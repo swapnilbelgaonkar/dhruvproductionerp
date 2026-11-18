@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body { @apply bg-canvas font-sans text-[14px] text-ink; }
+  :focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(91, 56, 245, 0.35); border-radius: 10px; }
+  .num { font-variant-numeric: tabular-nums; }
+}
+
+@layer components {
+  .card { @apply rounded-xl bg-white shadow-card; }
+  .input {
+    @apply h-12 w-full rounded-md border border-line-input bg-white px-4 text-[15px] text-ink placeholder:text-ink-muted
+      transition-shadow duration-200 ease-erp focus:border-primary focus:shadow-focus focus:outline-none disabled:bg-neutral-bg disabled:text-ink-2;
+  }
+  .input-error { @apply border-danger-text; }
+  .label { @apply mb-1.5 block text-[13px] font-medium text-ink-2; }
+  .skeleton { @apply animate-pulse rounded-md bg-gradient-to-r from-[#F1EFF8] via-[#F7F6FC] to-[#F1EFF8]; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+.page-enter { animation: pageIn 240ms cubic-bezier(0.4, 0, 0.2, 1); }
+@keyframes pageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+dialog::backdrop { background: rgba(22, 20, 45, 0.28); backdrop-filter: blur(8px); }
+dialog[open] { animation: dlgIn 200ms cubic-bezier(0.4, 0, 0.2, 1); }
+@keyframes dlgIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }

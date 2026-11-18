@@ -1,0 +1,16 @@
+{
+  "name": "dhruv-erp",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.9.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev:api": "pnpm --filter @dhruv/api dev",
+    "dev:web": "pnpm --filter @dhruv/web dev",
+    "db:migrate": "pnpm --filter @dhruv/api db:migrate",
+    "db:seed": "pnpm --filter @dhruv/api db:seed",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build"
+  }
+}
