@@ -2,7 +2,7 @@
 
 Covers MP Part 2 and Part 30 Step 6. **Source:** the UI Design Prompt (UI§1–43), supplied "for reference". This document keeps its visual language and records each place where an ERP needs something different. Those departures need sign-off (D20).
 
-> **Missing input:** UI§1 and §43 say to "replicate the attached reference image", but no image was attached. The tokens below come from the written prompt only. Please supply the screenshot before UI sign-off (D20).
+> **Reference image received:** `docs/source/ui-reference-dashboard.webp`. Its colours were sampled and checked against these tokens. The findings are in doc 14 §5, and the resulting changes are U9–U10 below.
 
 ## 1. Design principles
 
@@ -36,7 +36,8 @@ Covers MP Part 2 and Part 30 Step 6. **Source:** the UI Design Prompt (UI§1–4
 | `--color-info` / `-bg` / `-text` | `#3B82F6` / `#EAF2FF` / `#2563C9` | Informational, In Transit | 5.03:1 ✔ |
 | `--color-neutral-bg` / `-text` | `#F3F3F7` / `#5E5E73` | Inactive, Closed, Draft | 5.71:1 ✔ |
 | `--color-accent` | `#E639CF` | Secondary chart series, mini-KPI sparkline | — |
-| `--color-chart-neutral` | `#E9E8F0` | Comparison bars, donut track | — |
+| `--color-chart-neutral` | `#DED9E8` (sampled from the reference; prompt said `#E9E8F0`) | Comparison bars | — |
+| `--color-chart-track` | `#E9E8F0` | Donut track, progress background | — |
 
 Dark theme: **not in the first release** (UI prompt: "if required"). Tokens are named semantically so a dark theme can be added later without changing components.
 
@@ -99,6 +100,7 @@ The prompt's menu (Overview, Users, Statistics, Documents, Uploads, Messages, Re
 
 | Group | Items (Lucide icon) |
 |---|---|
+| — | *(icon names below are Lucide equivalents; with U9 the Phosphor counterparts are used)* |
 | — | Overview (`layout-dashboard`) · Approvals (`check-circle-2`, with counter) |
 | Sales | Leads & Pipeline (`target`) · Dealers (`store`) · Quotations (`file-text`) · Sales Orders (`shopping-cart`) · Targets & Pricing (`tags`) · Field (`map-pin`) |
 | Supply | Purchase (`clipboard-list`) · Inventory (`warehouse`) |
@@ -180,3 +182,5 @@ Colour contrast as in §2.1 · keyboard reachable everything, with a visible foc
 | U6 | Secondary text `#86869A`, status text in light tints | Darker text tokens (§2.1) | WCAG AA |
 | U7 | Focus glow at 0.08 alpha | 0.25 alpha | Visible focus |
 | U8 | Inputs 52–56px | 48px / 40px compact | Density; still ≥ 44px target |
+| U9 | Lucide line icons (UI §39) | **Phosphor** icons: `duotone` weight in the sidebar (matches the filled/duotone nav in the reference image), `regular` line weight inside content | The reference image and the written prompt disagree; Phosphor is allowed by UI §39 and covers both styles in one family |
+| U10 | Inter for everything | Inter for UI and data; optional geometric display face (e.g. Plus Jakarta Sans 700) for page titles and KPI figures | The reference image uses a rounded geometric heading face |

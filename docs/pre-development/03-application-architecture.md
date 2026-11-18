@@ -7,14 +7,14 @@ Covers MP Parts 3, 22, 24 and 25, and P4 §1 and §8. These are proposals; items
 | # | Decision | Choice | Why | Alternatives considered |
 |---|---|---|---|---|
 | AD-01 | Deployment shape | **Modular monolith**: one deployable API, plus a separate worker process from the same codebase | Strong consistency across stock, quality and finance; simpler operations for the team size in P5 §3 | Microservices (premature; too many distributed transactions) |
-| AD-02 | Backend | **Node.js 22 LTS + TypeScript + NestJS** | MP§3.2; module boundaries and dependency injection map naturally to the domains | Structured Express (more boilerplate for guards and pipes) |
+| AD-02 | Backend | **Node.js 22 LTS + TypeScript + NestJS** (NestJS runs on Express, which fits the BRD's "Node.js/Express containers"; deployed as a modular monolith, not microservices) | MP§3.2; module boundaries and dependency injection map naturally to the domains | Structured Express (more boilerplate for guards and pipes) |
 | AD-03 | Data access | **Drizzle ORM** for typed queries, plus SQL migrations | Explicit SQL control for locking (`SELECT … FOR UPDATE`) and the ledger tables | Prisma (weaker row-locking and raw SQL ergonomics), TypeORM |
 | AD-04 | Database | **PostgreSQL 16**, one database with one schema per domain | MP§3.3 | — |
-| AD-05 | Frontend | **React 18 + TypeScript + Vite SPA** | The ERP sits behind a login and needs no SSR/SEO. Vite is what MP§3.1 specifies. The public QR verification page is a separate small SSR/static route. | Next.js (the UI prompt's suggestion) — **D19** |
+| AD-05 | Frontend | **React 18 + TypeScript + Vite SPA** (confirmed: BRD p.20 names a React/Vite SPA on CloudFront; D19 closed) | The ERP sits behind a login and needs no SSR/SEO. Vite is what MP§3.1 specifies. The public QR verification page is a separate small SSR/static route. | Next.js (the UI prompt's suggestion) — **D19** |
 | AD-06 | UI stack | Tailwind CSS with design tokens, Radix UI primitives (accessible), Lucide icons, Recharts, Framer Motion, TanStack Query/Table, React Hook Form + Zod | UI§39–40; MP§3.1 | MUI (fights the visual language) |
 | AD-07 | Shared contracts | Zod schemas in a shared package, used for frontend validation and backend DTOs, with OpenAPI generated from them | One source of truth for validation | Hand-written OpenAPI |
 | AD-08 | Workflow engine | **In-house state-machine and approval-policy service** inside the monolith | Approvals must sit in the same DB transaction as state changes (MP R4) | Camunda/Temporal (heavy; separate source of truth) |
-| AD-09 | Queue | **PostgreSQL-backed job queue (pg-boss)** in phase 1; Amazon SQS adapter later if throughput needs it | Outbox and jobs commit atomically with business data; one fewer moving part | SQS/Redis BullMQ from day one |
+| AD-09 | Queue | **Postgres transactional outbox → BullMQ on ElastiCache Redis** (BRD p.20 names Redis for sessions, OTP state and PDF queues). Redis runs with AOF persistence, and the outbox guarantees no event is lost if Redis restarts | Follows the BRD while keeping business commits atomic (D35) | pg-boss only (the v0.1 proposal) |
 | AD-10 | Identity | Built-in identity module (argon2id, TOTP MFA, WebAuthn optional). OIDC federation hook for later SSO | No IdP named in the sources — **D22** | AWS Cognito, Keycloak, Entra ID |
 | AD-11 | File storage | Amazon S3 (private, SSE-KMS); access by short-lived pre-signed URLs | MP§3.4 | — |
 | AD-12 | PDF generation | HTML templates rendered by headless Chromium in the worker | Pixel-accurate GST invoice and CoA layouts | PDFKit (hard to maintain) |
@@ -158,10 +158,10 @@ CI pipeline: lint → typecheck → unit → API/integration (Testcontainers Pos
 
 | Attribute | Proposed target |
 |---|---|
-| Availability | 99.5% monthly in business hours (06:00–23:00 IST) for the Core release |
+| Availability | BRD p.20 asks **99.95%**. Proposed: 99.5% business hours for the Pilot, rising to 99.9% (24×7) at Core. 99.95% is possible with Multi-AZ RDS and multi-task ECS at higher cost (D21) |
 | RPO / RTO | RPO ≤ 15 min (PITR); RTO ≤ 4 h; restore tested every quarter |
 | Backups | Daily snapshot kept 35 days; monthly kept 12 months; S3 versioning plus Object Lock for controlled QA documents |
 | Performance | p95 ≤ 500 ms for reads and ≤ 1 s for commands at 200 concurrent users; list pages paginate on the server at 25/50/100 rows |
-| Scale assumptions | To validate: ~300 users, ~50k sales order lines/year, ~5k batches/year, ~2M scan events/year |
+| Scale assumptions | To validate: ~300 internal users, ~50k sales order lines/year, ~5k batches/year, ~2M scan events/year. BRD p.20 mentions "thousands of concurrent dealer orders"; realistic peak numbers are needed (D21) |
 | Observability | OpenTelemetry traces, CloudWatch metrics and logs, alerts on error rate, queue age, DLQ depth and posting failures |
 | Browser support | Latest 2 versions of Chrome, Edge, Safari and Firefox; tablet 768px+ |

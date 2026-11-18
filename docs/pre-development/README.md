@@ -4,7 +4,7 @@
 |---|---|
 | Client | Dhruv Agro Technologies Pvt. Ltd. |
 | Package | Stage 0 — Requirements & Architecture (Master Development Prompt, Part 30, Steps 1–8) |
-| Version | 0.1 (draft for review) |
+| Version | 0.2 (BRD v2.4 and UI reference reconciled) |
 | Prepared | 18 November 2026 |
 | Status | **Submitted for approval. No application code has been written. Development is not authorised.** |
 
@@ -14,10 +14,10 @@ When sources conflict, the higher one wins. Every conflict found is logged in [1
 
 | Rank | Source | Short ref used in this package | Available? |
 |---|---|---|---|
-| 1 | Original BRD `BRD-DHRUV-ERP-2026-V2.4` (20 pages) | `BRD` | **Not supplied.** Its content is known only through the Phase 1–7 summaries and the Master Prompt. Clause and page references are marked `BRD§?` until the document is supplied (decision **D00**). |
+| 1 | Original BRD `BRD-DHRUV-ERP-2026-V2.4` (20 pages): `docs/source/BRD-DHRUV-ERP-2026-V2.4.pdf` | `BRD p.n` | Yes. Received in v0.2 and reconciled in doc 14. Signed by six department heads (15–17 Nov 2026). |
 | 2 | Seven-phase planning blueprint (`docs/source/Dhruv_Agro_ERP_All_7_Phases.docx`, text copy in `docs/source/phases-1-7-consolidated.md`) | `P1` … `P7` | Yes |
 | 3 | Master Development Prompt, Parts 1–30 | `MP§n` | Yes (supplied in the project brief) |
-| 4 | UI Design Prompt (sections 1–43), supplied as a reference | `UI§n` | Yes; the screenshot it refers to was **not** attached (D20) |
+| 4 | UI Design Prompt (sections 1–43), plus reference screenshot `docs/source/ui-reference-dashboard.webp` | `UI§n` | Yes (screenshot checked in doc 14 §5) |
 | 5 | Client-approved decisions | `D##` | None approved yet |
 
 ## Package contents (Step 8 deliverables)
@@ -37,16 +37,17 @@ When sources conflict, the higher one wins. Every conflict found is logged in [1
 | 11 | Development sequence, roadmap and estimated work packages | [11-roadmap-and-work-packages.md](11-roadmap-and-work-packages.md) |
 | 12 | Open decision and conflict register | [12-open-decision-register.md](12-open-decision-register.md) |
 | 13 | Testing and acceptance strategy | [13-testing-and-acceptance-strategy.md](13-testing-and-acceptance-strategy.md) |
+| 14 | BRD v2.4 reconciliation and UI reference check | [14-brd-reconciliation-and-ui-reference-check.md](14-brd-reconciliation-and-ui-reference-check.md) |
 
 ## What this package is not
 
 - It is not a signed statement of work, price or schedule. The budget figures come from P5 and are illustrative.
-- It does not approve any requirement. Every RTM row starts as `Pending`.
+- It does not approve any corrections or additions. Original BRD rows are `Baseline` (BRD signed); every other RTM row is `Pending`.
 - It makes no claim of regulatory compliance (MP Rule 11). Statutory items sit in the verification register (D08).
 
 ## How to approve
 
 1. Each department owner reviews the RTM rows for their department (column `Owner`) and the workflows for their department.
-2. Management answers the open decisions in doc 12. The **P0 decisions block the build**: D00, D01, D02, D04, D05, D12, D13, D14.
+2. Management answers the open decisions in doc 12. The **P0 decisions that still block the build**: D01, D02 (name the accounting system), D05, D12, D13, D14 (confirm), D20 (UI departures), D26 (legal name, GST registrations), D33, D37. D04 only needs confirmation. Departments that have **not** signed the BRD (QC, Purchase, Stores/Logistics, IT) need to sign off their areas.
 3. Approvers record one of: Approved / Approved with Changes / Revision Required / Rejected (P6 §10), and the version they approved.
 4. Development starts only after a separate, explicit authorisation (P6 §9) and covers only the stage that was authorised.

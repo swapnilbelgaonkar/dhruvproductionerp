@@ -8,7 +8,7 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 |---|---|
 | **ID** | Module prefix plus a sequence number. IDs never change. A withdrawn requirement is marked `Rejected`, not renumbered. |
 | **Requirement** | The behaviour the system must show, written so it can be tested. |
-| **Source** | `BRD` = original requirement as reported by P1/P7/MP (exact clause pending, D00). `P1`–`P7` = planning phase and section. `MP§` = Master Prompt part. `UI§` = UI prompt section. |
+| **Source** | `BRD p.n` = page of BRD v2.4 (`docs/source/BRD-DHRUV-ERP-2026-V2.4.pdf`); see doc 14 §2 for the section map. `P1`–`P7` = planning phase and section. `MP§` = Master Prompt part. `UI§` = UI prompt section. |
 | **Class** | `O` original BRD · `C` approved-in-principle correction to the BRD · `A` proposed addition or enhancement · `M` missing requirement found during this analysis · `X` conflicting, needs a decision |
 | **Pri** | `P0` must exist for a safe first operation · `P1` needed for core ERP · `P2` important but deferrable · `Opt` optional |
 | **Owner** | Department that is accountable for sign-off |
@@ -16,18 +16,21 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 | **Dec** | Open decisions that block this requirement. `—` means none. |
 | **Test** | Acceptance test reference in doc 13. `TC-xx` = mandatory scenario, `UAT-xx` = P3 acceptance matrix, `MT-<mod>` = module test suite. |
 
-**Decision status for every row below is `Pending`.** Nothing has been client-approved yet.
+**Decision status:**
+- Rows of class `O` are **`Baseline`**: BRD v2.4 carries departmental sign-off dated 15–17 Nov 2026 (doc 14 §1).
+- Rows of class `C`, `A`, `M` and `X` are **`Pending`**: corrections and additions are not yet approved (MP §1.1).
+- Baseline rows that list a decision ID still need that decision before they can be built.
 
 ### 1.1 Inventory summary
 
 | Class | Count | Meaning for the client |
 |---|---|---|
-| O — Original BRD | 93 | Kept as specified, or kept with details still to confirm |
-| C — Correction | 19 | BRD intent kept, but how it works changes (for example, conditional approval routing) |
-| A — Addition | 101 | Recommended in P1–P7 / MP and not present in the BRD |
-| M — Missing | 10 | Found during this analysis and not covered by any source |
-| X — Conflict | 12 | Sources disagree. Listed again in doc 12 §2 |
-| **Total** | **235** | |
+| O — Original BRD | 121 | Kept as specified, or kept with details still to confirm |
+| C — Correction | 21 | BRD intent kept, but how it works changes (for example, conditional approval routing) |
+| A — Addition | 100 | Recommended in P1–P7 / MP and not present in the BRD |
+| M — Missing | 11 | Found during this analysis and not covered by any source |
+| X — Conflict | 19 | Sources disagree. Listed again in doc 12 §2 |
+| **Total** | **272** | |
 
 ---
 
@@ -35,7 +38,7 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| SEC-001 | Four designated executive administration positions exist (BRD "four main admins"). | BRD; P7 §3; MP§4.2 | O | P0 | MD / IT | Pi | D14 | MT-ADM |
+| SEC-001 | Four designated executive administration positions exist (BRD "four main admins"). | BRD p.3; P7 §3; MP§4.2 | O | P0 | MD / IT | Pi | D14 | MT-ADM |
 | SEC-002 | Admin power is split into Super, Executive, Security and Emergency administration. No role can bypass business controls without leaving a trace. | MP§4.2; P1 §7 G06 | X | P0 | MD / IT | Pi | D14 | TC-01, TC-18 |
 | SEC-003 | Sensitive overrides need a written justification and an independent second approval, and are reviewed afterwards. | MP§4.2; P7 BR-12 | A | P0 | Executive / IT | Pi | D14 | MT-ADM |
 | SEC-004 | Users log in with username or email and password. Passwords are hashed with argon2id. | MP§4.1 | O | P0 | IT | Pi | D22 | MT-AUTH |
@@ -53,6 +56,8 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 | SEC-016 | Security is checked against OWASP ASVS Level 2 before go-live. | MP§24 | A | P1 | IT | Co | — | Sec test |
 | SEC-017 | Data is encrypted in transit (TLS 1.2+) and at rest (database, object storage, backups). | MP§24 | A | P0 | IT | Pi | D21 | Sec test |
 | SEC-018 | Privileged access is approved by an independent approver and recertified periodically. | P1 §4 IT | A | P1 | IT | Co | — | MT-ADM |
+| SEC-019 | The four main admin accounts and privileged roles use strong MFA. The BRD specifies WhatsApp OTP + 2FA PIN; an authenticator app or hardware key is proposed instead. | BRD p.3,19 | X | P0 | IT | Pi | D22 | MT-AUTH |
+| SEC-020 | Corporate Admin 03/04 duties (failover, audit forensics, key custody, "schema locks") become controlled IAM/KMS roles and exception workflows. No raw key holding. | BRD p.3 | X | P1 | MD / IT | Co | D14 | MT-ADM |
 | ADM-001 | Role matrix screen: module × action × scope × effective date. Changes are proposed, then approved. | P4 §2 M01 | A | P0 | IT | Pi | — | MT-ADM |
 | ADM-002 | Approval delegation with a start and end date, limited to the delegator's own authority. | MP§20.1; P4 §3 | A | P1 | IT | Co | — | MT-APR |
 | ADM-003 | Audit viewer: search by actor, object, action and time, with a before/after diff. | P4 §2 M01 | A | P0 | IT | Pi | — | MT-AUD |
@@ -62,12 +67,14 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| ORG-001 | Nine-tier sales hierarchy: BH, NSM, DSM, ZSM, RSM, SASM, ASM, TSM, SE. | BRD; MP§4.3; P7 SAL-001 | O | P0 | Sales | Pi | — | MT-ORG |
+| ORG-001 | Nine-tier sales hierarchy: BH, NSM, DSM, ZSM, RSM, SASM, ASM, TSM, SE. | BRD p.3–4; MP§4.3; P7 SAL-001 | O | P0 | Sales | Pi | — | MT-ORG |
 | ORG-002 | Each user record holds: employee ID, department, designation, reporting manager, territory, status, roles, approval authority and login identity. | MP§4.3 | O | P0 | HR | Pi | — | MT-ORG |
 | ORG-003 | Territory tree is configured by admins: National → Zone → State → Region → District → Taluka → Dealer/Retail Beat. Nothing is hardcoded. | MP§4.3, R3 | O | P0 | Sales | Pi | — | MT-ORG |
 | ORG-004 | Moving a territory from one owner to another transfers open leads, opportunities and dealers, and keeps the history. | P1 §4 Sales | M | P1 | Sales | Co | — | MT-ORG |
 | ORG-005 | Legal entity, plant, warehouse, zone and bin hierarchy. More plants and warehouses can be added without code changes. | MP§11.1, R14 | O | P0 | Plant / Stores | Pi | D26 | MT-ORG |
 | ORG-006 | Departments master and cost centres. | MP§5.1 | A | P1 | Finance | Co | — | MT-MDM |
+| ORG-007 | Territory levels follow the BRD jurisdictions: National → Zone Cluster → Zone → State → District Cluster → District → Taluka → Beat (configurable). | BRD p.3–4 | X | P0 | Sales | Pi | D37 | MT-ORG |
+| ORG-008 | Configure plants Chakan Plant 1 and Baramati Unit 2, and warehouses WH-01 FG, WH-02 RM, WH-03 PM (Chakan) and WH-04 Central Lab Chemicals (Hyderabad), with their GST registrations. | BRD p.14,18 | O | P0 | Plant / Stores / Fin | Pi | D26, D36 | MT-ORG |
 
 ## 4. Master data (MDM)
 
@@ -88,73 +95,82 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 | MDM-013 | Equipment and instrument master, linked to calibration (QC) and production lines. | MP§5.1 | O | P1 | Plant / QC | Co | — | MT-MDM |
 | MDM-014 | Bulk import with validation, and a per-row error report. Nothing is committed while invalid references remain. | MP§3.5; TC-19 | A | P1 | IT | Co | D10 | TC-19 |
 | MDM-015 | Document types master: name, mandatory-for rules, expiry tracking flag and retention period. | MP§5.1 | A | P1 | Admin | Co | D25 | MT-DMS |
+| MDM-016 | Vendor master holds CIB registration number + expiry and the factory manufacturing licence, with same-line GSTIN and certificate entry. | BRD p.8 | O | P1 | Purchase | Co | D07 | MT-MDM |
+| MDM-017 | Transporter master holds the SLA agreement PDF with validity dates, transport permit + expiry, a nationalised-bank cancelled cheque and fleet-partner KYC. | BRD p.9 | O | P1 | Logistics | Co | D07 | MT-MDM |
 
 ## 5. Dealer & distributor management (DLR)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| DLR-001 | Dealer registration captures business, commercial, statutory and security information (MP§6.1). Dealer code is generated automatically. | BRD; MP§6.1 | O | P0 | Sales | Pi | — | UAT-01 |
+| DLR-001 | Dealer registration captures business, commercial, statutory and security information (MP§6.1). Dealer code is generated automatically. | BRD p.7–8; MP§6.1 | O | P0 | Sales | Pi | — | UAT-01 |
 | DLR-002 | Required KYC documents depend on constitution type (proprietor, partnership, LLP, Pvt Ltd, etc.). | P1 §4; MP§6.1 | C | P0 | Compliance | Pi | D07 | UAT-01 |
-| DLR-003 | Three security cheques and five director KYC records are collected only where the approved policy says so. They are not universal. | BRD; P1 §6; MP§6.1 | X | P1 | Finance | Pi | D07 | MT-DLR |
-| DLR-004 | Licence vault: fertilizer and pesticide licence number, issuer, validity and eligible product categories, with evidence attached. | BRD; MP§6.1 | O | P0 | Compliance | Pi | D08 | TC-03 |
+| DLR-003 | Three security cheques and five director KYC records are collected only where the approved policy says so. They are not universal. | BRD p.7–8; P1 §6; MP§6.1 | X | P1 | Finance | Pi | D07 | MT-DLR |
+| DLR-004 | Licence vault: fertilizer and pesticide licence number, issuer, validity and eligible product categories, with evidence attached. | BRD p.7–8; MP§6.1 | O | P0 | Compliance | Pi | D08 | TC-03 |
 | DLR-005 | Onboarding workflow: Registration → Document Verification → Commercial Review → Finance Review → Final Approval → Activation. | MP§6.2; P2 | C | P0 | Sales / Fin | Pi | D07 | UAT-01 |
 | DLR-006 | Each stage records remarks, a rejection reason and requests for pending documents. | MP§6.2 | A | P0 | Sales | Pi | — | MT-DLR |
 | DLR-007 | Dealers can be suspended and reactivated with a reason. A suspended dealer cannot get new quotations or orders. | MP§6.2 | A | P0 | Sales / Fin | Pi | — | MT-DLR |
-| DLR-008 | Licence expiry alerts go out at T-60, T-30 and T-7 days (configurable). On expiry, orders for the affected product categories are blocked. | MP§6.2; P2 §4; BR-11 | A | P0 | Compliance | Pi | D08 | TC-03, UAT-02 |
+| DLR-008 | Licence expiry alerts at 60 days, 30 days and on expiry (BRD). An expired fertilizer licence blocks fertilizer billing; an expired pesticide licence blocks agrochemical billing. The block also applies when an order is created (MP). | BRD p.7,19; MP§6.2; P2 §4; BR-11 | O | P0 | Compliance | Pi | D08 | TC-03, UAT-02 |
 | DLR-009 | Dealer 360° view: profile, people, leads, quotations, orders, invoices, outstanding, credit, dispatches, complaints, returns, documents and timeline. | MP§6.3 | O | P1 | Sales | Co | — | MT-DLR |
 | DLR-010 | Bank account details are verified before any refund or credit note payout. | P1 §4 | A | P1 | Finance | Co | — | MT-DLR |
 | DLR-011 | Duplicate GSTIN or PAN across dealers is blocked. If allowed by policy, a multi-branch dealer is linked to a parent instead. | P2 Dealer | A | P0 | Sales | Pi | — | TC-02 |
 | DLR-012 | Decide whether dealers get their own portal login to place orders and view their ledger. | — | M | P2 | Sales | En | D31 | — |
+| DLR-013 | Same-line entry: the GST certificate upload sits on the same row as the GSTIN input. A verifier confirms the certificate matches the entered GSTIN before activation. | BRD p.7–8 | O | P0 | Compliance | Pi | — | TC-02 |
+| DLR-014 | Document uploads: fertilizer certificate, pesticide (CIB&RC) certificate and official letterhead with stamp and signature. | BRD p.8 | O | P0 | Compliance | Pi | D07 | UAT-01 |
+| DLR-015 | Constitution types include Farmer Producer Company (FPO). Credit days, credit limit, annual target and target financial year are captured. | BRD p.8 | O | P0 | Sales | Pi | — | MT-DLR |
 
 ## 6. Sales & CRM — all 18 BRD submodules kept (CRM)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| CRM-001 | All 18 Sales & Marketing Hub submodules are kept (the list is in doc 02 §M03). | BRD; P7 CRM-001; MP§7 | O | P0 | Sales | Co | — | MT-CRM |
+| CRM-001 | All 18 Sales Hub sub-modules as listed in the BRD (doc 02 §M03). | BRD p.10–11; P7 CRM-001; MP§7 | O | P0 | Sales | Co | — | MT-CRM |
 | CRM-002 | CRM dashboard with the 10 KPIs in MP§7.1, scoped to the viewer's territory subtree. | MP§7.1 | O | P1 | Sales | Co | D23 | MT-MIS |
-| CRM-003 | Lead capture with the fields in MP§7.2 and configurable sources (exhibition, IndiaMART, field, referral, dealer enquiry). | BRD; MP§7.2 | O | P0 | Sales | Co | — | MT-CRM |
+| CRM-003 | Lead capture with the fields in MP§7.2 and configurable sources (exhibition, IndiaMART, field, referral, dealer enquiry). | BRD p.10–11; MP§7.2 | O | P0 | Sales | Co | — | MT-CRM |
 | CRM-004 | Leads are checked for duplicates on mobile, GSTIN and company name. A duplicate can be merged, keeping its history. | P1 §4 Sales | A | P1 | Sales | Co | — | MT-CRM |
 | CRM-005 | Lead ownership transfer with a reason. The audit trail keeps the previous owner. | P1 §4 Sales | A | P1 | Sales | Co | — | MT-CRM |
-| CRM-006 | BANT qualification, plus configurable extra qualification fields. | BRD; MP§7.3 | O | P1 | Sales | Co | — | MT-CRM |
-| CRM-007 | Opportunity pipeline (Kanban) with the 5 stages, value, expected close date, probability, product demand, activities and a mandatory loss reason. | BRD; MP§7.4 | O | P1 | Sales | Co | — | MT-CRM |
-| CRM-008 | Activities: calls, meetings, dealer and field visits, agronomist discussions, follow-ups, reminders and a timeline. | BRD; MP§7.5 | O | P1 | Sales | Co | — | MT-CRM |
-| CRM-009 | Annual targets split monthly and down the hierarchy. The total of children cannot exceed the parent. Shows achievement vs target. | BRD; MP§7.6 | O | P1 | Sales | Co | D23 | MT-CRM |
-| CRM-010 | Pricing: base rates, dealer price groups, volume slabs, trade and promotional discounts, contract prices, effective dates and approved exceptions. | BRD; MP§7.7 | O | P0 | Sales / Fin | Co | — | MT-CRM |
-| CRM-011 | Sample workflow: Request → Approval → Warehouse Allocation → Dispatch → Trial → Feedback. Each sample is linked to a released batch. | BRD; MP§7.8 | O | P1 | Sales / Stores | Co | — | MT-CRM |
-| CRM-012 | Field trial record: crop, location, product, dosage, date, baseline, observations, performance, farmer feedback and findings. | BRD; MP§7.9 | O | P2 | Sales / Agronomy | Co | — | MT-CRM |
-| CRM-013 | Competitor intelligence register with restricted visibility. | BRD; MP§7.10 | O | P2 | Sales | Co | — | MT-CRM |
-| CRM-014 | Beat planning: monthly tour plan, daily schedule, GPS check-in/out, visit outcome and follow-up tasks. | BRD; MP§7.11 | O | P1 | Sales | Co | D09 | MT-CRM |
+| CRM-006 | BANT qualification, plus configurable extra qualification fields. | BRD p.10–11; MP§7.3 | O | P1 | Sales | Co | — | MT-CRM |
+| CRM-007 | Opportunity pipeline (Kanban) with the 5 stages, value, expected close date, probability, product demand, activities and a mandatory loss reason. | BRD p.10–11; MP§7.4 | O | P1 | Sales | Co | — | MT-CRM |
+| CRM-008 | Activities: calls, meetings, dealer and field visits, agronomist discussions, follow-ups, reminders and a timeline. | BRD p.10–11; MP§7.5 | O | P1 | Sales | Co | — | MT-CRM |
+| CRM-009 | Annual targets split monthly and down the hierarchy. The total of children cannot exceed the parent. Shows achievement vs target. | BRD p.10–11; MP§7.6 | O | P1 | Sales | Co | D23 | MT-CRM |
+| CRM-010 | Pricing: base rates, dealer price groups, volume slabs, trade and promotional discounts, contract prices, effective dates and approved exceptions. | BRD p.10–11; MP§7.7 | O | P0 | Sales / Fin | Co | — | MT-CRM |
+| CRM-011 | Sample workflow: Request → Approval → Warehouse Allocation → Dispatch → Trial → Feedback. Each sample is linked to a released batch. | BRD p.10–11; MP§7.8 | O | P1 | Sales / Stores | Co | — | MT-CRM |
+| CRM-012 | Field trial record: crop, location, product, dosage, date, baseline, observations, performance, farmer feedback and findings. | BRD p.10–11; MP§7.9 | O | P2 | Sales / Agronomy | Co | — | MT-CRM |
+| CRM-013 | Competitor intelligence register with restricted visibility. | BRD p.10–11; MP§7.10 | O | P2 | Sales | Co | — | MT-CRM |
+| CRM-014 | Beat planning: monthly tour plan, daily schedule, GPS check-in/out, visit outcome and follow-up tasks. | BRD p.10–11; MP§7.11 | O | P1 | Sales | Co | D09 | MT-CRM |
 | CRM-015 | Beat expenses are captured and approved, if the client brings them into scope. | MP§7.11 | X | Opt | Sales / Fin | En | D30 | — |
-| CRM-016 | Contract and annual volume agreements, with a consumption tracker. | BRD; MP§7.12 | O | P2 | Sales | Co | — | MT-CRM |
-| CRM-017 | Outstanding debt and recovery: aging, a promise-to-pay log and escalation. | BRD; MP§7.12 | O | P1 | Sales / Fin | Co | — | MT-CRM |
-| CRM-018 | Order approval register and executive sales analytics. | BRD; MP§7.12 | O | P1 | Sales | Co | — | MT-MIS |
+| CRM-016 | Contract and annual volume agreements, with a consumption tracker. | BRD p.10–11; MP§7.12 | O | P2 | Sales | Co | — | MT-CRM |
+| CRM-017 | Outstanding debt and recovery: aging, a promise-to-pay log and escalation. | BRD p.10–11; MP§7.12 | O | P1 | Sales / Fin | Co | — | MT-CRM |
+| CRM-018 | Order approval register and executive sales analytics. | BRD p.10–11; MP§7.12 | O | P1 | Sales | Co | — | MT-MIS |
 | CRM-019 | Standard Excel/CSV exports, permission-controlled and audited. | MP§7.12 | O | P1 | Sales | Co | — | MT-MIS |
 | CRM-020 | Customer 360°. It shares its implementation with the Dealer 360° view (DLR-009). | MP§7.12 | O | P1 | Sales | Co | — | MT-DLR |
+| CRM-021 | Sub-module 7, 9-Tier Hierarchy Rights Governance: configure tier level, title, maximum discount %, maximum order value and scope (UI over the approval policy and authority limits). | BRD p.10 | O | P0 | Sales / IT | Pi | D15 | MT-APR |
 
 ## 7. Quotation (QUO)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| QUO-001 | Multi-item quotation with the header fields in MP§8.1 and the line columns in MP§8.2. | BRD; MP§8 | O | P0 | Sales | Pi | — | MT-QUO |
+| QUO-001 | Multi-item quotation with the header fields in MP§8.1 and the line columns in MP§8.2. | BRD p.13; MP§8 | O | P0 | Sales | Pi | — | MT-QUO |
 | QUO-002 | The server calculates tax as CGST+SGST (intra-state) or IGST (inter-state), based on the place of supply. Rounding follows the configured rules. | MP§8.2 | O | P0 | Finance | Pi | D27 | MT-QUO |
 | QUO-003 | All 14 actions in MP§8.3, including Revise, Duplicate, PDF, Email and Convert to Sales Order. | MP§8.3 | O | P0 | Sales | Pi | — | MT-QUO |
-| QUO-004 | Validity period is a configurable policy (BRD default 7 days). An expired quotation can be revalidated or reissued but not converted. | BRD; P1 §6; MP§8.3 | C | P0 | Sales | Pi | D16 | MT-QUO |
+| QUO-004 | Validity = quotation date + 7 days (BRD). An expired quotation needs re-approval before it can be converted. The default stays configurable as company policy. | BRD p.13; P1 §6; MP§8.3 | C | P0 | Sales | Pi | D16 | MT-QUO |
 | QUO-005 | Every revision is kept as an immutable version (Q-0001/R1, R2 …) with a diff. | MP§8.3 | A | P0 | Sales | Pi | — | MT-QUO |
-| QUO-006 | A discount above the user's tier limit sends the quotation for approval before it can be sent to the dealer. | BRD; MP§4.4 | O | P0 | Sales | Pi | D15 | TC-04 |
+| QUO-006 | A discount above the user's tier limit sends the quotation for approval before it can be sent to the dealer. | BRD p.13; MP§4.4 | O | P0 | Sales | Pi | D15 | TC-04 |
+| QUO-007 | A4 print preview for quotation and PO: corporate header, bank details, validity banner, itemised tax breakdown and signature blocks. Quotations show IGST for inter-state supply and a discount column. | BRD p.13–14 | C | P0 | Sales / Purchase | Pi | — | MT-QUO |
 
 ## 8. Sales order (SO)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| SO-001 | A sales order can come from an approved quotation, a dealer PO, contract pricing or another approved channel. The dealer PO number and attachment are captured. | BRD; MP§9.1 | O | P0 | Sales | Pi | — | MT-SO |
+| SO-001 | A sales order can come from an approved quotation, a dealer PO, contract pricing or another approved channel. The dealer PO number and attachment are captured. | BRD p.13; MP§9.1 | O | P0 | Sales | Pi | — | MT-SO |
 | SO-002 | The 10 validations in MP§9.2 run on the server at submit and again at approval. | MP§9.2; P3 §6 | A | P0 | Sales / Fin | Pi | — | TC-03, TC-04 |
 | SO-003 | The same dealer PO reference cannot be used twice for one dealer. | MP§9.2 | A | P0 | Sales | Pi | — | MT-SO |
-| SO-004 | Approval is routed by a policy engine (value, discount, credit, territory, exception). Sequential BRD chain vs conditional routing is a client decision. | BRD; P1 §5; P7 SAL-003 | X | P0 | Sales / MD | Pi | D01 | TC-04, UAT-03 |
+| SO-004 | Approval is routed by a policy engine (value, discount, credit, territory, exception). Sequential BRD chain vs conditional routing is a client decision. | BRD p.13; P1 §5; P7 SAL-003 | X | P0 | Sales / MD | Pi | D01 | TC-04, UAT-03 |
 | SO-005 | Approval stages: Commercial approval → Accounts/credit review → Fulfilment allocation → Dispatch authorisation. | MP§9.3; P4 §4 | C | P0 | Sales / Fin | Pi | D01 | UAT-03 |
 | SO-006 | Order statuses follow the harmonised set in doc 05 §12.1. | MP§9.4; P4 §4 | C | P0 | Sales | Pi | — | MT-SO |
 | SO-007 | Amendments create a new revision. A material change (qty, price, discount, product, terms) invalidates the affected approvals and re-runs validation. | MP§9.5; BR-02 | C | P0 | Sales / Fin | Pi | D17 | TC-05, UAT-05 |
 | SO-008 | Backorders and partial fulfilment are supported, with the open quantity tracked per line. | P4 §4; MP§9.4 | A | P0 | Stores | Pi | D03 | MT-SO |
 | SO-009 | Cancelling an order releases its reservations and records the reason. Cancellation after dispatch is not allowed; a return is used instead. | MP§9.4 | A | P0 | Sales | Pi | — | MT-SO |
+| SO-010 | Approvers TSM–ZSM can edit, adjust quantities, hold or approve at their gate (BRD). Reductions keep earlier approvals; any increase resets them (MP §9.5). | BRD p.13 | X | P0 | Sales | Pi | D17 | TC-05 |
+| SO-011 | Orders above ZSM limits (₹5 L or 15%) continue to DSM → NSM → BH. The BRD chain does not define this route. | BRD p.3,13 | M | P0 | Sales / MD | Pi | D01 | TC-04 |
 
 ## 9. Approval engine (APR)
 
@@ -167,35 +183,38 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 | APR-005 | SLA timers and an escalation ladder, with notifications. | MP§20.2, §21 | A | P1 | IT | Co | D11 | MT-APR |
 | APR-006 | Approval register with aging and priority. Approval inbox per user. | MP§20.3 | A | P0 | IT | Pi | — | MT-APR |
 | APR-007 | Approvals cannot be bypassed through the API. State changes are allowed only through the workflow service. | MP§20.4, R4 | A | P0 | IT | Pi | — | TC-01 |
-| APR-008 | Sales authority limits (MP§4.4 table) are seeded as an inactive configuration and switched on only after business approval. | BRD; MP§4.4 | O | P0 | Sales / MD | Pi | D15 | TC-04 |
+| APR-008 | Sales authority limits (MP§4.4 table) are seeded as an inactive configuration and switched on only after business approval. | BRD p.3–4; MP§4.4 | O | P0 | Sales / MD | Pi | D15 | TC-04 |
+| APR-009 | Unified executive approval inbox covering SO, PO, credit-limit overrides, quality deviations, CAPA closures and SOP releases, with Approve / Reject (remarks) / Hold. | BRD p.19 | O | P0 | IT | Pi | — | MT-APR |
 
 ## 10. Procurement (PUR)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| PUR-001 | Multi-item procurement documents. | BRD; P7 PUR-001 | O | P0 | Purchase | Pi | — | MT-PUR |
+| PUR-001 | Multi-item procurement documents. | BRD p.8,13–14; P7 PUR-001 | O | P0 | Purchase | Pi | — | MT-PUR |
 | PUR-002 | A purchase requisition, with approval, is required before a PO (fields in MP§10.1). | P7 PUR-002; MP§10.1 | A | P0 | Purchase | Pi | D06 | MT-PUR |
 | PUR-003 | Budget and authority check on the PR, by cost centre. | P2 Proc | A | P1 | Finance | Co | D06 | MT-PUR |
-| PUR-004 | RFQ to several vendors for several items, with a deadline, uploaded vendor responses and technical compliance. | BRD; MP§10.2 | O | P1 | Purchase | Co | — | MT-PUR |
+| PUR-004 | RFQ to several vendors for several items, with a deadline, uploaded vendor responses and technical compliance. | BRD p.8,13–14; MP§10.2 | O | P1 | Purchase | Co | — | MT-PUR |
 | PUR-005 | Comparative statement with landed cost, lead time, quality rating and qualification. Choosing a vendor other than the cheapest needs a reason. | MP§10.3 | A | P1 | Purchase | Co | — | MT-PUR |
-| PUR-006 | Multi-item PO (fields in MP§10.4) with an approval workflow. | BRD; MP§10.4 | O | P0 | Purchase | Pi | D06 | MT-PUR |
+| PUR-006 | Multi-item PO (fields in MP§10.4) with an approval workflow. | BRD p.8,13–14; MP§10.4 | O | P0 | Purchase | Pi | D06 | MT-PUR |
 | PUR-007 | PO amendments are versioned and re-approved. Cancelling the balance is supported. | P1 §4 | A | P1 | Purchase | Co | — | MT-PUR |
 | PUR-008 | Partial receipts against PO lines keep the outstanding quantity. | P1 §4; TC-09 | A | P0 | Stores | Pi | — | TC-09, UAT-06 |
-| PUR-009 | Three-way match (PO, GRN, invoice) with configurable quantity, price and tax tolerances. Anything outside tolerance goes to an exception queue. | BRD; MP§10.6 | O | P0 | Finance | Co | D06 | TC-10 |
+| PUR-009 | Three-way match (PO, GRN, invoice) with configurable quantity, price and tax tolerances. Anything outside tolerance goes to an exception queue. | BRD p.8,13–14; MP§10.6 | O | P0 | Finance | Co | D06 | TC-10 |
 | PUR-010 | Supplier returns against the original GRN and lot, with a debit note. | P1 §4; MP§10.5 | A | P1 | Purchase | Co | — | MT-PUR |
 | PUR-011 | Emergency or single-source purchase path with retrospective approval. | P2 D06 | X | P2 | Purchase | Co | D06 | MT-PUR |
 | PUR-012 | Supplier advance payment and its settlement against the invoice. | P1 §4 | M | P2 | Finance | Co | D02 | MT-FIN |
+| PUR-013 | PO acceptance validity of 7 days (configurable); an unacknowledged expired PO needs re-issue. | BRD p.13 | O | P1 | Purchase | Co | D06 | MT-PUR |
+| PUR-014 | RFQ comparative matrix ranks bidders by weighted landed cost per MT, quality rating and lead time, and pre-selects the winner. Purchase confirms, with a reason if overriding. | BRD p.8 | X | P1 | Purchase | Co | D34 | MT-PUR |
 
 ## 11. Inventory & warehouse (INV)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| INV-001 | GRN creates a traceable internal lot and puts it in quarantine automatically. A quarantined lot cannot be issued (full spec in P7 §7). | BRD; P7 §7; BR-04 | O | P0 | Stores / QC | Pi | D04 | TC-08 |
+| INV-001 | GRN creates a traceable internal lot and puts it in quarantine automatically. A quarantined lot cannot be issued (full spec in P7 §7). | BRD p.15,17; P7 §7; BR-04 | O | P0 | Stores / QC | Pi | D04 | TC-08 |
 | INV-002 | Stock ledger: balances come only from movements. There is no editable quantity field. | P3 §5; P7 INV-002 | A | P0 | Stores | Pi | — | MT-INV |
 | INV-003 | Stock is described by three separate dimensions — location, quality status and allocation — rather than one exclusive state (doc 04 §5). | P1 §5; MP§11.2 | C | P0 | Stores | Pi | D05 | TC-07 |
 | INV-004 | GRN fields as listed in MP§11.3, including supplier batch, internal lot, manufacturing and expiry dates, and vehicle. | MP§11.3 | O | P0 | Stores | Pi | — | MT-INV |
 | INV-005 | Gate entry is recorded before the GRN. | P2 Inv | A | P1 | Stores | Co | — | MT-INV |
-| INV-006 | Multi-warehouse with zones and bins. The BRD's warehouse structure is configured as master data. | BRD; MP§11.1 | O | P0 | Stores | Pi | D26 | MT-INV |
+| INV-006 | Multi-warehouse with zones and bins. The BRD's warehouse structure is configured as master data. | BRD p.14; MP§11.1 | O | P0 | Stores | Pi | D26 | MT-INV |
 | INV-007 | Reservations are safe under concurrent use: the same eligible quantity can never be reserved twice. | BR-06; TC-07 | A | P0 | Stores | Pi | — | TC-07 |
 | INV-008 | Negative stock is blocked unless an authorised exception exists. | MP§11.6 | A | P0 | Stores | Pi | — | MT-INV |
 | INV-009 | FEFO/FIFO picking suggestions per item class. A different lot can be chosen with a reason. | MP§11.6 | A | P1 | Stores | Co | D05 | MT-INV |
@@ -205,48 +224,56 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 | INV-013 | Reorder and expiry alerts, configured per item and warehouse. | MP§11.5 | O | P1 | Stores | Co | — | MT-INV |
 | INV-014 | Inventory valuation method (weighted average or FIFO) per legal entity. | MP§11.5 | X | P1 | Finance | Co | D05 | MT-INV |
 | INV-015 | Every movement carries a source document and an authorised actor. Posted movements are corrected only by reversal. | MP§11.4, R7 | A | P0 | Stores | Pi | — | TC-18 |
+| INV-016 | Gate entry records delivery challan no., vehicle gross/tare weight and physical package condition. | BRD p.17 | O | P1 | Stores | Pi | — | MT-INV |
 
 ## 12. Manufacturing — all 16 BRD functions kept (MFG)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| MFG-001 | All 16 production functions are kept (the list is in doc 02 §M07). | BRD; P7 MFG-001 | O | P0 | Plant | Co | — | MT-MFG |
-| MFG-002 | Production dashboard with the KPIs in MP§12.1. | BRD; MP§12.1 | O | P1 | Plant | Co | D23 | MT-MIS |
+| MFG-001 | All 16 production functions are kept (the list is in doc 02 §M07). | BRD p.18; P7 MFG-001 | O | P0 | Plant | Co | — | MT-MFG |
+| MFG-002 | Production dashboard with the KPIs in MP§12.1. | BRD p.18; MP§12.1 | O | P1 | Plant | Co | D23 | MT-MIS |
 | MFG-003 | OEE = Availability × Performance × Quality. Any other ratio is labelled differently. | P1 §6; MP§12.1 | C | P1 | Plant | Co | D23 | MT-MFG |
-| MFG-004 | MRP uses sales orders, forecast, FG stock, BOM, raw material stock, lead times, safety stock and capacity, and produces planned orders and PR proposals. | BRD; MP§12.2 | O | P1 | Plant | Co | D03 | MT-MFG |
-| MFG-005 | Production order fields as listed in MP§12.3. | BRD; MP§12.3 | O | P0 | Plant | Pi | — | MT-MFG |
-| MFG-006 | BOM/formulation versions are effective-dated. Only an approved, effective version can be released to production. | BRD; MP§12.4; BR-07 | C | P0 | Plant / QA | Pi | — | MT-MFG |
-| MFG-007 | Execution: Reserve → Issue → Batch start → Dosing → Processing → IPQC → Completion → Packaging. Actual lots, quantities, operators, equipment and readings are recorded. | BRD; MP§12.5 | O | P0 | Plant | Pi | — | UAT-08 |
+| MFG-004 | MRP uses sales orders, forecast, FG stock, BOM, raw material stock, lead times, safety stock and capacity, and produces planned orders and PR proposals. | BRD p.18; MP§12.2 | O | P1 | Plant | Co | D03 | MT-MFG |
+| MFG-005 | Production order fields as listed in MP§12.3. | BRD p.18; MP§12.3 | O | P0 | Plant | Pi | — | MT-MFG |
+| MFG-006 | BOM/formulation versions are effective-dated. Only an approved, effective version can be released to production. | BRD p.18; MP§12.4; BR-07 | C | P0 | Plant / QA | Pi | — | MT-MFG |
+| MFG-007 | Execution: Reserve → Issue → Batch start → Dosing → Processing → IPQC → Completion → Packaging. Actual lots, quantities, operators, equipment and readings are recorded. | BRD p.18; MP§12.5 | O | P0 | Plant | Pi | — | UAT-08 |
 | MFG-008 | Consumption above BOM tolerance needs an authorised deviation. | TC-11 | A | P0 | Plant / QA | Pi | — | TC-11 |
 | MFG-009 | Approved material substitutions within the approved alternates list. | P1 §4 | A | P1 | Plant / QA | Co | D03 | MT-MFG |
-| MFG-010 | Yield and mass-balance reconciliation: planned and actual yield, variance, scrap, waste, recovered material and rework. | BRD; MP§12.6 | O | P0 | Plant | Pi | — | MT-MFG |
-| MFG-011 | Packaging work order, packing material issue, filled and rejected packs, box serials and QR label printing. | BRD; MP§12.7 | O | P0 | Plant | Pi | D24 | MT-MFG |
-| MFG-012 | Backward and forward traceability, including rework genealogy. | BRD; MP§12.8 | O | P0 | Plant / QA | Pi | — | UAT-15 |
+| MFG-010 | Yield and mass-balance reconciliation: planned and actual yield, variance, scrap, waste, recovered material and rework. | BRD p.18; MP§12.6 | O | P0 | Plant | Pi | — | MT-MFG |
+| MFG-011 | Packaging work order, packing material issue, filled and rejected packs, box serials and QR label printing. | BRD p.18; MP§12.7 | O | P0 | Plant | Pi | D24 | MT-MFG |
+| MFG-012 | Backward and forward traceability, including rework genealogy. | BRD p.18; MP§12.8 | O | P0 | Plant / QA | Pi | — | UAT-15 |
 | MFG-013 | Production order amendment and cancellation, with stock reversal. | P1 §4 | A | P1 | Plant | Co | — | MT-MFG |
 | MFG-014 | Downtime logging with reason codes (feeds OEE availability). | MP§12.1 | O | P1 | Plant | Co | — | MT-MFG |
-| MFG-015 | Production cost per batch and per MT (material, plus labour and overhead allocation). | BRD; P4 M07 | O | P2 | Plant / Fin | Co | D32 | MT-MFG |
+| MFG-015 | Production cost per batch and per MT (material, plus labour and overhead allocation). | BRD p.18; P4 M07 | O | P2 | Plant / Fin | Co | D32 | MT-MFG |
 | MFG-016 | Capacity and line scheduling, and maintenance windows. | P1 §4 | A | P2 | Plant | En | — | MT-MFG |
+| MFG-017 | Plant operations calendar (Gantt): batch runs, CIP line cleaning, maintenance downtime and shift changeovers. | BRD p.18 | O | P1 | Plant | Co | — | MT-MFG |
+| MFG-018 | Finished-goods stock transfer: inspected lots move from the plant floor to WH-01, and remain unsaleable until the QA Head releases them. | BRD p.18 | O | P0 | Plant / Stores | Pi | — | MT-MFG |
+| MFG-019 | Plant & line settings master: plants, production lines, shifts (A, B, Night) and machine parameters. | BRD p.18 | O | P0 | Plant | Pi | — | MT-MFG |
+| MFG-020 | Production reports & audits: shift-wise production, downtime, maintenance history and operator efficiency. | BRD p.18 | O | P2 | Plant | Co | D23 | MT-MIS |
 
 ## 13. Quality control — all 6 BRD submodules kept (QC)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| QC-001 | All 6 QC submodules are kept (doc 02 §M08). | BRD; P7 QCL-001 | O | P0 | QC | Pi | — | MT-QC |
+| QC-001 | All 6 QC submodules are kept (doc 02 §M08). | BRD p.15; P7 QCL-001 | O | P0 | QC | Pi | — | MT-QC |
 | QC-002 | QC dashboard with the KPIs in MP§13.1. | MP§13.1 | O | P1 | QC | Co | — | MT-MIS |
 | QC-003 | Sample IDs are unique and carry chain-of-custody events (collected, received, split, retained, disposed). | MP§13.2; P1 §4 | A | P0 | QC | Pi | — | MT-QC |
 | QC-004 | Results are entered against an effective specification and method, with instrument, analyst and raw evidence attached. | MP§13.3 | O | P0 | QC | Pi | — | MT-QC |
 | QC-005 | The analyst who enters a result cannot be the reviewer who approves it (enforced by the system). | MP§13.4 | A | P0 | QC | Pi | — | MT-QC |
-| QC-006 | Controlled CoA document, versioned, with reviewer and approver. | BRD; MP§13.5 | O | P0 | QC | Pi | — | MT-QC |
-| QC-007 | An OOS/OOT result automatically opens an investigation. A retest needs authorisation. The original result is never overwritten. | BRD; MP§13.6 | O | P0 | QC | Pi | — | TC-12 |
-| QC-008 | An instrument that is overdue for calibration cannot be selected for a result. | BRD; MP§13.7 | O | P1 | QC | Co | — | MT-QC |
-| QC-009 | Raw-material lot disposition (Release, Reject, Hold) with authorised signatory. | P4 M08; P2 QC | C | P0 | QC / QA | Pi | D04 | TC-08 |
+| QC-006 | Controlled CoA document, versioned, with reviewer and approver. | BRD p.15; MP§13.5 | O | P0 | QC | Pi | — | MT-QC |
+| QC-007 | An OOS/OOT result automatically opens an investigation. A retest needs authorisation. The original result is never overwritten. | BRD p.15; MP§13.6 | O | P0 | QC | Pi | — | TC-12 |
+| QC-008 | An instrument that is overdue for calibration cannot be selected for a result. | BRD p.15; MP§13.7 | O | P1 | QC | Co | — | MT-QC |
+| QC-009 | Raw-material lot disposition (Release, Reject, Hold) by the QC Manager with an approved CoA (BRD p.4, p.15). | P4 M08; P2 QC | C | P0 | QC / QA | Pi | D04 | TC-08 |
 | QC-010 | Retention samples, and reagent and standard expiry tracking. | P1 §4 | M | P2 | QC | Co | — | MT-QC |
+| QC-011 | QC register covers 5 sample categories: raw material, in-process (IPQC), finished goods, packaging material and reagent/chemical. | BRD p.15 | O | P0 | QC | Pi | — | MT-QC |
+| QC-012 | Quarantine-lock override needs dual authorisation (QC Head + Plant Manager), raises a deviation automatically, notifies QA and blocks final batch release until QC approves the lot. | BRD p.15 | X | P0 | QC / Plant / QA | Pi | D33 | TC-08 |
+| QC-013 | CoA layout: physical parameters, chemical assay, heavy-metal limits, QC Analyst and QC Manager signatures, quality seal image and a CoA QR code. | BRD p.15 | O | P0 | QC | Pi | D08 | MT-QC |
 
 ## 14. Quality assurance — all 17 BRD submodules kept (QA)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| QA-001 | All 17 QA submodules are kept (MP§14 list; doc 02 §M09). | BRD; P7 QAS-001 | O | P0 | QA | Co | — | MT-QA |
+| QA-001 | All 17 QA submodules are kept (MP§14 list; doc 02 §M09). | BRD p.16; P7 QAS-001 | O | P0 | QA | Co | — | MT-QA |
 | QA-002 | QA dashboard with the KPIs in MP§14.1. | MP§14.1 | O | P1 | QA | Co | — | MT-MIS |
 | QA-003 | FG release requires: QC results approved → BMR/BPR reviewed → deviations reviewed → QA disposition. | MP§14.2; BR-05 | C | P0 | QA | Pi | D04 | TC-13, UAT-09 |
 | QA-004 | Only the designated QA release authority can set the disposition (Released, On Hold, Rejected, Rework Authorised). | MP§14.2 | C | P0 | QA | Pi | D04 | TC-13 |
@@ -254,37 +281,43 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 | QA-006 | Controlled document lifecycle: number, version, owner, author, reviewer, approver, effective date, review date and history. | MP§14.3 | O | P1 | QA | Co | — | MT-QA |
 | QA-007 | CAPA lifecycle with effectiveness verification. | MP§14.4 | O | P1 | QA | Co | — | MT-QA |
 | QA-008 | Recall case: affected shipments, dealers, stock, actions and reconciliation, with recall drill mode. | MP§14.5 | O | P1 | QA | Co | — | UAT-15 |
-| QA-009 | Deviation, NC, incident and change control registers, cross-linked to batches, lots and CAPA. | BRD; MP§14 | O | P1 | QA | Co | — | MT-QA |
-| QA-010 | Internal, supplier and customer/regulatory audits with findings that link to CAPA. | BRD; MP§14 | O | P2 | QA | Co | — | MT-QA |
-| QA-011 | Training compliance: each SOP version requires training, and effectiveness is recorded. An untrained user can be blocked from SOP-bound tasks. | BRD; P1 §4 | C | P2 | QA / HR | En | — | MT-QA |
-| QA-012 | Quality risk register (FMEA-style scoring). | BRD; MP§14 | O | P2 | QA | En | — | MT-QA |
-| QA-013 | Complaint investigation linked to the batch, shipment and dealer, flowing to CAPA and recall. | BRD; MP§14 | O | P1 | QA | Co | — | MT-QA |
-| QA-014 | "QA Rights Governance" — QA authorities are delegated, recorded and recertified. | BRD; MP§14 | O | P1 | QA | Co | — | MT-QA |
+| QA-009 | Deviation, NC, incident and change control registers, cross-linked to batches, lots and CAPA. | BRD p.16; MP§14 | O | P1 | QA | Co | — | MT-QA |
+| QA-010 | Internal, supplier and customer/regulatory audits with findings that link to CAPA. | BRD p.16; MP§14 | O | P2 | QA | Co | — | MT-QA |
+| QA-011 | Training compliance: each SOP version requires training, and effectiveness is recorded. An untrained user can be blocked from SOP-bound tasks. | BRD p.16; P1 §4 | C | P2 | QA / HR | En | — | MT-QA |
+| QA-012 | Quality risk register (FMEA-style scoring). | BRD p.16; MP§14 | O | P2 | QA | En | — | MT-QA |
+| QA-013 | Complaint investigation linked to the batch, shipment and dealer, flowing to CAPA and recall. | BRD p.16; MP§14 | O | P1 | QA | Co | — | MT-QA |
+| QA-014 | "QA Rights Governance" — QA authorities are delegated, recorded and recertified. | BRD p.16; MP§14 | O | P1 | QA | Co | — | MT-QA |
 | QA-015 | The ISO 9001 revision and the client's certification obligations are confirmed. No compliance claim is made in the system. | P1 §6; R11 | C | P2 | QA | — | D08 | — |
+| QA-016 | A recall (mock or actual) traces and locks all affected batches across the supply chain within 2 hours. | BRD p.16 | O | P1 | QA | Co | — | UAT-15 |
+| QA-017 | Line clearance is recorded by a QA Executive before batch or packaging starts. | BRD p.4 | O | P1 | QA / Plant | Co | — | MT-QA |
+| QA-018 | Controlled documents follow a biennial review cycle with due-date alerts. | BRD p.16 | O | P2 | QA | Co | — | MT-QA |
 
 ## 15. Logistics & dispatch (LOG)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| LOG-001 | Dispatch planning queue of approved, allocated orders, grouped as in MP§15.1. | BRD; MP§15.1 | O | P0 | Logistics | Pi | — | MT-LOG |
-| LOG-002 | Pick list → batch validation → pack → box scan → loading confirmation. | BRD; MP§15.2 | O | P0 | Stores | Pi | — | MT-LOG |
+| LOG-001 | Dispatch planning queue of approved, allocated orders, grouped as in MP§15.1. | BRD p.17; MP§15.1 | O | P0 | Logistics | Pi | — | MT-LOG |
+| LOG-002 | Pick list → batch validation → pack → box scan → loading confirmation. | BRD p.17; MP§15.2 | O | P0 | Stores | Pi | — | MT-LOG |
 | LOG-003 | Only QA-released lots can be picked (enforced by the server). | MP§11.6; BR-05 | A | P0 | Stores | Pi | — | TC-13 |
-| LOG-004 | Transporter, vehicle and driver allocation, with freight terms. | BRD; MP§15.3 | O | P0 | Logistics | Pi | — | MT-LOG |
-| LOG-005 | Shipping documents: invoice, delivery challan, packing list, e-way bill reference and LR. | BRD; MP§15.4 | O | P0 | Logistics | Pi | D08 | MT-LOG |
-| LOG-006 | POD with received quantity, recipient, upload, and shortage/damage remarks. | BRD; MP§15.5 | O | P0 | Logistics | Pi | — | TC-16 |
+| LOG-004 | Transporter, vehicle and driver allocation, with freight terms. | BRD p.17; MP§15.3 | O | P0 | Logistics | Pi | — | MT-LOG |
+| LOG-005 | Shipping documents: invoice, delivery challan, packing list, e-way bill reference and LR. | BRD p.17; MP§15.4 | O | P0 | Logistics | Pi | D08 | MT-LOG |
+| LOG-006 | POD with received quantity, recipient, upload, and shortage/damage remarks. | BRD p.17; MP§15.5 | O | P0 | Logistics | Pi | — | TC-16 |
 | LOG-007 | Exceptions: partial dispatch, short loading, damage, failed delivery, RTO, customer return and freight dispute. | P1 §4; MP§15.6 | A | P1 | Logistics | Co | — | TC-16 |
 | LOG-008 | Freight reconciliation against the transporter invoice. | P1 §4 | A | P1 | Logistics / Fin | Co | — | MT-LOG |
 | LOG-009 | Only scanned and confirmed quantities are posted as dispatched. | P2 §4 | A | P0 | Logistics | Pi | — | TC-14 |
+| LOG-010 | Loading slip with exact batch numbers, bag counts and box QR codes, plus a statutory delivery challan. | BRD p.17 | O | P0 | Stores / Logistics | Pi | — | MT-LOG |
+| LOG-011 | Lorry receipt: consignee and carrier copies; freight terms Paid / To-Pay / TBB; signed LR/POD upload drives freight settlement. | BRD p.17 | O | P0 | Logistics | Pi | — | MT-LOG |
 
 ## 16. QR & mobile (QR, MOB)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| QR-001 | Each FG box gets a unique serial identity linked to product, SKU, batch, manufacturing and expiry dates, serial and verification token. | BRD; MP§16.1; P7 LOG-001 | O | P0 | Plant / IT | Pi | D24 | MT-QR |
+| QR-001 | Each FG box gets a unique serial identity linked to product, SKU, batch, manufacturing and expiry dates, serial and verification token. | BRD p.17; MP§16.1; P7 LOG-001 | O | P0 | Plant / IT | Pi | D24 | MT-QR |
 | QR-002 | Server-side verification uses an HMAC-signed token. A visible hash alone is never trusted. | MP§16.1 | C | P0 | IT | Pi | — | MT-QR |
-| QR-003 | Internal scan actions: pack, move, pick, load, dispatch, receive, return and verify. | BRD; MP§16.2 | O | P0 | Stores | Pi | — | MT-QR |
+| QR-003 | Internal scan actions: pack, move, pick, load, dispatch, receive, return and verify. | BRD p.17; MP§16.2 | O | P0 | Stores | Pi | — | MT-QR |
 | QR-004 | A box cannot be scanned into two incompatible shipments. The second scan is rejected and logged. | TC-14; UAT-10 | A | P0 | Stores | Pi | — | TC-14 |
-| MOB-001 | Offline scanning: event ID, device, user, scan type, local time, sync status, server response and conflict status are captured. | BRD; MP§16.3; P7 MOB-001 | O | P1 | Stores / IT | Co | D09 | TC-15 |
+| QR-005 | Browser scanner supports the built-in camera and external USB/Bluetooth 2D imagers. | BRD p.17 | O | P0 | Stores / IT | Pi | D09 | MT-QR |
+| MOB-001 | Offline scanning: event ID, device, user, scan type, local time, sync status, server response and conflict status are captured. | BRD p.17; MP§16.3; P7 MOB-001 | O | P1 | Stores / IT | Co | D09 | TC-15 |
 | MOB-002 | The server reconciles all offline events. Duplicates are ignored idempotently. Conflicts go to an operator resolution queue. | MP§16.3; BR-10 | A | P1 | IT | Co | — | TC-15 |
 | MOB-003 | Device registration, remote wipe/revocation and an encrypted local store. | P4 §7 | A | P1 | IT | Co | D09 | MT-MOB |
 | MOB-004 | Public verification page shows only product name, pack, batch, dates and a genuine/not-genuine result. It is rate-limited. | MP§16.4, R10 | A | P1 | IT | Co | D24 | MT-QR |
@@ -295,38 +328,43 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| FIN-001 | Ledgers for dealers, vendors and transporters, and credit restriction. | BRD; P7 FIN-001 | O | P0 | Finance | Co | D02 | MT-FIN |
-| FIN-002 | Finance model: native accounting (Model A) or subledgers plus external accounting integration (Model B). Only one is built. | P7 FIN-002; MP§17 | X | P0 | Finance / MD | — | D02 | — |
-| FIN-003 | Invoice engine with the fields in MP§17.2. Invoices are created from dispatched quantities. | BRD; MP§17.2 | O | P0 | Finance | Pi | D27 | MT-FIN |
+| FIN-001 | Ledgers for dealers, vendors and transporters, and credit restriction. | BRD p.13,19; P7 FIN-001 | O | P0 | Finance | Co | D02 | MT-FIN |
+| FIN-002 | Finance model: the BRD scope is subledgers plus a GST summary, which points to Model B (subledgers + external accounting). The external system still has to be named. | P7 FIN-002; MP§17 | X | P0 | Finance / MD | — | D02 | — |
+| FIN-003 | Invoice engine with the fields in MP§17.2. Invoices are created from dispatched quantities. | BRD p.13,19; MP§17.2 | O | P0 | Finance | Pi | D27 | MT-FIN |
 | FIN-004 | GST e-invoice (IRN, signed QR, cancellation window) and e-way bill generation, if applicable after confirmation. | P1 §6; MP§17.2 | X | P1 | Finance | Co | D08, D27 | MT-INT |
-| FIN-005 | Credit control checks outstanding, aging, limit, open exposure and terms. An overrun needs an authorised exception and never passes silently. | BRD; MP§17.3; BR-03 | O | P0 | Finance | Pi | D18 | TC-06, UAT-04 |
+| FIN-005 | Credit control checks outstanding, aging, limit, open exposure and terms. An overrun needs an authorised exception and never passes silently. | BRD p.13,19; MP§17.3; BR-03 | O | P0 | Finance | Pi | D18 | TC-06, UAT-04 |
 | FIN-006 | Receipts and allocation to invoices: partial, on-account and advance. | MP§17.1; UAT-11 | A | P0 | Finance | Co | D02 | UAT-11 |
 | FIN-007 | Credit and debit notes linked to the source (return, rate difference, shortage). | MP§17.1 | A | P1 | Finance | Co | — | UAT-12 |
 | FIN-008 | Vendor payable from the matched invoice, and vendor payments. | MP§17.1 | A | P1 | Finance | Co | D02 | MT-FIN |
 | FIN-009 | Bank reconciliation. | MP§17.1 | A | P2 | Finance | Co | D02 | MT-FIN |
 | FIN-010 | Postings are idempotent. Each one keeps a source reference, a posting status and the external acknowledgment. A retry can never post twice. | MP§17.4, R6 | A | P0 | Finance | Co | — | TC-17, UAT-14 |
 | FIN-011 | Posting period lock and financial close checklist. | P1 §4; MP§17.1 | A | P1 | Finance | Co | — | MT-FIN |
-| FIN-012 | GST tax summary reports (GSTR-1 style outward, inward register). | BRD; MP§19.2 | O | P1 | Finance | Co | D08 | MT-FIN |
+| FIN-012 | GST tax summary reports (GSTR-1 style outward, inward register). | BRD p.13,19; MP§19.2 | O | P1 | Finance | Co | D08 | MT-FIN |
 | FIN-013 | A return after invoicing reconciles stock, tax and finance together. | P2 §4; UAT-12 | A | P1 | Finance | Co | — | UAT-12 |
+| FIN-014 | GST summary: monthly input tax credit (from vendor tax invoices, not POs) vs output liability, split CGST/SGST/IGST. | BRD p.19 | C | P1 | Finance | Co | D27 | MT-FIN |
+| FIN-015 | E-way bill fields on the invoice and shipment: 12-digit EWB number, vehicle number and expiry date. | BRD p.13 | O | P0 | Finance / Logistics | Pi | D08 | MT-LOG |
 
 ## 18. Documents, notifications, reporting (DMS, NTF, MIS)
 
 | ID | Requirement | Source | Class | Pri | Owner | Rel | Dec | Test |
 |---|---|---|---|---|---|---|---|---|
-| DMS-001 | Central document vault for the 16 categories in MP§18. Files are kept in private object storage; their metadata is kept in PostgreSQL. | BRD; MP§3.4, §18 | O | P0 | Admin | Pi | — | MT-DMS |
+| DMS-001 | Central document vault for the 16 categories in MP§18. Files are kept in private object storage; their metadata is kept in PostgreSQL. | BRD p.19; MP§3.4, §18 | O | P0 | Admin | Pi | — | MT-DMS |
 | DMS-002 | Upload, preview, versioning, authorised download through short-lived signed URLs, expiry tracking, review and audit. | MP§18 | O | P0 | Admin | Pi | — | MT-DMS |
 | DMS-003 | Uploads are virus-scanned and their MIME type and size checked. | — | M | P1 | IT | Co | — | Sec test |
 | DMS-004 | Retention schedule per document type, and legal hold. | P1 §6 privacy | M | P2 | Compliance | Co | D25 | MT-DMS |
+| DMS-005 | Vault expiry badges at 60 days, 30 days and expired for licences, CIB registrations, commissioner certificates and leases. | BRD p.19 | O | P1 | Admin | Co | — | MT-DMS |
 | NTF-001 | The 17 notification types in MP§21.1. | MP§21.1 | A | P1 | IT | Co | D11 | MT-NTF |
-| NTF-002 | Channels: in-app, email, and WhatsApp Business (where approved). Delivery status and history are kept. | BRD; MP§21.2 | O | P1 | IT | Co | D11 | MT-NTF |
+| NTF-002 | Channels: in-app, email, and WhatsApp Business (where approved). Delivery status and history are kept. | BRD p.7; MP§21.2 | O | P1 | IT | Co | D11 | MT-NTF |
 | NTF-003 | Admin-configurable trigger, condition, recipients, channel, template, escalation and active flag. | MP§21.3 | A | P2 | IT | Co | — | MT-NTF |
 | NTF-004 | No duplicate notifications on retry: each message has a dedupe key. | MP§21.3 | A | P1 | IT | Co | — | MT-NTF |
-| MIS-001 | Ten departmental dashboards (MP§19). | BRD; MP§19 | O | P1 | Mgmt | Co | D23 | MT-MIS |
+| MIS-001 | Ten departmental dashboards (MP§19). | BRD p.6,19; MP§19 | O | P1 | Mgmt | Co | D23 | MT-MIS |
 | MIS-002 | Report catalogue as in MP§19.2 (about 50 reports, listed in doc 06 §4). | MP§19.2 | O | P1 | Mgmt | Co | D23 | MT-MIS |
 | MIS-003 | Reports apply the same row-level scope as the screens. | MP§19.2 | A | P0 | IT | Co | — | TC-01 |
 | MIS-004 | Each KPI has a written formula, an owner and a refresh rate (KPI dictionary). | P2 MIS; P1 G12 | A | P1 | Mgmt | Co | D23 | MT-MIS |
 | MIS-005 | Report builder: dataset, fields, permission and schedule. | P4 M13 | A | P2 | Mgmt | En | — | MT-MIS |
 | MIS-006 | Global search across permitted records. | MP§3.1; UI§23 | A | P1 | IT | Co | — | MT-UI |
+| MIS-007 | Executive KPI cards with the BRD formulas and thresholds: pipeline (green > ₹50 L / red < ₹20 L), active orders (amber > 15), OEE (green > 85%), quarantine hold (red > 48 h), overdue debt (red > ₹10 L), pending dispatch (amber > 10). | BRD p.6 | O | P1 | Mgmt | Co | D23 | MT-MIS |
+| MIS-008 | Custom report filter grid by tier, region/state, product category, qty (MT), value (₹) and approval status, with CSV export. | BRD p.19 | O | P1 | Mgmt | Co | — | MT-MIS |
 
 ## 19. Platform, data, operations (PLT)
 
@@ -347,6 +385,8 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 | PLT-013 | Personal data processing follows India's DPDP Act 2023 (notice, purpose, retention, access), as confirmed by the client's adviser. | P1 §6 privacy | M | P1 | Compliance | Co | D25 | — |
 | PLT-014 | Multi-language UI (English first; Hindi/Marathi to be decided). | — | M | Opt | Mgmt | En | D29 | — |
 | PLT-015 | Build-versus-adapt assessment before a full custom build is commissioned. | P7 §10 | X | P0 | MD | — | D13 | — |
+| PLT-016 | AWS stack per BRD: Route 53 + ACM custom domain, CloudFront for the Vite SPA, ECS Fargate with autoscaling 2–8, RDS PostgreSQL Multi-AZ, S3, ElastiCache Redis, WAF + Shield. | BRD p.20 | O | P0 | IT | Pi | D35 | — |
+| PLT-017 | Availability and scale: BRD states 99.95% uptime and thousands of concurrent dealer orders; measurable SLOs to be agreed. | BRD p.20 | X | P1 | IT | Co | D21 | Perf test |
 
 ## 20. UI / UX (UI)
 
@@ -388,4 +428,4 @@ Covers MP Part 30, Step 1, and the RTM structure in P7 §2.
 | 22–25 API, DB, security, cloud | PLT-001…015, SEC-010…018 |
 | 2 UI | UI-001…008 |
 
-**Next step for the RTM:** once the BRD v2.4 is supplied (D00), each `BRD` source is replaced with its clause and page number, and any BRD statement not yet represented gets a new row. P7 §3 notes that the current list is built from summaries, so the BRD may contain more line items.
+**BRD reconciliation (v0.2):** every BRD section is mapped in doc 14 §2. The 37 BRD items that were missing from v0.1 were added: SEC-019/020, ORG-007/008, MDM-016/017, DLR-013…015, CRM-021, QUO-007, SO-010/011, APR-009, PUR-013/014, INV-016, MFG-017…020, QC-011…013, QA-016…018, LOG-010/011, QR-005, FIN-014/015, DMS-005, MIS-007/008, PLT-016/017.

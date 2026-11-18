@@ -15,16 +15,19 @@ Effective permission =
 
 Actions (MP§4.5): `view`, `create`, `edit_draft`, `submit`, `approve`, `reject`, `hold`, `amend`, `cancel`, `release`, `post`, `export`, `configure`, `deactivate`, `override`.
 
-## 2. Administrative model (answers SEC-001/002; D14)
+## 2. Administrative model (SEC-001/002/019/020; D14)
 
-| Position | Can | Cannot | Controls |
-|---|---|---|---|
-| Super Administration (1 position) | Platform settings, create admin roles, emergency approval (as one of two) | Approve business transactions; change audit; approve own privilege change | MFA (hardware key recommended), every action reviewed monthly |
-| Executive Administration (2 positions, e.g. MD and ED) | Approve policies, authority limits, number series and settings; final approval on business exceptions per policy | Grant themselves roles; bypass QA release | MFA; maker-checker with each other |
-| Security Administration (1 position, IT) | Users, roles, scopes, devices, sessions, audit viewer | Approve business documents; edit settings | MFA; role changes need EA approval |
-| Emergency Access ("break-glass") | Time-boxed (≤ 4 h) elevation for a named user | Persist beyond the window | Two of the Super/Executive admins approve; mandatory post-review within 2 working days |
+The BRD (p.3) defines the four main admins. The table maps each to a controlled position (MP §4.2):
 
-This keeps the BRD requirement for **four executive administration positions** and removes unrestricted bypass, as MP§4.2 requires.
+| BRD account | BRD powers | Controlled position | Can | Cannot | Controls |
+|---|---|---|---|---|---|
+| Admin 01 — Managing Director | Full system override, credit limit extensions, exceptional price approvals, "schema locks" | **Executive Admin (Commercial)** | Final approver for credit-limit exceptions and exceptional pricing; approves policies and authority limits | Edit posted transactions; bypass QA release; approve own privilege change | Strong MFA; every override needs a reason and is reviewed |
+| Admin 02 — Executive Director | PO release > ₹10,00,000, vendor credit terms, master financial ledgers | **Executive Admin (Purchase & Finance)** | Final PO approval > ₹10 L; vendor credit terms; finance masters | Same as above | Maker-checker with Admin 01 on policy changes |
+| Admin 03 — Executive Board Vault | Audit log forensics, emergency failover | **Security Admin** | Users, roles, scopes, devices, audit viewer and export, DR runbooks | Approve business documents | Role changes need Executive Admin approval |
+| Admin 04 — Executive Board Vault | Encryption key custody, emergency failover | **Super Admin / break-glass custodian** | Platform settings; holds AWS KMS/IAM admin permissions (keys never leave KMS); one of two break-glass approvers | Approve business transactions | Hardware key MFA; actions reviewed monthly |
+| Emergency access | — | Time-boxed elevation (≤ 4 h) | — | Persist beyond the window | Two of Admins 01, 02, 04 approve; post-review within 2 working days |
+
+"Unrestricted override" (BRD) becomes **override through an exception workflow**: reason, second approver where policy says so, audit and post-review. MFA for these accounts: authenticator app or hardware key instead of WhatsApp OTP + PIN (X16, D22).
 
 ## 3. Role catalogue (proposed)
 
@@ -74,7 +77,7 @@ This keeps the BRD requirement for **four executive administration positions** a
 | Approval policies / limits | — | — | — | — | — | — | V | — | — | — | — | — | — | — | — | — | — | — | — | — | AK | — |
 | Audit log | — | — | — | — | — | — | V | — | — | — | — | — | — | — | — | — | — | — | — | — | V | VX |
 
-`R*` = raw-material lot release authority, assigned to QC Manager **or** QA Manager/Head depending on D04.
+`R*` = raw-material lot release. **BRD p.4/p.15: QC Manager**, with an approved CoA. QA can place a QA hold at any time. The QAM/QAH `R*` cells apply only to the override workflow (D33).
 
 ## 5. Sales authority limits (seed values from the BRD, MP§4.4; inactive until approved, D15)
 
@@ -90,11 +93,25 @@ This keeps the BRD requirement for **four executive administration positions** a
 | 8 | TSM | 5% | ₹75,000 | |
 | 9 | SE | Catalogue price (0%) | Catalogue pricing | Initiator only |
 
+### 5.0 BRD tier permissions (p.3–4), mapped to system permissions
+
+| Tier | Jurisdiction (BRD) | BRD permissions → system permission |
+|---|---|---|
+| BH | Pan-India | Final exceptional pricing (`price.override`), national hierarchy provisioning (`hierarchy.configure`), national quota resets (`target.configure`) |
+| NSM | All 4 zones (N, S, E, W) | Zonal target distribution, national campaigns (`scheme.create`), multi-state distributor review |
+| DSM | Multi-zone cluster | Zonal team performance reviews, overdue debt escalation (`receivable.escalate`), regional sales audits |
+| ZSM | Zone | Zonal order approval, territory allocation (`territory.assign`), distributor dispute mediation |
+| RSM | State | Approval of SASM/ASM orders, field trial authorisation (`trial.approve`), dealer credit reviews |
+| SASM | Multi-district cluster | Quote creation, cluster discount approval, promotional sample requisition approval (`sample.approve`) |
+| ASM | District | Approval of TSM orders, lead allocation (`lead.assign`), beat route scheduling, sample issuance |
+| TSM | Taluka / sub-district | First-level approval of SE orders, dealer KYC submission (`dealer.submit`), farmer meeting logs |
+| SE | Retail beats and outlets | Order creation, customer onboarding, quotation generation, daily beat check-ins |
+
 ### 5.1 Two routing options for D01
 
 | | Option 1 — Sequential (BRD) | Option 2 — Conditional (recommended in P1 §5) |
 |---|---|---|
-| Rule | Every order passes SE/TSM → ASM → SASM → RSM → ZSM → Accounts → Warehouse | The order goes to the **lowest tier whose limits cover both the order value and the highest line discount**, walking up the initiator's reporting chain. Then Accounts (credit), then Dispatch authorisation |
+| Rule | Every order passes SE/TSM → ASM → SASM → RSM → ZSM → Accounts → Warehouse (BRD p.13). The BRD defines no route for orders above ZSM limits (X23) | The order goes to the **lowest tier whose limits cover both the order value and the highest line discount**, walking up the initiator's reporting chain. Then Accounts (credit), then Dispatch authorisation |
 | Example: ₹1,20,000 at 6% | 5 sales signatures | ASM only → Accounts |
 | Example: ₹4,00,000 at 4% | 5 sales signatures | ZSM (value > RSM limit) → Accounts |
 | Example: ₹90,000 at 13% | 5 sales signatures | ZSM (discount > RSM's 12%) → Accounts |
@@ -117,14 +134,15 @@ Optional hybrid: conditional routing, plus a "notify-only" copy to the intermedi
 | Credit exception | Exposure > limit, or overdue > N days | FH; above ₹Y → MD | 4 h | MD |
 | SO amendment (material) | Material field changed (D17) | Re-run the policy for the new revision | as SO | — |
 | PR | Always | Department head → budget owner if over budget | 1 day | PH |
-| PO | By value: < ₹1L PH; ₹1–10L PH + FH; > ₹10L + MD (to be set, D06) | — | 2 days | MD |
+| PO | By value: < ₹1 L PH; ₹1–10 L PH + FH; **> ₹10 L Executive Director (BRD p.3)** (lower bands to be set, D06) | — | 2 days | MD |
 | Emergency PR/PO | Emergency flag | PH immediately, retrospective FH review within 3 days | — | — |
 | Three-way match exception | Outside tolerance | PUR (justify) → FH | 2 days | — |
 | Stock adjustment | Any; value > ₹Z also FH | SH → ACC / FH | 2 days | FH |
-| RM lot disposition | After QC review | QC Manager or QA (D04) | 1 day | QA Head |
+| RM lot disposition | After QC review | **QC Manager** with approved CoA (BRD) | 1 day | QC Head |
+| Quarantine-lock override | Exceptional use before QC release | QC Head **and** Plant Manager (BRD p.15) + automatic deviation, QA Head notified (D33) | Immediate | MD |
 | BOM version | Always | Plant Head → QA Manager | 3 days | QA Head |
 | Specification version | Always | QC Head → QA Manager | 3 days | QA Head |
-| FG batch release | Always | QA Head or delegated QA Manager (single authorised signature, with re-authentication) | 1 day | — |
+| FG batch release | Always | **QA Head** (BRD p.4, p.16); delegation to QA Managers only if the client approves (single signature with re-authentication) | 1 day | — |
 | Deviation (major/critical) | Severity | QA Manager → QA Head | 1 day | MD (critical) |
 | CAPA closure | Always | Owner → QA Manager (effectiveness) | — | QA Head |
 | Recall initiation / closure | Always | QA Head → MD | Immediate | — |

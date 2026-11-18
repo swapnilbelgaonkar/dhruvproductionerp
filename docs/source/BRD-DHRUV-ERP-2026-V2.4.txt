@@ -1,0 +1,644 @@
+        DA
+    DHRUV AGRO TECHNOLOGIES PVT. LTD.
+    Chemical & Bio-Agri Manufacturing Enterprise • MIDC Chakan, Pune, Maharashtra
+
+
+
+       ENTERPRISE SOFTWARE ARCHITECTURE & FUNCTIONAL BLUEPRINT
+
+    BUSINESS REQUIREMENTS
+    DOCUMENT (BRD)
+    Comprehensive End-to-End Functional Specifications, Workflow Architecture,
+    Field Mappings, and Governance Matrix for Dhruv Agro Enterprise ERP 2.0
+         DOCUMENT REFERENCE                                SYSTEM TARGET RELEASE
+         BRD-DHRUV-ERP-2026-V2.4                           Enterprise Production Release v2.4 (Live Web &
+                                                           Mobile Cloud)
+         AUTHOR & TECHNICAL ARCHITECT                      EXECUTIVE SPONSOR
+         Advanced ERP Engineering Team / System            Executive Board of Directors (Dr. Dhruv Patel &
+         Solutions Architect                               Rajesh Sharma)
+         CLASSIFICATION                                    APPLICABLE INDUSTRIAL STANDARDS
+         Strictly Confidential — Proprietary Enterprise    FCO 1985, ISO 9001:2015, CIB&RC Chemical Acts,
+         Intellectual Property                             GST & E-Way Regulations
+
+
+
+
+    Dhruv Agro Corporate Headquarters: Plot C-42, MIDC Chakan, Pune - 410501 Date of Compilation: November 2026
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                         Page 1
+Document Control & Executive Sign-Off Matrix
+This Business Requirements Document (BRD) serves as the definitive functional and technical baseline for the
+Dhruv Agro Enterprise ERP system. All stakeholders, department leads, and system administrators must operate in
+strict conformance with the specifications documented herein.
+ Version Release
+         Date                  Primary Change Scope & Additions                          Prepared
+                                                                                         By             Approved By
+ v1.0    June 2026       Initial foundational ERP release: Core CRM, Dealers, Invoicing, Product        Director
+                         Procurement & Inventory.                                        Eng.
+ v2.0        August 2026 Added 18 Sales Hub modules, 9-tier Sales Hierarchy, Detailed Solutions         Board of
+                         Order Approval Register, and Production Engine.                 Arch.          Directors
+ v2.2        September Separated QC Lab & QA Compliance (17 modules), Strict             Principal      QA & QC
+             2026        Quarantine Lock, Multi-Item Quotation/PO, HSN & CGST/SGST Eng.                 Head
+                         split.
+ v2.4        November    Complete End-to-End BRD compilation: Transporters, Box QR Enterprise           Executive
+             2026        scanning, Standalone APK, AWS cloud blueprint.                  Arch.          Board
+Formal Departmental Sign-Off Matrix
+ Stakeholder                   Representative          Department Scope                  Sign-off     Verification
+ Designation                   Name                                                      Status       Date
+ Managing Director             Dr. Dhruv Patel         Executive Governance &             APPROVED    2026-11-15
+                                                       Commercial Overrides
+ Executive Director            Rajesh Sharma           Commercial Operations, Purchase    APPROVED    2026-11-15
+                                                       & Finance
+ VP - Sales & Marketing Amitabh Verma                  Pan-India Commercial Network (9    APPROVED    2026-11-16
+                                                       Tiers)
+ Head - Quality                Dr. Sunita Reddy        Regulatory, SOPs, CAPA, BMR &      APPROVED    2026-11-16
+ Assurance (QA)                                        Audits
+ Head - Plant                  Ramesh Verma            Formulations, Manufacturing &      APPROVED    2026-11-17
+ Operations                                            Packaging
+ Head - Finance &              Kiran Deshmukh          Tax Ledgers, GST, Statutory        APPROVED    2026-11-17
+ Accounts                                              Billing & Audits
+
+   Executive Summary: Dhruv Agro Enterprise ERP 2.0 is an integrated chemical and bio-fertilizer enterprise
+   resource planning suite engineered to replace legacy disconnected systems. It enforces strict regulatory
+   compliance (FCO, CIB&RC, ISO 9001:2015), multi-tier role-based approval gates, automatic mathematical checks
+   (GST split, 7-day validity, mass balance yield loss), box-level cryptographic QR tracking, and a physical system
+   quarantine lock that prevents unapproved chemical release.
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                                Page 2
+Section 1: User Roles, 9-Tier Sales Hierarchy & Access Governance
+  1.1 Executive Board & 4 Main Admins (Super-User Governance)
+The ERP enforces a top-level security ring managed by 4 Main Admins. These accounts have unrestricted
+administrative authority, override rights, and authenticate via multi-factor authentication (WhatsApp OTP + 2FA
+PIN):
+   Dr. Dhruv Patel (Managing Director): Full system override, credit limit extensions, exceptional price approvals,
+   system schema locks.
+   Rajesh Sharma (Co-Founder & Executive Director): High-value Purchase Order releases (>₹10,00,000),
+   vendor credit terms, master financial ledgers.
+   Corporate Admin 03 & 04 (Executive Board Vault): Emergency failover, audit log forensics, and
+   cryptographic encryption key custody.
+  1.2 Commercial Sales Department: 9-Tier Hierarchy Architecture
+To eliminate unauthorized discounting and prevent order leakage across nationwide distributor networks, the ERP
+implements a strict 9-Tier Commercial Sales Hierarchy:
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                         Page 3
+ Tier Role Title             Code Territorial              Discount         Order Value      Core Workflow Permissions
+ Rank                             Jurisdiction             Authority        Threshold
+ Tier 1 Business             BH Pan-India                  Unlimited        Unlimited        Final exceptional pricing,
+        Head                      National Scope           (Exceptional)    (>₹10 Lakhs)     national hierarchy
+                                                                                             provisioning, national quota
+                                                                                             resets.
+ Tier 2 National     NSM               All 4 Zones (N, S, Up to 25% Max Up to                Zonal target distribution,
+        Sales                          E, W)                            ₹10,00,000           national campaign rollout,
+        Manager                                                                              multi-state distributor review.
+ Tier 3 Deputy Sales DSM               Assigned Multi-     Up to 20%        Up to            Zonal team performance
+        Manager                        Zone Cluster                         ₹7,50,000        reviews, overdue debt
+                                                                                             escalation, regional sales
+                                                                                             audits.
+ Tier 4 Zonal Sales          ZSM       Zone Level (e.g.    Up to 15%        Up to            Zonal order approval, territory
+        Manager                        West Zone)                           ₹5,00,000        allocation, state-level
+                                                                                             distributor dispute mediation.
+ Tier 5 Regional             RSM       State Level (e.g.   Up to 12%        Up to            Approval of SASM/ASM
+        Sales                          Maharashtra)                         ₹3,50,000        orders, field trial
+        Manager                                                                              authorizations, dealer credit
+                                                                                             reviews.
+ Tier 6 Senior Area          SASM Multi-District           Up to 10%        Up to            Quote creation, cluster
+        Sales                     Cluster                                   ₹2,50,000        discount approval,
+        Manager                                                                              promotional sample requisition
+                                                                                             approval.
+ Tier 7 Area Sales           ASM       District Level     Up to 7%          Up to            Approval of TSM orders, lead
+        Manager                        (e.g. Nashik Dist)                   ₹1,50,000        allocation, beat route
+                                                                                             scheduling, sample issuance.
+ Tier 8 Territory            TSM       Taluka / Sub-       Up to 5%         Up to            First-level order approval from
+        Sales                          District Level                       ₹75,000          SEs, dealer KYC submission,
+        Manager                                                                              farmer meeting logs.
+ Tier 9 Sales                SE        Assigned Retail     Standard List    Catalog          Order creation, customer
+        Executive                      Beats & Outlets     Price Only       Pricing          onboarding, quotation
+                                                                                             generation, daily beat check-
+                                                                                             ins.
+
+  1.3 Operations, Manufacturing & Quality Roles Matrix
+  QC ANALYST (LABORATORY)                                          QC MANAGER (ANALYTICAL LABORATORY)
+  Physical/chemical testing, observation entry,                    Verifies test results, issues Certificate of Analysis
+  analytical data logging. Cannot release material.                (CoA), approves quarantine release.
+  QA EXECUTIVE (COMPLIANCE)                                        QA HEAD (BATCH DISPOSITION)
+  Drafts SOPs, logs deviations, maintains training                 Final release authority for finished goods, approves
+  records, performs line clearance.                                SOPs/CAPA, signs off BMR reviews.
+  STORE / WAREHOUSE MANAGER                                        PLANT PRODUCTION MANAGER
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                                   Page 4
+  Manages godowns, receipts (GRN), box QR barcode      BOM formulation, batch launch, shift allocation,
+  labeling, quarantine segregation.                    yield and mass balance control.
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                      Page 5
+Section 2: Executive Dashboard & Enterprise Analytics
+The Executive Dashboard functions as the mission-control portal for enterprise leadership and department heads,
+synthesizing real-time operational data across commercial, production, quality, and logistics pipelines.
+  2.1 Core KPI Cards & Metric Calculation Rules
+ KPI Title        Calculation Formula / Data                      Threshold               Operational Purpose
+                  Source                                          Indicator
+ Total Commercial Sum of all Active Opportunities in              Green: >₹50L • Red:     Evaluates sales forward pipeline
+ Pipeline         Stages 1–4                                      <₹20L                   strength for cash flow planning.
+ Active Sales     Count of Orders in status:                      Amber: >15 Pending      Prevents bottlenecks in the 9-tier
+ Orders           "Submitted" or "Accounts Review"                                        sequential approval workflow.
+ Production        (Actual Output MT / Plant                      Green: >85% •           Measures continuous chemical reactor
+ Target OEE       Planned Capacity MT) * 100                      Amber: 70-85%           and packaging line efficiency.
+ Quarantine Stock Sum of Raw Materials awaiting QC                Red Alert: >48          Enforces the strict quarantine lock
+ Hold             Laboratory release                              Hours Hold              preventing unreleased material usage.
+ Overdue Debt     Sum of Invoices exceeding Dealer                Red: >₹10,00,000        Automatically locks dealer ordering
+ Collection       Credit Days (e.g. >45 days)                                             when overdue limit is breached.
+ Pending          Orders approved by Accounts                     Amber: >10 Orders       Coordinates warehouse bay loading
+ Dispatches       awaiting Transporter pickup                                             and transporter SLA compliance.
+
+  2.2 Stage-Gate Pipeline Analytics
+  Enterprise Pipeline Funnel:
+    Stage 1: Lead Requirement (BANT Verified)          ➔    Stage 2: Sample Trial & Agronomist Assay   ➔
+
+    Stage 3: Quotation Sent (7-Day Limit)      ➔       Stage 4: Dealer PO Received    ➔
+
+    Stage 5: Hierarchy Approved & Dispatched
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                                      Page 6
+Section 3: Master Data & Strategic Partner Onboarding Ecosystem
+  3.1 Dealer Network Onboarding & KYC Vault (Customers)
+Agricultural dealers and distributors represent the core revenue channel. The onboarding workflow requires
+comprehensive commercial vetting, statutory licensing under Fertilizer and Pesticide Control Orders, and legal
+security guarantees.
+   Statutory Same-Line Entry Protocol: In Section 4 (Required Document Uploads), the GST Certificate Upload
+   control is engineered side-by-side on the exact same line as the GST Number text input field. This enforces zero
+   discrepancies between the uploaded PDF certificate and the 15-character GSTIN entered into the ledger
+   database.
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                            Page 7
+ Section                Field Name              Data Type & Format      Statutory Validation Rule
+ 1. Business            Auto Dealer Code        String (e.g. DLR-       System-generated sequential auto-increment; read-
+ Profile                                        2026-884 )              only.
+                        Business Legal          String (Max 150         Mandatory; must match official GST and PAN filings.
+                        Name                    chars)
+                        Constitution Type       Dropdown                Proprietorship, Partnership, Private Limited, LLP,
+                                                                        Farmer Producer Co (FPO).
+                        Proprietor /            String (Max 100         Full legal name as per Aadhaar / PAN card.
+                        Director                chars)
+                        Contact Phone &         Mobile (+91) & Email   Valid 10-digit Indian mobile number for WhatsApp
+                        Email                                          dispatch alerts.
+ 2. Commercial          Credit Days Limit       Integer (e.g. 45 Days) Days before invoicing triggers automatic order-taking
+ Limits                                                                freeze.
+                        Approved Credit         Currency (₹ INR)       Maximum open exposure allowed before director
+                        Limit                                          approval required.
+                        Annual Business         Currency (₹ INR)       Contracted annual turnover quota for tiered volume
+                        Target                                         rebates.
+                        Target Financial        Dropdown               FY 2025-26, FY 2026-27, FY 2027-28.
+                        Year
+ 3. Statutory           Fertilizer Licence      Alphanumeric (FL-       Mandatory under Fertilizer (Control) Order 1985.
+ Licences               No                      MH-XXXXX)
+                        Fertilizer Expiry       Date (YYYY-MM-DD)       System alerts 60 days before expiry; blocks billing if
+                        Date                                            expired.
+                        Pesticide Licence       Alphanumeric (PL-       Mandatory under Insecticides Act 1968.
+                        No                      MH-XXXXX)
+                        Pesticide Expiry        Date (YYYY-MM-DD)       System alerts 60 days before expiry; blocks
+                        Date                                            agrochemical billing.
+ 4. Document            GST Certificate +       File (PDF) + Text       Same-line entry: 15-digit GSTIN verified against
+ Uploads                GSTIN                   String                  certificate.
+                        Fertilizer              File Upload             Scanned copy of state agricultural commissioner
+                        Certificate             (PDF/Image)             endorsement.
+                        Pesticide               File Upload             Scanned copy of CIB&RC retail/wholesale
+                        Certificate             (PDF/Image)             endorsement.
+                        Official Letterhead     File Upload             Dealer letterhead with rubber stamp and authorized
+                                                (PDF/Image)             signature.
+ 5. Security            3 Bank Security         3 × File Uploads        Cheque #1, #2, #3 uploaded as legal security under
+ Cheques                Cheques                 (PDF/Img)               Section 138 NI Act.
+ 6. Management          Minimum 5               5 × (Name + ID          Full legal name + KYC ID doc upload
+ Vault                  Directors Data          Document)               (PAN/Aadhaar/Passport) for 5 board members.
+
+  3.2 Vendor Network Onboarding & RFQ Comparative Matrix (Suppliers)
+Chemical raw materials (technical grade actives, surfactants, emulsifiers, solvents) and packaging materials must
+be sourced from certified chemical manufacturers subject to stringent vendor ratings.
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                                         Page 8
+Key Functional Provisions in Vendor Master:
+    Chemical CIB Registration: Central Insecticides Board registration number and statutory expiry tracking.
+    Manufacturing Licence: Factory manufacturing licence verification for hazardous chemical processing.
+    Same-Line GST Entry: Upload file control alongside GST number input on the exact same row.
+    3 Bank Security Cheques & Minimum 5 Directors KYC Documents.
+    RFQ Comparative Evaluation Matrix: Integrated commercial comparison grid displaying basic quoted rate,
+    trade discount, landed tax/freight, net landed cost per MT, vendor quality rating, and lead time to auto-select
+    the winning bidder.
+  3.3 Transporter Onboarding & Transport SLA Agreement Vault (Logistics)
+Logistics partners transporting heavy bulk chemicals and liquid fertilizers must adhere to transport safety
+standards, hazardous material transport permits, and formal Service Level Agreements (SLA).
+   Compulsory Transport SLA Agreement (PDF): Formal legal SLA uploaded with contract validity dates.
+   Transport Registration Licence: National/State commercial transport permit number and expiry.
+   Transporter GST Certificate & GST Number: Same-line input configuration.
+   Nationalised Bank Cancelled Cheque: Verification of commercial bank account for freight settlements.
+   5 Directors / Fleet Partners KYC Vault: Identity records of fleet management operators.
+  3.4 Products & Master (Chemical SKUs) & Items (Finished Goods)
+ SKU         Product Trade        Chemical / Technical          Category      Standard HSN             Applicable
+ Code        Name                 Formulation                                 Pack      Code           GST
+  PRD-       Dhruv Chelated       Zinc                          Micronutrient 1 Kg / 25 29224990       12% (6%
+ CHEL-       Zinc 12% EDTA        Ethylenediaminetetraacetate                 Kg                       CGST + 6%
+ 01                               12% Min                                                              SGST)
+  PRD-       Dhruv Formula        Zn 5%, Fe 2%, Mn 1%, Cu
+                                                       Soil Nutrition          5 Kg / 10   31059090    12% (6%
+ MICR-       Grade 4 (Micro       0.5%, B 0.5%                                 Kg                      CGST + 6%
+ 02          Mix)                                                                                      SGST)
+  PRD-       Dhruv Bio-Zyme Ascophyllum Nodosum Marine Biostimulant            10 Kg       31010099    5% (2.5%
+ BIOZ-       Granules       Algae Extract                                      Bucket                  CGST + 2.5%
+ 03                                                                                                    SGST)
+  PRD-       Dhruv Super          Potassium Humate 98% Water Organic Soil      1 Kg        38249900    18% (9%
+ HUMA-       Humate 98%           Soluble                    Additive          Pouch                   CGST + 9%
+ 04          Flakes                                                                                    SGST)
+  PRD-       Cypermethrin         Cyano-(3-                     Raw Material   200 Kg      29269090    18% (9%
+ CYPE-       Technical 92%        phenoxyphenyl)methyl ester    Active         Drum                    CGST + 9%
+ 05                                                                                                    SGST)
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                            Page 9
+Section 4: Sales & Marketing Management Hub (18 Sub-Modules)
+The Sales & Marketing Hub provides a unified commercial platform for managing the entire B2B sales lifecycle
+across the 9-tier hierarchy. It comprises 18 interconnected sub-modules:
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                 Page 10
+ # Sub-Module Name            Core Functional Purpose & Scope                  Key Input / Output Data Fields
+ 1 CRM Dashboard & KPIs       Real-time commercial metrics, conversion         Total Pipeline Value, Conversion %,
+                              ratios, stage breakdown, overdue collection      Hot Leads Count, Overdue Sum.
+                              alerts.
+ 2 Lead Capture &             Captures leads from exhibitions, agro-           Company, Contact, Phone, Territory,
+    Management                dealers, IndiaMART, field visits; logs           Lead Source, Chemical Demand.
+                              industry requirements.
+ 3 BANT Qualification Engine Evaluates BANT (Budget, Authority, Need,          Need Score, Qty Required (MT),
+                              Timeline) before converting leads to             Budget Clearance, Decision Maker
+                              opportunities.                                   Known.
+ 4 Opportunity Pipeline       Visual 4-stage pipeline (Requirement ➔           Opportunity ID, Customer, Value (₹),
+    (Kanban)                  Sample Trial ➔ Quote Sent ➔ PO Expected).        Expected Close Date, Win %.
+ 5 Commercial Activity Log Daily beat visits, phone logs, technical            Activity Type, Date/Time, Discussion
+                              discussions, and field agronomy visits           Notes, Next Action Follow-up Date.
+                              recorded by reps.
+ 6 Customer 360°              Consolidated dossier of dealer history: past     Dealer Code, Credit History, Total
+    Comprehensive View        quotes, orders, ledger balance, active           Order Value (₹), Payment Reliability.
+                              complaints.
+ 7 9-Tier Hierarchy Rights Dynamic configuration of commercial                 Tier Level (1-9), Title, Max Discount %,
+    Governance                privileges, approval ceilings, and territorial   Max Order Value, Scope.
+                              boundaries.
+ 8 Competitor Market          Tracks competitor formulations, pricing per      Competitor Brand, Technical Active %,
+    Intelligence              unit, market share %, and counter-               Market Price/Kg, Dhruv Strategy.
+                              strategies.
+ 9 Price List & Tiered        Controls base selling prices, volume slabs,      Product SKU, Base Selling Rate, Slab
+    Discount Control          dealer margins, and max discount overrides.      Discounts, Hierarchy Approval Ceiling.
+ 10 Sample Requisition &      Authorizes non-commercial promotional            Sample ID, Target Farmer/Dealer,
+    Dispatch                  samples for field trials and analytical          Product Batch, Agronomist
+                              validation.                                      Recommendation.
+ 11 Field Trial Assay         Records crop performance trials (crop yield      Trial Crop, Dosage/Acre, Yield %, Soil
+    Evaluation                increase %, dosage, soil health                  pH Effect, Farmer Feedback.
+                              improvements).
+ 12 Zonal Target Setting &    Breaks down national annual sales target (₹      Financial Year, Zone/State, Assigned
+    Allocation                Cr) into zonal, regional, and district quotas.   Target (₹), Monthly Target Breakdown.
+ 13 Outstanding Debt &        Automated aging of dealer debts (>30, >60,       Invoice No, Aging Days, Outstanding
+    Recovery Hub              >90 days) with automated recovery call           Balance (₹), Escalation Level.
+                              triggers.
+ 14 Dealer Order Approval     Sequential 7-stage workflow: SE/TSM ➔            PO Letterhead Upload, Item Details,
+    Register                  ASM ➔ SASM ➔ RSM ➔ ZSM ➔ Accounts ➔              HSN, Line Taxes, Multi-Tier Signatures.
+                              Warehouse.
+ 15 Executive Level Analytics Consolidated high-level overview for senior      National % Achievement, Approved
+    (BH/NSM/DSM)              sales leadership across national and zonal       Orders MT, Outstanding Recovery MT.
+                              teams.
+ 16 Contract Pricing & Annual Manages institutional rate contracts for         Contract Ref, Minimum Annual
+    Volume Agreements         corporate farming groups and large               Quantity (MT), Fixed Rate (₹), Validity
+                              cooperatives.                                    Period.
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                             Page 11
+ # Sub-Module Name                      Core Functional Purpose & Scope             Key Input / Output Data Fields
+ 17 Commercial Beat Plan &              Pre-planned travel programs (MTP) for       Rep Name, Beat Route, Scheduled
+    Tour Program                        sales executives across designated          Dealers, GPS Check-in Coordinates.
+                                        distributor clusters.
+ 18 Export Clear Excel / CSV            Standardized tabular export omitting        Product Name, Qty (Ltr/Kg), Pack Size,
+    Engine                              extraneous company pricing and formatting   Units, Rate, GST %, Total Amount.
+                                        dealer lines.
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                                Page 12
+Section 5: Operations Management (Commercial & Logistics)
+  5.1 Quotation Engine (Sales)
+    7-Day Statutory Order Validity: The quotation validity period is automatically calculated as Quotation Date +
+    7 Days . Expired quotations cannot be converted to sales orders without re-approval.
+
+    Dynamic Multi-Item Selection Table: Users can add multiple chemical line items using the + Add Another
+    Item button. Each row dynamically calculates taxable amount and taxes.
+
+    Statutory Table Headers: The quotation table explicitly specifies Sl No , Description of Goods , HSN / SAC
+    Code , Pack Size , Quantity (Units) , Rate (₹) , CGST % , SGST % , and Amount (₹) .
+
+    A4 Print Preview Modal: Instant print frame with formal corporate header, bank details, 7-day validity banner,
+    itemized tax ledger breakdown, and authorized signature blocks.
+  5.2 Invoice Engine (Statutory Tax Invoice)
+    Tax Invoice Generation: Generates statutory commercial invoices complying with Indian GST rules (CGST +
+    SGST for intra-state Maharashtra transactions; IGST for inter-state supply).
+    E-Way Bill Integration: Formatted fields for 12-digit Government E-Way Bill Number, Vehicle Number, and E-
+    Way Expiry Date.
+    Statutory Rounding: Auto-calculation of round-off paise to ensure exact rupee totals.
+  5.3 Sales Order & Sequential Multi-Tier Approval Workflow
+  End-to-End Order Workflow:
+    1. SE / TSM Order Intake (Upload Dealer PO)            ➔     2. ASM Approval (District Check)    ➔
+
+    3. SASM Approval (Cluster Check)        ➔    4. RSM Approval (State Check)          ➔    5. ZSM Approval (Zonal Check)   ➔
+
+    6. Accounts Review (Ledger / Stock Lock)           ➔       7. Warehouse Dispatch (Box QR Scan)
+
+    Scanned PO Upload: Sales reps upload the physical purchase order on the dealer's official letterhead with
+    rubber stamp and signature (PDF/Image format).
+    Universal Editing Rights: TSM, ASM, SASM, RSM, and ZSM each possess authorized rights to edit, update,
+    adjust quantities, hold, or approve orders at their respective gate.
+    Accounts Team Stock Gate: Accounts team performs two checks before releasing to the warehouse: (1)
+    Dealer outstanding ledger balance check against credit limit, and (2) Inventory availability in designated
+    godown.
+  5.4 Procurement & Purchase Orders (Raw Materials)
+    Dynamic Multi-Item Selection: Supports multiple chemical ingredients per PO (e.g. Active Ingredient +
+    Solvent + Surfactant + HDPE Drums).
+    HSN & Separate CGST / SGST Columns: HSN / SAC Code column placed immediately after Raw Material
+    Description , followed by separate CGST % and SGST % columns.
+
+    7-Day Validity & 3-Way Matching: POs are issued with 7-day acceptance validity and match against
+    subsequent Inward Receipt Notes (GRN) and Vendor Tax Invoices.
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                                         Page 13
+    A4 Print Preview Frame: Complete purchase order layout with purchase terms, delivery destination godown,
+    and Purchase Manager signature block.
+  5.5 Inventory & Warehouse Stock Control
+    Multi-Warehouse Architecture: Distinct godowns for Finished Goods (WH-01 Chakan), Raw Materials (WH-02
+    Chakan), Packaging Materials (WH-03 Chakan), and Central Lab Chemicals (WH-04 Hyderabad).
+    Triple Stock Segregation:
+        Available Stock : Released by QC; ready for production or dispatch.
+
+        Quarantined Stock : Inward material awaiting laboratory testing. Hard-locked by system.
+
+        Reserved Stock : Allocated to approved sales orders awaiting vehicle loading.
+
+    Buffer Stock Alerts: Automatic warning when available stock falls below safety threshold.
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                    Page 14
+Section 5.6 & 5.7: Quality Control (QC) & Quality Assurance (QA)
+  5.6 Quality Control (QC Laboratory) — 6 Core Submodules
+The QC Laboratory ensures that no chemical raw material enters production and no finished fertilizer leaves the
+plant without analytical testing complying with the Fertilizer (Control) Order (FCO 1985) and Central Insecticides
+Board (CIB) standards.
+   Mandatory System Quarantine Control Lock: When raw materials arrive at the warehouse gate, the system
+   marks the inventory status as Quarantined . The ERP enforces an absolute system-level lock: Warehouse and
+   Production storekeepers cannot issue quarantined material to manufacturing lines until the QC Manager
+   digitally releases the batch with an approved Certificate of Analysis (CoA).
+
+ QC Submodule       Functional Specifications & Protocol                       Key Data Fields & Governance
+ 1. QC Testing &    Main register managing analytical samples across 5         Sample ID, Batch No, Category, Mfg
+ CoA Register       categories: (1) Raw Material, (2) In-Process (IPQC), (3)   Date, Exp Date, Analysed By, Test
+                    Finished Goods, (4) Packaging Material, (5)                Status (Passed / Failed), CoA QR Code.
+                    Reagent/Chemical.
+ 2. Strict          Enforces system-level quarantine barrier. Overrides        Quarantine Lot ID, Inward GRN Ref,
+ Quarantine Lock require dual authorization from QC Head and Plant             Holding Warehouse, Lock Status,
+                    Manager.                                                   Release Timestamp, Releasing Officer.
+ 3. Specification & Standard testing protocols (STP) and acceptance criteria   Product Name, Test Parameter (Assay
+ Method Master      as per FCO 1985 and Indian Standards (IS).                 %, pH, Solubility, Bulk Density),
+                                                                               Standard Spec Range, Analytical
+                                                                               Method (HPLC, AAS).
+ 4. OOS & OOT      Formal investigation workflow for Out-of-Specification      Incident ID, Sample Ref, Failing
+ Investigation Log (OOS) and Out-of-Trend (OOT) test results.                  Parameter, Lab Investigation Report,
+                                                                               Root Cause, Retesting Protocol, Final
+                                                                               Disposition.
+ 5. Instruments &        Tracks all lab analytical equipment (HPLC, Atomic     Instrument Code, Equipment Name,
+ Calibration             Absorption Spectrophotometer, pH meters, moisture     Make/Model, Calibration Frequency,
+                         balances).                                            Last Calibrated Date, Calibration Due
+                                                                               Date, Status.
+ 6. QC Hierarchy         Enforces separation of duties between QC Analysts     Role Tier, Observation Entry Rights, CoA
+ Governance              (data entry only) and QC Managers (approval and       Signing Rights, Quarantine Override
+                         release).                                             Authority.
+Certificate of Analysis (CoA) Statutory Layout:
+    Physical Parameters: Appearance (Free Flowing Powder / Liquid), Solubility (100% Water Soluble), pH of 5%
+    solution (2.5 to 4.0).
+    Chemical Assay Parameters: Elemental Assay percentages (Zinc as Zn 3.0%, Ferrous as Fe 2.5%, Copper as
+    Cu 1.0%, Manganese as Mn 1.0%, Boron as B 0.5%, Molybdenum as Mo 0.1%).
+    Heavy Metal Impurity Limits: Toxic contaminants restricted under FCO guidelines (Lead as Pb <0.003%,
+    Cadmium as Cd <0.0025%, Arsenic as As <0.01%).
+    Digital Sign & Stamp: File upload provisions for QC Analyst signature, QC Manager signature, and official
+    corporate Quality seal image.
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                             Page 15
+  5.7 Quality Assurance (QA Compliance) — 17 Core Submodules
+While QC tests the material, Quality Assurance (QA) governs the quality systems, documentation integrity, and
+regulatory compliance across all manufacturing and warehousing operations.
+ # QA Submodule             Operational Scope & Compliance Governance
+ 1 SOP Management           Creation, review, revision, and distribution of Standard Operating Procedures across all
+                            plant divisions.
+ 2 Document Version         Strict tracking of document versions (v1.0, v1.1, v2.0), effective dates, and biennial
+    Control                 review cycles.
+ 3 Change Control           Formal evaluation of proposed changes to equipment, vendors, raw materials, or
+    Management              manufacturing processes.
+ 4 CAPA Management          Corrective and Preventive Actions tracking resulting from deviations, customer
+                            complaints, or audit findings.
+ 5 Deviation Management Logging and technical risk assessment of unplanned process or laboratory events with
+                            containment plans.
+ 6 Non-Conformance (NC) Formal identification, tagging, and quarantine of non-conforming in-process batches or
+                            raw materials.
+ 7 Incident Management Reporting and root-cause analysis of EHS (Environmental, Health & Safety) chemical spill
+                            or facility events.
+ 8 Batch Record Review Exhaustive review of Batch Manufacturing Records and Batch Packaging Records prior to
+    (BMR/BPR)               commercial release.
+ 9 Internal Quality Audits Scheduled internal department audits evaluating adherence to SOPs, hygiene, and
+                            calibration routines.
+ 10 Supplier Quality Audits On-site and questionnaire audits of active chemical ingredient manufacturers and
+                            packaging suppliers.
+ 11 Customer / Regulatory Management of audits conducted by institutional clients or State Agricultural
+    Audits                  Commissioner inspectors.
+ 12 Training Compliance     Training matrix tracking employee qualifications, GxP certifications, and chemical
+    Register                handling training.
+ 13 Specification Approval Formal sign-off on new product specifications between R&D, Quality, and Plant
+    Gate                    Management.
+ 14 Quality Risk            FMEA (Failure Mode and Effects Analysis) risk assessments for chemical synthesis and
+    Management (QRM)        packing lines.
+ 15 Complaint Investigation Root cause analysis of dealer field complaints (efficacy failure, caking, sediment) with
+                            retention sample tests.
+ 16 Recall Management       Mock and actual product recall protocols capable of tracing and locking batches across
+    Engine                  the supply chain within 2 hours.
+ 17 QA 3-Tier Rights        Three-tier privilege separation: QA Executive (Logs records) ➔ QA Manager (Approves
+    Governance              SOPs/CAPA) ➔ QA Head (Final Batch Disposition & Release).
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                          Page 16
+Section 5.8 to 5.13: Logistics, Traceability & Mobile Hardware
+Scanning
+  5.8 Logistics Schedule & Dispatch Planning
+    Shipment Queue: Real-time list of sales orders released by Accounts, organized by destination district and
+    delivery priority.
+    Vehicle & Transporter Assignment: Assigns transport partner, vehicle registration number, and driver contact
+    to scheduled consignments.
+  5.9 Receipt Note (Inward GRN)
+    Gate Entry Record: Inward consignment receipt capturing delivery challan no., vehicle gross/tare weight, and
+    physical package condition.
+    Automatic Quarantine Assignment: On GRN completion, material lots automatically enter the quarantine
+    register awaiting QC inspection.
+  5.10 Delivery Note (Outward DC)
+    Loading Slip Generation: Warehouse packing list confirming exact batch numbers, bag counts, and box QR
+    codes loaded onto the carrier.
+    Transport Challan: Statutory delivery challan accompanying the consignment during transit.
+  5.11 Transport Receipt (Bilty / LR Tracker)
+    Lorry Receipt (LR) Management: Records consignee copy, carrier copy, and freight ledger amount (Paid / To-
+    Pay / TBB).
+    Proof of Delivery (POD) Archiving: Upload of dealer-signed LR acknowledgments for freight invoice
+    settlement.
+  5.12 Box-Level QR Code Generator & Scanner
+    Cryptographic Box Barcode: Generates unique QR codes for every finished goods carton containing: Product
+    Code, Batch Number, Manufacturing Date, Expiry Date, Serial Number, and Verification Hash.
+    Camera & Laser Scanner Interface: Browser-based scanner supporting integrated webcam and external
+    USB/Bluetooth industrial 2D barcode imagers.
+  5.13 Standalone Mobile APK Scanner
+    Mobile Device Optimized (PWA/APK Mode): Operates in standalone APK mode accessed via ?mode=apk or
+    direct mobile launcher shortcut.
+    Offline Local Storage: Stores scanned box serials in local indexed database when operating in remote rural
+    godowns with poor network connectivity, auto-syncing upon reconnection.
+    Anti-Counterfeit Farmer Verification: Allows dealers and field agricultural officers to scan any box to instantly
+    verify batch authenticity and FCO compliance.
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                          Page 17
+Section 6: Production & Manufacturing Plant Engine (16
+Submodules)
+The Production & Plant Engine controls continuous and batch manufacturing operations across Dhruv Agro's
+chemical blending reactors, granulators, pulverizers, and automated packaging lines.
+ # Plant Submodule                   Functional Specifications & Engineering Controls
+ 1 Production Dashboard              Real-time daily output (MT), OEE efficiency %, target achievement %, running reactors,
+    & OEE                            and active loss metrics.
+ 2 Production Planning               Converts confirmed sales orders into monthly and weekly plant production schedules with
+    (MRP)                            raw material demand forecasting.
+ 3 Production Orders                 Official production work orders detailing planned quantity (MT), target line, launch date,
+    Register                         and completion deadlines.
+ 4 Plant Operations                  Gantt-style calendar scheduling batch runs, line cleaning (CIP), maintenance downtime,
+    Calendar                         and shift changeovers.
+ 5 BOM & Formulation                 Chemical master recipes specifying standard input ratios (Kg/MT), reactor temperature,
+    Master                           reaction time, and standard yield %.
+ 6 Material Consumption              Tracks exact raw material lots dosed into reactors (internal lot, supplier lot, GRN
+    Dosing                           reference, dosing weight).
+ 7 Yield & Mass Balance              Calculates chemical mass balance: Total Input Raw Material (Kg) = Finished
+    Engine                           Goods (Kg) + Process Loss (Kg) + Recovered Scrap (Kg) .
+
+ 8 Loss, Waste & Scrap               Categorizes manufacturing losses (reactor wall residue, dust collection filter loss,
+    Tracking                         evaporation, packaging spillage).
+ 9 Recycle & Rework                  Re-processing protocols for off-spec powder or granulate fines returned into the
+    Engine                           secondary mixing cycle.
+ 10 Packaging Line                   Monitors automatic bag-filling and pouch-sealing lines (50Kg bags, 1Kg pouches, 1L
+    Operations                       bottles), bag counter logs, and tare checks.
+ 11 Finished Goods Stock             Automated post-production transfer of inspected lots from plant floor to Central Finished
+    Transfer                         Goods Godown (WH-01).
+ 12 Batch Traceability               Dual Traceability Engine:
+    Graph                            • Backward: FG Batch ➔ In-Process Lot ➔ Raw Material Lots ➔ Vendor GRN & Certificate.
+                                     • Forward: Vendor Raw Material Lot ➔ Affected Batches ➔ Dispatched Dealers & Invoices.
+ 13 Quality Integration              In-process quality testing gates during manufacturing (viscosity, reaction completion,
+    (IPQC)                           bulk density before bagging).
+ 14 Production Costing               Computes actual landed manufacturing cost per MT: Raw Material Cost + Energy/Power +
+    Ledger                           Labor + Packaging + Amortized Overhead.
+ 15 Production Reports &             Shift-wise production reports, machine downtime logs, maintenance history, and operator
+    Audits                           efficiency reports.
+ 16 Plant & Line Settings            Configuration of plants (Chakan Plant 1, Baramati Unit 2), production lines, shift timings
+    Master                           (A, B, Night), and machine parameters.
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                                     Page 18
+Section 7: Portals, Governance & System Administration
+  7.1 Finance & Ledgers
+    Subledger Accounting: Maintains independent real-time financial ledgers for every dealer, vendor, and
+    transport partner.
+    Credit Exposure & Lock Trigger: Real-time credit monitoring blocks fresh sales order generation when a
+    dealer's total outstanding balance exceeds approved credit limit or aging threshold.
+    Tax Ledgers & GST Summary: Consolidates monthly Input Tax Credit (ITC from vendor POs) versus Output
+    Tax Liability (from sales invoices) split into CGST, SGST, and IGST components.
+  7.2 Document Vault
+    Centralized Statutory Repository: Secure encrypted repository archiving factory licences, CIB registrations,
+    state agricultural commissioner certificates, lease agreements, and corporate tax filings.
+    Expiry Alert System: Visual badge alerts at 60 days, 30 days, and expired intervals to prevent non-compliance
+    shutdown.
+  7.3 Approvals Engine
+    Unified Executive Approval Inbox: Single dashboard aggregating all pending approval requests across
+    departments: Sales Orders, Purchase Orders, Credit Limit Overrides, Quality Deviations, CAPA Closures, and
+    SOP Releases.
+    Multi-Action Decision Controls: One-click actions to Approve, Reject with remarks, or Hold for technical
+    clarification.
+  7.4 User Management & Access Rights Matrix
+    4 Main Admin Super-Accounts: Protected with WhatsApp OTP two-factor verification.
+    Granular Role-Based Permissions (RBAC): Specific boolean flags for each module: create , edit , update ,
+     delete , approve , hold , and deactivate .
+
+    Audit Trail Logging: Every user action (logins, order approvals, price overrides, document edits) is logged with
+    immutable timestamps, user IDs, and IP addresses in the global audit drawer.
+  7.5 Reports & Customization Engine
+    Multi-Dimensional Filter Grid: Generate custom reports filtered by Sales Hierarchy Tier, Region/State, Product
+    Category, Quantity (MT), Order Value (₹), and Approval Status.
+    Clean Tabular Data Export: One-click export to formatted Excel (.csv) matching exact commercial
+    presentation standards.
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                         Page 19
+Section 8: Custom Domain & AWS Cloud Infrastructure Plan
+To transition the system from prototype to an enterprise-grade, high-availability commercial deployment hosting
+thousands of concurrent dealer orders and document transactions, the following AWS cloud architecture is
+specified:
+ Infrastructure         AWS Service            Configuration Specification                 SLA & Sustainability Target
+ Layer                  Component
+ DNS & SSL              AWS Route 53 + AWS Custom corporate domain (e.g.                   100% DNS availability;
+ Routing                Certificate Manager erp.dhruvagro.com ) with wildcard              automatic SSL renewal.
+                                               SSL/TLS encryption.
+ Content                Amazon CloudFront Global edge caching for React/Vite single-       Sub-50ms latency across all
+ Delivery & CDN                                page application static assets and UI       Indian telecom networks.
+                                               scripts.
+ Application            AWS ECS (Fargate       Node.js / Express containerized API         99.95% uptime SLA;
+ Server                 Containers) or Elastic microservices with auto-scaling (2 to 8     automatic health check
+                        Beanstalk              instances).                                 recovery.
+ Relational             Amazon RDS             ACID-compliant relational database engine   Automated daily backups;
+ Database               PostgreSQL (Multi- handling commercial transactions, row           Multi-AZ instant failover;
+                        AZ)                    locks, and financial ledgers.               encrypted at rest.
+ Document &             Amazon S3 (Simple Private encrypted bucket storing uploaded        99.999999999% (11 9s)
+ Media Vault            Storage Service)       PDFs (GST certs, 3 cheques, 5 directors     durability; presigned secure
+                                               KYC, signed POs).                           access URLs.
+ Job Queue &            Amazon ElastiCache High-speed in-memory store for session          Sub-millisecond read/write
+ Cache                  (Redis)                tokens, WhatsApp OTP state, and             response times.
+                                               background PDF generation queues.
+ Security & WAF         AWS WAF (Web App DDoS mitigation, SQL injection filtering, rate    Zero breach tolerance; real-
+                        Firewall) + Shield     limiting, and geo-restriction.              time threat monitoring.
+
+
+
+                Dhruv Agro Technologies Pvt. Ltd. — Enterprise ERP 2.0 Business Requirements Document
+                              Document End • Confidential & Proprietary • All Rights Reserved
+
+
+
+
+Dhruv Agro Technologies Ltd. — Confidential BRD v2.4                                                                Page 20
+

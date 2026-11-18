@@ -100,30 +100,28 @@ flowchart LR
 
 **Design choice:** dealers, vendors and transporters share one `party` table with role records (`party_roles`), so one GSTIN cannot exist as two unrelated records and a vendor that is also a dealer gets one ledger identity.
 
-## M03 — Sales & CRM (18 BRD submodules kept)
+## M03 — Sales & CRM (the 18 sub-modules in BRD p.10–11)
 
-The MP lists 17 Sales functions by name. The 18th is assumed to be the quotation/order desk handled in M04. **Confirm the exact list of 18 against the BRD (D00).**
-
-| # | Submodule | Main screens | Approvals |
+| # | BRD sub-module | Main screens (doc 06) | Approvals |
 |---|---|---|---|
-| 1 | CRM Dashboard | S-M03-01 | — |
-| 2 | Lead Management | Lead register, lead form | — |
-| 3 | Lead Qualification (BANT+) | Qualification panel | — |
-| 4 | Opportunity Pipeline | Kanban, opportunity detail | Loss approval optional |
-| 5 | Commercial Activities | Activity log, calendar | — |
-| 6 | Territory & Target Management | Target allocation tree, achievement | Target publish by BH/NSM |
-| 7 | Pricing Management | Price lists, schemes, contract prices | Price list approval (Sales + Finance) |
-| 8 | Sample Management | Sample request, sample register | Sample approval |
-| 9 | Field Trial Management | Trial plan, observations | — |
-| 10 | Competitor Intelligence | Competitor register | — |
-| 11 | Beat Planning | Tour plan, daily beat, check-in | Tour plan approval by manager |
-| 12 | Customer / Dealer 360° | 360 view | — |
-| 13 | Contracts & Annual Volume Agreements | Contract register | Contract approval |
-| 14 | Outstanding Debt & Recovery | Aging, recovery log | — |
-| 15 | Order Approval Register | Register view (reads APR) | — |
-| 16 | Executive Sales Analytics | Analytics dashboards | — |
-| 17 | Standardised Exports | Export centre | Export permission |
-| 18 | Quotation & Order Desk (assumed) | Delivered by M04 | — |
+| 1 | CRM Dashboard & KPIs | S-M03-01 | — |
+| 2 | Lead Capture & Management | S-M03-02, -03, -22 | — |
+| 3 | BANT Qualification Engine | S-M03-03 | — |
+| 4 | Opportunity Pipeline (Kanban) | S-M03-04, -05 | — |
+| 5 | Commercial Activity Log | S-M03-06 | — |
+| 6 | Customer 360° Comprehensive View | S-M03-17 | — |
+| 7 | 9-Tier Hierarchy Rights Governance | S-M01-06 (authority limits), S-M02-05 (territory), S-M03-23 | Executive Admin publish |
+| 8 | Competitor Market Intelligence | S-M03-14 | — |
+| 9 | Price List & Tiered Discount Control | S-M03-09, -10 | BH + FH |
+| 10 | Sample Requisition & Dispatch | S-M03-12 | SASM/ASM per BRD tier rights |
+| 11 | Field Trial Assay Evaluation | S-M03-13 | RSM authorises trials |
+| 12 | Zonal Target Setting & Allocation | S-M03-07, -08 | NSM/BH publish |
+| 13 | Outstanding Debt & Recovery Hub (aging > 30/60/90) | S-M03-18 | — |
+| 14 | Dealer Order Approval Register | S-M03-19 (orders processed in M04) | — |
+| 15 | Executive Level Analytics (BH/NSM/DSM) | S-M03-20, -21 | — |
+| 16 | Contract Pricing & Annual Volume Agreements | S-M03-11 | Contract approval |
+| 17 | Commercial Beat Plan & Tour Program | S-M03-15, -16 | Manager approves the tour plan |
+| 18 | Export Clean Excel / CSV Engine | S-M03-24 | Export permission |
 
 **Data:** `sales.leads`, `lead_qualifications`, `opportunities`, `activities`, `targets`, `price_lists`, `price_list_items`, `schemes`, `samples`, `field_trials`, `competitor_entries`, `beat_plans`, `beat_visits`, `contracts`.
 **Depends on:** M01 (territory scope), M02 (party, product), M12 (outstanding).
@@ -177,41 +175,40 @@ The MP lists 17 Sales functions by name. The 18th is assumed to be the quotation
 
 **Data:** `inv.lots`, `stock_movements`, `stock_balances` (derived and maintained in the same transaction), `reservations`, `transfers`, `count_sheets`, `adjustments`, `gate_entries`, `goods_receipts(+lines)`.
 
-## M07 — Manufacturing (16 BRD functions kept; list reconstructed, confirm against BRD)
+## M07 — Manufacturing (the 16 sub-modules in BRD p.18)
 
-| # | Function | Notes |
+| # | BRD sub-module | Notes |
 |---|---|---|
-| 1 | Production dashboard | Plan vs actual, yield, OEE, cost |
-| 2 | Demand & forecast intake | Sales orders plus forecast |
-| 3 | MRP | Net requirements, planned orders, PR proposals |
-| 4 | Production scheduling (line/shift) | Capacity view |
-| 5 | BOM & chemical formulation | Versions, effective dates, alternates |
-| 6 | Production order | Release, amend, cancel |
-| 7 | Material reservation & issue | Released lots only |
-| 8 | Batch execution (BMR) | Start, steps, parameters, operators, equipment |
-| 9 | Material dosing | Actual lot and quantity per ingredient, tolerance check |
-| 10 | Process parameters & readings | Temperature, pH, time … |
-| 11 | In-process QC (IPQC) | Sample request to QC; hold step |
-| 12 | Yield & mass balance | Loss, scrap, recovered, rework |
-| 13 | Packaging (BPR) | Pack work order, PM issue, filled and rejected packs |
-| 14 | Box serialisation & QR labels | Through M11 |
-| 15 | Downtime & OEE | Reason codes |
-| 16 | Production cost & genealogy | Cost per batch and MT; trace forward and backward |
+| 1 | Production Dashboard & OEE | Daily MT, OEE (formula D23), achievement, running reactors, losses |
+| 2 | Production Planning (MRP) | SO + forecast → schedules and RM demand; PR proposals |
+| 3 | Production Orders Register | Planned MT, line, launch date, deadline; release/amend/cancel |
+| 4 | Plant Operations Calendar | Gantt: batch runs, CIP cleaning, maintenance downtime, shift changeovers |
+| 5 | BOM & Formulation Master | Kg/MT ratios, temperature, reaction time, standard yield %; versions and effective dates |
+| 6 | Material Consumption Dosing | Internal lot, supplier lot, GRN ref, dosing weight; tolerance check |
+| 7 | Yield & Mass Balance Engine | Input = FG + process loss + recovered scrap |
+| 8 | Loss, Waste & Scrap Tracking | Reactor residue, dust filter, evaporation, packaging spillage |
+| 9 | Recycle & Rework Engine | Off-spec fines back into secondary mixing; genealogy kept |
+| 10 | Packaging Line Operations | 50 kg bags, 1 kg pouches, 1 L bottles; bag counter; tare checks; box serial + QR (M11) |
+| 11 | Finished Goods Stock Transfer | Plant floor → WH-01; stays QA-unreleased until the QA Head disposition |
+| 12 | Batch Traceability Graph | Backward and forward |
+| 13 | Quality Integration (IPQC) | Viscosity, reaction completion, bulk density gates |
+| 14 | Production Costing Ledger | RM + energy + labour + packaging + overhead per MT |
+| 15 | Production Reports & Audits | Shift reports, downtime, maintenance history, operator efficiency |
+| 16 | Plant & Line Settings Master | Plants (Chakan 1, Baramati 2), lines, shifts A/B/Night, machine parameters |
 
 **Data:** `mfg.bom_headers`, `bom_versions`, `bom_lines`, `bom_alternates`, `production_orders`, `batches`, `batch_steps`, `material_consumptions`, `process_readings`, `batch_outputs`, `production_losses`, `packaging_runs`, `downtime_events`.
 
-## M08 — Quality Control (6 BRD submodules kept)
+## M08 — Quality Control (the 6 sub-modules in BRD p.15)
 
-| # | Submodule | Functions |
+| # | BRD sub-module | Functions |
 |---|---|---|
-| 1 | Sampling | Sample IDs, chain of custody, retention |
-| 2 | Testing / lab worklist | Assign analyst; spec and method; instrument |
-| 3 | Result review & approval | Analyst ≠ reviewer |
-| 4 | Certificate of Analysis | Controlled and versioned PDF |
-| 5 | OOS / OOT investigation | Phase I/II, retest authorisation |
-| 6 | Calibration | Schedule; overdue instrument locked |
-| + | QC dashboard | MP§13.1 |
-| + | Raw-material lot disposition | Release, Reject, Hold. Who signs is decided in D04 |
+| 1 | QC Testing & CoA Register | Samples in 5 categories (RM, IPQC, FG, PM, reagent); results; CoA with signatures, seal and CoA QR |
+| 2 | Strict Quarantine Lock | Automatic lock on GRN; release by the QC Manager with CoA; dual-authorisation override (D33) |
+| 3 | Specification & Method Master | STPs per FCO 1985 / IS; parameters (assay %, pH, solubility, bulk density); methods (HPLC, AAS) |
+| 4 | OOS & OOT Investigation Log | Investigation report, root cause, retest protocol, final disposition |
+| 5 | Instruments & Calibration | HPLC, AAS, pH meters, moisture balances; due dates; an overdue instrument is locked |
+| 6 | QC Hierarchy Governance | Analyst enters data only; Manager approves, signs CoA, releases quarantine |
+| + | QC dashboard; chain-of-custody and retention samples (additions) | MP §13.1–13.2 |
 
 **Data:** `qc.specifications(+versions, +parameters)`, `test_methods`, `samples`, `sample_custody_events`, `test_results`, `result_reviews`, `coas`, `oos_cases`, `instruments`, `calibrations`, `lot_dispositions`.
 
