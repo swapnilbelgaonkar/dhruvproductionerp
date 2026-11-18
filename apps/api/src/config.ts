@@ -8,6 +8,7 @@ const envSchema = z.object({
     .string()
     .refine((v) => Buffer.from(v, 'base64').length === 32, 'APP_ENCRYPTION_KEY must be 32 bytes, base64-encoded'),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  STORAGE_DIR: z.string().default('./storage'),
 });
 
 export type Config = z.infer<typeof envSchema> & { isProd: boolean };

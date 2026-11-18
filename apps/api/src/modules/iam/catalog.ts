@@ -23,11 +23,17 @@ export const PERMISSIONS = [
   ...P('Masters', 'org.department', ['view', 'create', 'edit', 'deactivate'], 'departments'),
   ...P('Masters', 'org.territory', ['view', 'create', 'edit', 'deactivate'], 'territories'),
   ...P('Masters', 'org.employee', ['view', 'create', 'edit', 'deactivate'], 'employees'),
+  ...P('Product masters', 'mdm.uom', ['view', 'configure'], 'units of measure and conversions'),
+  ...P('Product masters', 'mdm.hsn', ['view', 'create', 'edit'], 'HSN/SAC codes'),
+  ...P('Product masters', 'mdm.tax_rate', ['configure'], 'effective-dated GST rates'),
+  ...P('Product masters', 'mdm.product_category', ['view', 'create', 'edit', 'deactivate'], 'product categories'),
+  ...P('Product masters', 'mdm.item', ['view', 'create', 'edit_draft', 'submit', 'approve', 'deactivate'], 'items and pack sizes'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
 const VIEW = ALL.filter((c) => c.endsWith(':view'));
-const ORG_VIEW = VIEW.filter((c) => c.startsWith('org.'));
+const ORG_VIEW = VIEW.filter((c) => c.startsWith('org.') || c.startsWith('mdm.'));
+const MASTER = (c: string) => c.startsWith('org.') || c.startsWith('mdm.');
 
 interface RoleDef { code: string; name: string; department: string; description: string; privileged?: boolean; requiresMfa?: boolean; permissions: string[] }
 
@@ -46,10 +52,10 @@ export const ROLES: RoleDef[] = [
       'sys.audit:verify', 'sys.dashboard:view_admin', ...ORG_VIEW] },
   { code: 'MASTER_DATA_OWNER', name: 'Master Data Owner', department: 'Administration',
     description: 'Creates and maintains organisation masters; submits them for approval.',
-    permissions: [...ORG_VIEW, ...ALL.filter((c) => c.startsWith('org.') && /:(create|edit|edit_draft|submit|deactivate)$/.test(c))] },
+    permissions: [...ORG_VIEW, ...ALL.filter((c) => MASTER(c) && /:(create|edit|edit_draft|submit|deactivate)$/.test(c)), 'mdm.uom:configure'] },
   { code: 'MASTER_DATA_APPROVER', name: 'Master Data Approver', department: 'Administration',
     description: 'Approves organisation masters before activation (maker-checker).',
-    permissions: [...ORG_VIEW, ...ALL.filter((c) => c.startsWith('org.') && c.endsWith(':approve'))] },
+    permissions: [...ORG_VIEW, ...ALL.filter((c) => MASTER(c) && c.endsWith(':approve'))] },
   { code: 'AUDITOR', name: 'Auditor (read-only)', department: 'Administration', description: 'Read-only access including the audit log.',
     permissions: [...VIEW, 'sys.audit:export', 'sys.audit:verify', 'wf.approval:view_all'] },
   // Business roles (doc 07 §3). Module permissions are added as each module is built.
@@ -64,7 +70,8 @@ export const ROLES: RoleDef[] = [
     ['QC_ANALYST', 'QC Analyst', 'QC'], ['QC_MANAGER', 'QC Manager', 'QC'], ['QC_HEAD', 'QC Head', 'QC'],
     ['QA_EXECUTIVE', 'QA Executive', 'QA'], ['QA_MANAGER', 'QA Manager', 'QA'], ['QA_HEAD', 'QA Head', 'QA'],
     ['LOGISTICS_EXEC', 'Logistics Executive', 'Logistics'], ['LOGISTICS_HEAD', 'Logistics Head', 'Logistics'],
-  ].map(([code, name, department]) => ({ code: code!, name: name!, department: department!, description: name!, permissions: ORG_VIEW })),
+  ].map(([code, name, department]) => ({ code: code!, name: name!, department: department!, description: name!,
+    permissions: code === 'FINANCE_HEAD' ? [...ORG_VIEW, 'mdm.tax_rate:configure', 'mdm.hsn:create', 'mdm.hsn:edit'] : ORG_VIEW })),
 ];
 
 const masterActivation = (label: string): PolicyDefinition => ({
@@ -76,6 +83,7 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
   { docType: 'org.legal_entity', name: 'Legal entity activation', description: 'Maker-checker before a legal entity becomes active', definition: masterActivation('Master data approval') },
   { docType: 'org.plant', name: 'Plant activation', description: 'Maker-checker before a plant becomes active', definition: masterActivation('Master data approval') },
   { docType: 'org.warehouse', name: 'Warehouse activation', description: 'Maker-checker before a warehouse becomes active', definition: masterActivation('Master data approval') },
+  { docType: 'mdm.item', name: 'Item activation', description: 'Maker-checker before a product or material can be used in transactions', definition: masterActivation('Master data approval') },
   { docType: 'iam.role_grant', name: 'Privileged role grant', description: 'A privileged role takes effect only after an executive approves it (SEC-018)',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [{ kind: 'role', label: 'Executive approval', roles: ['EXEC_ADMIN', 'SUPER_ADMIN'] }] }] } },
   // D01 approved: hybrid routing. Used by sales orders in Stage 2; simulation is available now.

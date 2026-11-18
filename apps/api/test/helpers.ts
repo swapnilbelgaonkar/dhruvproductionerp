@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { hash } from '@node-rs/argon2';
 import { authenticator } from 'otplib';
 import supertest from 'supertest';
@@ -8,7 +11,8 @@ import { createPool } from '../src/db/pool';
 import { encrypt } from '../src/lib/crypto';
 import { TEST_DB } from './global-setup';
 
-export const cfg = loadConfig({ NODE_ENV: 'test', DATABASE_URL: TEST_DB, APP_ENCRYPTION_KEY: randomBytes(32).toString('base64') } as NodeJS.ProcessEnv);
+export const cfg = loadConfig({ NODE_ENV: 'test', DATABASE_URL: TEST_DB, APP_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+  STORAGE_DIR: mkdtempSync(join(tmpdir(), 'dhruv-files-')) } as NodeJS.ProcessEnv);
 export const db = createPool(TEST_DB);
 export const app = createApp(db, cfg);
 export const PASSWORD = 'Test-password-2026';
@@ -23,6 +27,8 @@ export interface Agent {
   post: (url: string, body?: object) => supertest.Test;
   put: (url: string, body?: object) => supertest.Test;
   patch: (url: string, body?: object) => supertest.Test;
+  upload: (url: string, data: Buffer, mime: string) => supertest.Test;
+  raw: supertest.Agent;
 }
 
 export async function makeUser(opts: { roles?: { code: string; scope?: object }[]; employeeId?: string; name?: string } = {}) {
@@ -56,6 +62,8 @@ export async function login(email: string, secret?: string): Promise<Agent & { c
     post: (url, body) => withCsrf(agent.post(url), body),
     put: (url, body) => withCsrf(agent.put(url), body),
     patch: (url, body) => withCsrf(agent.patch(url), body),
+    upload: (url, data, mime) => agent.post(url).set('x-csrf-token', csrf).set('content-type', mime).send(data),
+    raw: agent,
   };
 }
 

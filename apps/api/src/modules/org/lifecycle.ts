@@ -26,7 +26,9 @@ export interface LifecycleConfig {
   select: string;
   from: string;
   /** column holding the legal entity for data scoping */
-  scopeColumn: 'id' | 'legal_entity_id';
+  scopeColumn: 'id' | 'legal_entity_id' | null;
+  /** extra fields merged into the detail response (e.g. pack sizes) */
+  extraDetail?: (db: Db, row: Record<string, unknown>) => Promise<Record<string, unknown>>;
   validateSubmit?: (tx: Tx, row: Record<string, unknown>) => Promise<void>;
   validateWrite?: (tx: Tx, data: Record<string, unknown>, id: string | null) => Promise<void>;
   /** block deactivation while dependent records are still active */
@@ -63,14 +65,17 @@ export function lifecycleRoutes(db: Db, c: LifecycleConfig) {
   });
 
   const r = Router();
-  const scopeCol = `t.${c.scopeColumn}`;
+  const scopeCol = c.scopeColumn ? `t.${c.scopeColumn}` : 'null::uuid';
+  const inScope = (req: Request, action: string, row: Record<string, unknown>) =>
+    c.scopeColumn === null || inLegalEntityScope(req, perm(c, action), (row[c.scopeColumn] as string) ?? null);
+  const scopeValue = (row: Record<string, unknown>) => (c.scopeColumn ? (row[c.scopeColumn] as string) : null);
 
   r.get('/', requirePermission(perm(c, 'view')), asyncHandler(async (req, res) => {
     const { limit, offset } = pageParams(req.query);
     const args: unknown[] = [];
     const where: string[] = [];
     const scope = legalEntityScope(req, perm(c, 'view'));
-    if (scope) { args.push(scope); where.push(`${scopeCol} = any($${args.length}::uuid[])`); }
+    if (scope && c.scopeColumn) { args.push(scope); where.push(`${scopeCol} = any($${args.length}::uuid[])`); }
     const status = str(req.query.status);
     if (status) { args.push(status); where.push(`t.status = $${args.length}`); }
     const q = str(req.query.q);
@@ -86,13 +91,14 @@ export function lifecycleRoutes(db: Db, c: LifecycleConfig) {
 
   r.get('/:id', requirePermission(perm(c, 'view')), asyncHandler(async (req, res) => {
     const row = (await db.query(`select ${c.select}, ${scopeCol} as "scopeLegalEntityId" ${c.from} where t.id = $1`, [req.params.id])).rows[0];
-    if (!row || !inLegalEntityScope(req, perm(c, 'view'), row.scopeLegalEntityId)) throw Errors.notFound(c.label);
+    if (!row || (c.scopeColumn && !inLegalEntityScope(req, perm(c, 'view'), row.scopeLegalEntityId))) throw Errors.notFound(c.label);
     const approvals = (await db.query(
       `select a.id, a.doc_no, a.status, a.submitted_at, a.completed_at, u.full_name as initiator
          from wf.approval_requests a join iam.users u on u.id = a.initiated_by
         where a.subject_type = $1 and a.subject_id = $2 order by a.submitted_at desc`, [c.resource, row.id])).rows;
     const { scopeLegalEntityId: _s, ...data } = row;
-    res.json({ ...data, approvals, allowedActions: allowedActions(req, c, row.status) });
+    const extra = c.extraDetail ? await c.extraDetail(db, row) : {};
+    res.json({ ...data, ...extra, approvals, allowedActions: allowedActions(req, c, row.status) });
   }));
 
   function toColumns(data: Record<string, unknown>) {
@@ -101,6 +107,7 @@ export function lifecycleRoutes(db: Db, c: LifecycleConfig) {
   }
 
   function assertWriteScope(req: Request, action: string, data: Record<string, unknown>) {
+    if (c.scopeColumn === null) return;
     if (c.scopeColumn === 'id') {
       if (legalEntityScope(req, perm(c, action)) !== null) throw Errors.forbidden(`${perm(c, action)} (all legal entities)`);
     } else if (!inLegalEntityScope(req, perm(c, action), (data.legalEntityId as string) ?? null)) {
@@ -132,7 +139,7 @@ export function lifecycleRoutes(db: Db, c: LifecycleConfig) {
     const actor = actorOf(req);
     await withTx(db, async (tx) => {
       const before = (await tx.query(`select * from ${c.table} where id = $1 for update`, [req.params.id])).rows[0];
-      if (!before || !inLegalEntityScope(req, perm(c, 'edit_draft'), before[c.scopeColumn])) throw Errors.notFound(c.label);
+      if (!before || !inScope(req, 'edit_draft', before)) throw Errors.notFound(c.label);
       assertWriteScope(req, 'edit_draft', data);
       if (!['Draft', 'Rejected'].includes(before.status)) throw Errors.state(`A ${before.status} ${c.label.toLowerCase()} cannot be edited.`);
       if (before.version !== version) throw Errors.concurrent();
@@ -151,13 +158,13 @@ export function lifecycleRoutes(db: Db, c: LifecycleConfig) {
     const actor = actorOf(req);
     const result = await withTx(db, async (tx) => {
       const row = (await tx.query(`select * from ${c.table} where id = $1 for update`, [req.params.id])).rows[0];
-      if (!row || !inLegalEntityScope(req, perm(c, action), row[c.scopeColumn])) throw Errors.notFound(c.label);
+      if (!row || !inScope(req, action, row)) throw Errors.notFound(c.label);
       if (!fromStatuses.includes(row.status)) throw Errors.state(`A ${row.status} ${c.label.toLowerCase()} cannot be submitted.`);
       await c.validateSubmit?.(tx, row);
       await setStatus(tx, c, row.id, 'Submitted', actor);
       return submitForApproval(tx, actor, {
         subjectType: c.resource, subjectId: row.id, subjectLabel: `${c.label} ${row.code} — ${row.name}`,
-        revision: row.version, legalEntityId: row[c.scopeColumn], facts: { legalEntityId: row[c.scopeColumn] },
+        revision: row.version, legalEntityId: scopeValue(row), facts: { legalEntityId: scopeValue(row) },
       });
     });
     res.json({ approvalRequestId: result.id, approvalDocNo: result.doc_no, status: result.status });
@@ -170,7 +177,7 @@ export function lifecycleRoutes(db: Db, c: LifecycleConfig) {
     const { reason } = parse(reasonSchema, req.body);
     await withTx(db, async (tx) => {
       const row = (await tx.query(`select * from ${c.table} where id = $1 for update`, [req.params.id])).rows[0];
-      if (!row || !inLegalEntityScope(req, perm(c, 'deactivate'), row[c.scopeColumn])) throw Errors.notFound(c.label);
+      if (!row || !inScope(req, 'deactivate', row)) throw Errors.notFound(c.label);
       if (row.status !== 'Active') throw Errors.state(`Only an active ${c.label.toLowerCase()} can be deactivated.`);
       await c.validateDeactivate?.(tx, row);
       await setStatus(tx, c, row.id, 'Inactive', actorOf(req), reason);

@@ -48,3 +48,15 @@ export const qs = (o: Record<string, unknown>) => {
   const s = p.toString();
   return s ? `?${s}` : '';
 };
+
+/** Raw-body file upload (PDF/PNG/JPEG); metadata goes in the query string. */
+export async function uploadFile<T = unknown>(path: string, file: File, meta: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`/api/v1${path}${qs({ ...meta, fileName: file.name })}`, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': file.type || 'application/octet-stream', 'x-csrf-token': csrfToken() },
+    body: file,
+  });
+  const json = await res.json().catch(() => undefined);
+  if (!res.ok) throw new ApiError(res.status, json?.error ?? { code: 'HTTP_' + res.status, message: 'Upload failed.' });
+  return json as T;
+}

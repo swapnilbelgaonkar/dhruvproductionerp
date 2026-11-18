@@ -10,6 +10,7 @@ import { LoginPage } from './pages/auth/Login';
 import { MASTERS, MasterDetailPage, MasterFormPage, MasterListPage } from './pages/masters/LifecycleMaster';
 import { DepartmentsPage, EmployeeDetailPage, EmployeeFormPage, EmployeesPage, TerritoriesPage } from './pages/masters/SimpleMasters';
 import { OverviewPage } from './pages/Overview';
+import { CategoriesPage, HsnPage, UomPage } from './pages/masters/ProductMasters';
 
 function Protected({ perm, children }: { perm?: string; children: JSX.Element }) {
   const { can } = useAuth();
@@ -48,6 +49,10 @@ export function App() {
         {master('legalEntities')}
         {master('plants')}
         {master('warehouses')}
+        {master('items')}
+        <Route path="products/categories" element={<Protected perm="mdm.product_category:view"><CategoriesPage /></Protected>} />
+        <Route path="products/hsn" element={<Protected perm="mdm.hsn:view"><HsnPage /></Protected>} />
+        <Route path="products/uom" element={<Protected perm="mdm.uom:view"><UomPage /></Protected>} />
         <Route path="masters/territories" element={<Protected perm="org.territory:view"><TerritoriesPage /></Protected>} />
         <Route path="masters/departments" element={<Protected perm="org.department:view"><DepartmentsPage /></Protected>} />
         <Route path="masters/employees" element={<Protected perm="org.employee:view"><EmployeesPage /></Protected>} />

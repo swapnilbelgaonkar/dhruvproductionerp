@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
 import { NAV } from './nav';
+import { NotificationBell } from './NotificationBell';
 import { SearchOverlay } from './SearchOverlay';
 
 function Logo({ collapsed }: { collapsed: boolean }) {
@@ -95,6 +96,7 @@ export function AppShell() {
             <kbd className="hidden rounded border border-line bg-white px-1.5 text-[11px] md:inline">Ctrl K</kbd>
           </button>
           <div className="ml-auto flex items-center gap-2">
+            <NotificationBell />
             <button onClick={() => nav('/profile')} className="flex h-11 items-center gap-2.5 rounded-full bg-white pl-1.5 pr-4 shadow-card hover:bg-primary-tint" aria-label="My profile">
               <span className="grid h-8 w-8 place-items-center rounded-full bg-primary-soft text-[13px] font-bold text-primary-hover">{initials(me?.user.fullName)}</span>
               <span className="hidden max-w-[160px] truncate text-[14px] font-medium md:block">{me?.user.fullName}</span>

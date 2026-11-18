@@ -1,4 +1,4 @@
-import { Buildings, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
+import { Barcode, Buildings, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -16,6 +16,12 @@ export const NAV: NavGroup[] = [
     { to: '/masters/territories', label: 'Territories', icon: MapTrifold, perm: 'org.territory:view' },
     { to: '/masters/departments', label: 'Departments', icon: TreeStructure, perm: 'org.department:view' },
     { to: '/masters/employees', label: 'Employees', icon: IdentificationBadge, perm: 'org.employee:view' },
+  ] },
+  { label: 'Products', items: [
+    { to: '/products/items', label: 'Items & Products', icon: Barcode, perm: 'mdm.item:view' },
+    { to: '/products/categories', label: 'Categories', icon: Flask, perm: 'mdm.product_category:view' },
+    { to: '/products/hsn', label: 'HSN & GST Rates', icon: Percent, perm: 'mdm.hsn:view' },
+    { to: '/products/uom', label: 'Units of Measure', icon: Ruler, perm: 'mdm.uom:view' },
   ] },
   { label: 'Administration', items: [
     { to: '/admin/users', label: 'Users', icon: UsersThree, perm: 'iam.user:view' },

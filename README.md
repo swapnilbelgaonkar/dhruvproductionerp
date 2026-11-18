@@ -5,7 +5,7 @@ Enterprise ERP for Dhruv Agro Technologies Pvt. Ltd. It covers chemical, fertili
 ## Status
 
 - **Stage 0** pre-development package: [`docs/pre-development/`](docs/pre-development/README.md). The BRD v2.4 and the UI reference image have been reconciled into it.
-- **Stage 1 Foundation, increment 1:** built and tested. See [`docs/development/stage-1-foundation.md`](docs/development/stage-1-foundation.md).
+- **Stage 1 Foundation, increments 1–2:** built and tested (platform, approvals, organisation and product masters, document vault, notifications). See [`docs/development/stage-1-foundation.md`](docs/development/stage-1-foundation.md).
 - **Client decisions and pending items:** [`docs/pre-development/12-open-decision-register.md`](docs/pre-development/12-open-decision-register.md).
 
 ## Repository layout
@@ -41,7 +41,7 @@ Prerequisites: Node 22, pnpm 10, and PostgreSQL 16 with the `ltree`, `pgcrypto`,
    ```
 
    ```bash
-   pnpm db:seed -- --org-from-brd
+   pnpm db:seed -- --org-from-brd --products-from-brd
    ```
 
 4. Start the API (port 4000) and the web portal (port 5173) in two terminals, then open http://localhost:5173.

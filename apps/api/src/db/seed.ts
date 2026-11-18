@@ -57,6 +57,21 @@ async function seedOrgFromBrd(tx: pg.PoolClient) {
   await audit(tx, SYSTEM, { action: 'org.seed_from_brd', entityType: 'org.legal_entity', entityId: leId, reason });
 }
 
+async function seedProductsFromBrd(tx: pg.PoolClient) {
+  // BRD p.9 categories and HSN codes. Licence mapping and GST rates are NOT seeded as facts: D08 / D27 need adviser confirmation.
+  const cats: [string, string, string][] = [['MICRONUTRIENT', 'Micronutrient', 'FERTILIZER'], ['SOIL-NUTRITION', 'Soil Nutrition', 'FERTILIZER'],
+    ['BIOSTIMULANT', 'Marine Biostimulant', 'BIOSTIMULANT'], ['ORGANIC-ADDITIVE', 'Organic Soil Additive', 'NONE'], ['TECHNICAL', 'Raw Material Active (technical)', 'PESTICIDE']];
+  for (const [code, name, lic] of cats) {
+    await tx.query(`insert into mdm.product_categories (code, name, licence_required) values ($1,$2,$3) on conflict (code) do nothing`, [code, name, lic]);
+  }
+  const hsn: [string, string][] = [['29224990', 'Zinc EDTA chelate (BRD PRD-CHEL-01)'], ['31059090', 'Micronutrient fertilizer mixtures (BRD PRD-MICR-02)'],
+    ['31010099', 'Seaweed / marine biostimulant (BRD PRD-BIOZ-03)'], ['38249900', 'Potassium humate preparations (BRD PRD-HUMA-04)'], ['29269090', 'Cypermethrin technical (BRD PRD-CYPE-05)']];
+  for (const [code, d] of hsn) {
+    await tx.query(`insert into mdm.hsn_codes (code, description) values ($1,$2) on conflict (code) do nothing`, [code, `[PROVISIONAL] ${d}`]);
+  }
+  await audit(tx, SYSTEM, { action: 'mdm.seed_from_brd', entityType: 'mdm.product_category', reason: 'PROVISIONAL from BRD v2.4 p.9 — confirm licence mapping (D08) and add GST rates (D27)' });
+}
+
 async function seedSample(tx: pg.PoolClient) {
   const d = await tx.query<{ id: string }>(
     `insert into org.departments (code, name) values ('SALES', '[SAMPLE] Sales'), ('QC', '[SAMPLE] Quality Control') on conflict (code) do nothing returning id`);
@@ -88,6 +103,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       console.log('bootstrap admin ready (password change required at first login)');
     } else console.log('BOOTSTRAP_ADMIN_* not set — skipped admin');
     if (args.has('--org-from-brd')) { await seedOrgFromBrd(client as unknown as pg.PoolClient); console.log('provisional BRD organisation seeded'); }
+    if (args.has('--products-from-brd')) { await seedProductsFromBrd(client as unknown as pg.PoolClient); console.log('provisional BRD categories and HSN codes seeded (no GST rates)'); }
     if (args.has('--sample')) { await seedSample(client as unknown as pg.PoolClient); console.log('[SAMPLE] data seeded'); }
     await client.query('commit');
     await client.end();

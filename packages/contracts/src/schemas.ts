@@ -105,3 +105,43 @@ export const authorityLimitSchema = z.object({
   maxDiscountPct: z.number().min(0).max(100).nullable(), maxOrderValue: z.number().min(0).nullable(), version: z.number().int(),
 });
 export const numberSeriesFormatSchema = z.object({ prefix: z.string().trim().regex(/^[A-Z0-9-]{1,10}$/), padding: z.number().int().min(3).max(10) });
+
+// ---------- Product master data (MDM-008…010) ----------
+export const ITEM_TYPES = ['FG', 'RM', 'PM', 'SEMI', 'LAB', 'SERVICE'] as const;
+export const LICENCE_TYPES = ['NONE', 'FERTILIZER', 'PESTICIDE', 'BIOSTIMULANT'] as const;
+export const UOM_DIMENSIONS = ['MASS', 'VOLUME', 'COUNT', 'LENGTH', 'AREA'] as const;
+
+export const uomSchema = z.object({
+  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{1,10}$/, 'Up to 10 letters/digits'),
+  name: trimmed(60), dimension: z.enum(UOM_DIMENSIONS), decimals: z.number().int().min(0).max(6),
+});
+export const uomConversionSchema = z.object({
+  itemId: uuid.optional().nullable(), fromUom: z.string().min(1), toUom: z.string().min(1),
+  factor: z.number().positive('Must be greater than zero'),
+}).refine((v) => v.fromUom !== v.toUom, { message: 'Choose two different units', path: ['toUom'] });
+export const hsnSchema = z.object({
+  code: z.string().trim().regex(/^[0-9]{4}([0-9]{2}){0,2}$/, 'HSN/SAC has 4, 6 or 8 digits'),
+  kind: z.enum(['HSN', 'SAC']).default('HSN'), description: trimmed(300),
+});
+export const taxRateSchema = z.object({
+  gstRate: z.number().min(0).max(100), cessRate: z.number().min(0).max(100).default(0),
+  validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date required'), notes: trimmed(500),
+});
+export const productCategorySchema = z.object({ code, name: trimmed(120), licenceRequired: z.enum(LICENCE_TYPES) });
+export const itemSchema = z.object({
+  code, name: trimmed(150), itemType: z.enum(ITEM_TYPES), categoryId: uuid.optional().nullable(),
+  baseUom: z.string().min(1, 'Required'), hsnId: uuid.optional().nullable(), formulation: optionalText(500),
+  shelfLifeDays: z.coerce.number().int().positive().optional().nullable(), storageClass: optionalText(60),
+  lotControlled: z.boolean().default(true), serialControlled: z.boolean().default(false), hazardous: z.boolean().default(false),
+});
+export const itemPackSchema = z.object({
+  packCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{1,20}$/, 'Letters, digits, hyphen'),
+  packSize: z.number().positive(), packUom: z.string().min(1), container: trimmed(40),
+  unitsPerBox: z.number().int().positive().default(1), gtin: z.string().regex(/^[0-9]{8,14}$/, '8–14 digits').optional().nullable(),
+});
+
+// ---------- Documents ----------
+export const documentMetaSchema = z.object({
+  documentType: z.string().min(1), entityType: z.string().min(1), entityId: uuid,
+  title: trimmed(200), validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(), note: z.string().max(500).optional().default(''),
+});

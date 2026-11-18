@@ -11,3 +11,4 @@ export const humanize = (s: string) => s.replace(/[._]/g, ' ').replace(/\b\w/g, 
 /** Two-letter initials, ignoring tags such as "[SAMPLE]". */
 export const initials = (name?: string) =>
   (name ?? '').replace(/\[[^\]]*\]/g, '').trim().split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase() || '?';
+export const fmtSize = (bytes: number) => (bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1048576).toFixed(1)} MB`);

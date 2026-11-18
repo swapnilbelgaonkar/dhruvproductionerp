@@ -13,8 +13,13 @@ import { authRoutes } from './modules/auth/routes';
 import { meRoutes, roleRoutes, userRoutes } from './modules/iam/routes';
 import { orgRoutes } from './modules/org/routes';
 import { approvalRoutes, policyRoutes } from './modules/workflow/routes';
+import { idempotency } from './middleware/idempotency';
+import { documentRoutes } from './modules/documents/routes';
+import { LocalDiskStorage, type FileStorage } from './modules/documents/storage';
+import { mdmRoutes } from './modules/mdm/routes';
+import { notificationRoutes } from './modules/notifications/routes';
 
-export function createApp(db: Db, cfg: Config) {
+export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
   const app = express();
   app.set('trust proxy', 1);
@@ -38,6 +43,7 @@ export function createApp(db: Db, cfg: Config) {
   v1.use(loadSession(db));
   v1.use('/auth', authRoutes(db, cfg));
   v1.use(requireAuth);
+  v1.use(idempotency(db));
   v1.use('/me', meRoutes());
   v1.use('/users', userRoutes(db));
   v1.use('/roles', roleRoutes(db));
@@ -47,6 +53,9 @@ export function createApp(db: Db, cfg: Config) {
   v1.use('/admin', adminRoutes(db));
   v1.use('/dashboard', dashboardRoutes(db));
   v1.use('/search', searchRoutes(db));
+  v1.use('/documents', documentRoutes(db, cfg, storage));
+  v1.use('/notifications', notificationRoutes(db));
+  v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);
 

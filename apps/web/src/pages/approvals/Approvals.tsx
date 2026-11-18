@@ -50,6 +50,7 @@ interface Detail {
 
 const SUBJECT_LINK: Record<string, (id: string) => string> = {
   'org.legal_entity': (id) => `/masters/legal-entities/${id}`, 'org.plant': (id) => `/masters/plants/${id}`, 'org.warehouse': (id) => `/masters/warehouses/${id}`,
+  'mdm.item': (id) => `/products/items/${id}`,
 };
 const DECISION_LABEL: Record<string, string> = { Approve: 'Approve', Reject: 'Reject', Return: 'Return for correction', Hold: 'Put on hold', Resume: 'Resume', Cancel: 'Withdraw request' };
 

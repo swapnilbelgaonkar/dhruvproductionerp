@@ -1,4 +1,4 @@
-# Stage 1 — Foundation: progress report (increment 1)
+# Stage 1 — Foundation: progress report (increments 1 and 2)
 
 Authorised by the client on 18 Nov 2026 ("build the system first, take pending decisions later"). The decisions that apply are logged in doc 12 §1.1.
 
@@ -51,21 +51,39 @@ Authorised by the client on 18 Nov 2026 ("build the system first, take pending d
   4. Checker approves from the inbox; the entity becomes Active.
   5. Audit integrity verified, search, mobile layout.
 
-## 3. Remaining for Stage 1 (increment 2)
+## 2a. Delivered in increment 2 (product masters, documents, notifications)
 
-These items are not built yet. The UI shows no buttons for them.
+Order follows D12 (business flow): what the Sales stage needs first.
 
-| Item | RTM |
-|---|---|
-| Document vault (S3 upload, preview, versions, expiry, virus scan) | DMS-001…005 |
-| Outbox relay worker and notifications (in-app, email): events are already written to `sys.outbox_events` but nothing delivers them yet | NTF-001…004, PLT-004 |
-| Idempotency-key middleware (the table exists; it is needed before Stage 2 posting endpoints) | PLT-004 |
-| Delegation of approvals and SLA escalation job | ADM-002, APR-005 |
-| Master change requests for **active** masters, e.g. adding a GSTIN to an active legal entity | MDM-004 |
-| Remaining masters: items/SKUs, UOM, HSN/tax, product categories, vendors, transporters, equipment, banks, document types | MDM-008…017 |
-| Bulk import with a validation report | MDM-014, TC-19 |
-| PDF generation service | AD-12 |
-| CI pipeline, staging deployment, OpenAPI document generation | PLT-005/006 |
+| Area | What works | RTM |
+|---|---|---|
+| Units of measure | 14 reference units, universal conversions (g/kg/MT, ml/L/KL); mass↔volume conversions only per item (density) | MDM-010 |
+| HSN & GST rates | HSN/SAC master; effective-dated GST + cess rates; a new rate closes the previous one; overlapping periods are rejected by the database; rate history is never deleted; effective-rate lookup by date for invoicing. **No rates are pre-loaded** (D27) | MDM-009 |
+| Product categories | Category → dealer licence required (Fertilizer / Pesticide / Bio-stimulant / None) | MDM-008, DLR-004 |
+| Items & pack sizes | FG/RM/PM/semi/lab/service items with maker-checker approval; stock items need HSN and category; FG and RM need shelf life; FG needs at least one pack size; packs are frozen once Active | MDM-008, MDM-005 |
+| Document vault | Upload PDF/PNG/JPEG (real type checked from the file contents, not its name); per-type size limits and mandatory expiry dates; versions (append-only); archive with reason; downloads only through 5-minute signed links tied to the user; every link and download audited; sensitive document types flagged | DMS-001/002, X26 |
+| Notifications | Outbox relay turns approval events into in-app notifications (approval needed, notify-only copies, approved/rejected/returned/on hold); safe on several servers and on retry; bell with unread badge, mark read / all read | NTF-001/004, PLT-004 |
+| Idempotency | `Idempotency-Key` on POST/PUT: retries replay the first result, a reused key with another body is refused | PLT-004 |
+| Worker process | `src/worker.ts` runs the relay separately in production (`RUN_RELAY=false` on API servers) | doc 03 §2 |
+| Provisional BRD products | `pnpm db:seed -- --products-from-brd` loads the 5 BRD categories and HSN codes, marked provisional, without GST rates | — |
+
+Evidence: `apps/api/test/masters-documents.test.ts` (6 tests). Total **29 API + 4 contract tests passing**. A browser run also passed:
+1. The maker creates PRD-CHEL-01; submission without a pack is blocked.
+2. The maker adds a 1 kg pouch pack and uploads the product specification PDF, then submits.
+3. The approver sees it in the bell and approves.
+4. The item is Active, and the PDF opens through a signed link.
+
+## 3. Remaining for Stage 1
+
+| Item | RTM | Needed by |
+|---|---|---|
+| Email notifications (SES) and document expiry alerts at 60 and 30 days (scheduled job) | NTF-002, DMS-005 | Stage 2 (licence expiry) |
+| Delegation of approvals and SLA escalation job | ADM-002, APR-005 | Stage 2 |
+| Master change requests for **active** masters (e.g. new pack on an active item, new GSTIN on an active legal entity) | MDM-004 | Stage 2 |
+| Vendor, transporter, equipment, bank and document-type admin screens | MDM-011…017 | Stages 3 and 6 |
+| Bulk import with a validation report | MDM-014, TC-19 | Before go-live |
+| PDF generation service; S3 storage adapter; virus scanning (`av_status` is recorded as *NotScanned* today) | AD-11/12, DMS-003 | Stage 2 (quotation PDF) / deployment |
+| CI pipeline, staging deployment, OpenAPI document | PLT-005/006 | Deployment |
 
 ## 4. How to run locally
 

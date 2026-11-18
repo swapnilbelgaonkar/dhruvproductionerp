@@ -184,6 +184,7 @@ export function searchRoutes(db: Db) {
     if (can(req, 'org.warehouse:view')) parts.push(`(select 'Warehouse', id, code, name, '/masters/warehouses/' || id from org.warehouses where (code ilike $1 or name ilike $1) and ${scoped('org.warehouse:view', 'legal_entity_id')} limit 5)`);
     if (can(req, 'org.territory:view')) parts.push(`(select 'Territory', id, code, name, '/masters/territories?focus=' || id from org.territories where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'org.employee:view')) parts.push(`(select 'Employee', id, emp_code, full_name, '/masters/employees/' || id from org.employees where emp_code ilike $1 or full_name ilike $1 limit 5)`);
+    if (can(req, 'mdm.item:view')) parts.push(`(select 'Item', id, code, name, '/products/items/' || id from mdm.items where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'iam.user:view')) parts.push(`(select 'User', id, full_name, email::text, '/admin/users/' || id from iam.users where email ilike $1 or full_name ilike $1 limit 5)`);
     parts.push(`(select 'Approval', a.id, a.doc_no, a.subject_label, '/approvals/' || a.id from wf.approval_requests a
                   where (a.doc_no ilike $1 or a.subject_label ilike $1) and (a.initiated_by = $2 or exists (select 1 from wf.approval_steps s where s.request_id = a.id and $2 = any(s.approver_ids))) limit 5)`);
