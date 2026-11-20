@@ -2,9 +2,9 @@
 
 Order follows D12 (business flow). Stage 2 parts:
 
-1. Dealer onboarding — **done** (this report)
+1. Dealer onboarding — **done**
 2. Leads, BANT, opportunities and activities (CRM) — **done**
-3. Pricing, quotations
+3. Pricing, quotations — **done**
 4. Sales orders with hybrid approval (D01)
 
 ## Part 1 — Dealer onboarding (BRD §3.1 p.7–8, MP Part 6)
@@ -73,5 +73,53 @@ Order follows D12 (business flow). Stage 2 parts:
 - A browser run also passed. The SE created a lead, logged a call, scored BANT at 90, qualified it and converted it. In the pipeline the SE moved the opportunity, saw "won" refused without a dealer, and recorded a loss to a competitor. The SE then completed a planned visit and scheduled the next action. The RSM sees the leads of the whole area.
 
 ### Not yet built in Stage 2
-- Pricing (price lists, schemes), quotations and sales orders — parts 3 and 4.
+- Sales orders — part 4.
 - Remaining sales sub-modules: samples, field trials, targets, competitor intelligence, beat plans, contracts, outstanding recovery, executive analytics, exports — later Stage 2 increments, after orders and invoices.
+
+## Part 3 — Pricing and quotations (BRD §4 #9, §5.1 p.13; MP §7.7, Part 8)
+
+| Area | What works | RTM |
+|---|---|---|
+| Price lists | One list per dealer price group (the `price group` on each dealer, default STANDARD), with a start date and an optional end date. The rate is per pack, before GST. Up to 10 volume slabs per pack (for example, 20+ packs 5% off); the best slab reached applies | CRM-010 |
+| Price approval | A price list is a Draft until submitted. The sales head (BH or NSM) and then the finance head approve it (policy `sales.price_list`, editable in Approval Policies). An active list cannot be edited | CRM-010 |
+| Price revision | "Copy as new version" copies every price and slab into a new Draft. The new list must start later than the active one. When it is approved, the old list automatically ends the day before. A list that would start on or before the active one is refused | CRM-010 |
+| Who manages prices | Sales operations, NSM and BH create and submit lists. Finance, accounts, credit and management can view them. Sales tiers see them through quotations | SEC |
+| Quotation | Number `QT/2026-27/000001` with revision R1, R2 …. Header: dealer, issuing legal entity, bill-to (registered or billing address), ship-to (any active dealer address), date, contact, payment and delivery terms (defaults from settings), notes and an optional linked opportunity. Up to 100 lines; each pack can appear once | QUO-001 |
+| Server-side pricing | The browser sends only pack, quantity and extra discount. The server takes the list rate from the dealer's active price list on the quotation date, applies the slab scheme and then the extra discount, and takes the GST rate from the HSN on that date. If any of these is missing, it stops with a clear message (`NO_PRICE`, `NO_TAX_RATE`). Amounts are in whole paise, so they do not drift | QUO-002 |
+| GST split | Seller state = the legal entity's state; place of supply = the ship-to state. If they are the same, CGST and SGST are each half the rate; otherwise IGST. The total is rounded to the rupee and the round-off is shown. The amount is also given in words (Indian numbering) | QUO-002, D27 |
+| Dealer eligibility | Only an active dealer with a valid, verified licence for every licensed product category on the quotation can be quoted. The live preview warns; saving and submitting refuse | DLR-008, BR-11 |
+| Validity | Quotation date + setting `sales.quotation.validityDays` (7, BRD p.13). An hourly job expires Approved or Sent quotations after their validity date. An expired quotation must be revised, which re-prices it and needs approval again | QUO-004, D16 |
+| Discount approval | Policy `sales.quotation`. With no extra discount, the quotation is approved when submitted. With an extra discount, while authority limits are inactive (D15), the initiator's reporting manager approves. Once D15 activates the limits, the quotation is approved directly if the discount is within the initiator's own tier limit; otherwise the authority ladder applies (the lowest covering tier, with skipped tiers notified). This needs only a policy change, not new code | QUO-006, D01, D15 |
+| Actions | Edit (Draft/Rejected), Submit, Mark as sent, Record acceptance, Revise (same number, next revision; the old revision becomes Superseded and stays readable), Duplicate (new number), Cancel with a reason, Print. Every change is in the audit log | QUO-003, QUO-005 |
+| A4 print | Company header with GSTIN for the seller's state and PAN, bill-to and ship-to with GSTIN, place of supply, itemised lines (list rate, scheme, extra discount, net rate, taxable value, GST % and amount, CGST+SGST or IGST), totals, amount in words, terms, bank details (setting `company.bankDetails`) and a signature block. Quotations not yet approved print with a "not a valid offer" banner. "Print or save as PDF" uses the browser | QUO-007 |
+| Links | From an open opportunity linked to a dealer, "Create quotation" pre-fills the dealer and the link. Quotations and price lists appear in global search and in approval links | CRM-007 |
+| Access | Quotations follow the dealer's territory (territory scope, as for dealers and leads). Sales tiers and sales operations create, edit, submit, send and cancel. Finance, accounts, credit and management can view | SEC-011 |
+
+### Evidence
+- `apps/api/test/calc.test.ts` has 5 tests: the intra-state and inter-state splits, rupee round-off, no paise drift over many lines, slab selection, and amount in words.
+- `apps/api/test/quotation.test.ts` has 3 tests:
+  - price list: maker-checker approval, frozen once active, start date rule, and automatic close of the old list
+  - quotation: no price, ineligible dealer, CGST/SGST maths, approval on submit with no extra discount, send, accept, print data, territory isolation
+  - discount: an inter-state quotation with IGST, the concurrent-edit check, reporting-manager approval, revise, duplicate, cancel and expiry
+- Totals: **47 API + 4 contract tests passing**. Typecheck and the production build are clean.
+- A browser run also passed:
+  1. Sales operations created a price list with a volume slab and submitted it. The NSM and the finance head approved it.
+  2. The sales executive quoted 24 × 1 L and 6 × 5 L. The 5% slab was applied, with CGST and SGST at 2.5% each and a ₹0.40 round-off. Submitting approved it at once. The executive marked it sent and printed it to PDF.
+  3. The executive duplicated it, changed the ship-to to Karnataka (IGST) and gave a 3% extra discount. The TSM approved it, and the executive revised it to R2.
+  4. No browser errors, and no horizontal scroll at phone width.
+
+### Changed during this part
+- `DATE` columns are now returned as plain `YYYY-MM-DD` strings. Before, a server running in IST could shift a business date by one day.
+- The generic master lifecycle gained an `onActivated` hook (used by price lists to close the older list).
+- New [SAMPLE] demo users: `nsm@`, `ops@` and `finance@demo.local`.
+
+### Not built yet (and why)
+- **Convert to sales order**: part 4 (the next step).
+- **Email to dealer**: needs the email integration (doc 09). For now the PDF comes from the browser's print dialog.
+- **Revision diff view**: every revision is kept and linked, but a side-by-side diff is not shown yet.
+- **Contract prices, promotional schemes and price exceptions** (rest of CRM-010): later, with the schemes sub-module.
+- The opportunity stage does not move to "Quote sent" automatically when a quotation is sent. It is still moved by hand.
+- **Client inputs still needed**:
+  - GST rates for each HSN code (D27). Finance enters them in *HSN & GST Rates*. Without a rate, a product cannot be quoted.
+  - The GSTIN of each legal entity, for the print header.
+  - The bank details setting.

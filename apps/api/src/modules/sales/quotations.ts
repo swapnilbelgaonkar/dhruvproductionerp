@@ -245,6 +245,22 @@ export function quotationRoutes(db: Db) {
     });
   }));
 
+  // packs priced for this dealer's price group on the date (the product picker)
+  r.get('/priced-packs', requirePermission('sales.quotation:create'), asyncHandler(async (req, res) => {
+    const partyId = str(req.query.partyId);
+    if (!partyId) throw Errors.validation([{ field: 'partyId', message: 'Choose a dealer' }]);
+    const date = str(req.query.date) ?? todayIST();
+    const rows = await db.query(
+      `select p.id, i.code as "itemCode", i.name as "itemName", p.pack_code as "packCode", p.pack_size as "packSize", p.pack_uom as "packUom", p.container,
+              x.rate, pl.code as "priceListCode",
+              coalesce((select json_agg(json_build_object('minQty', s.min_qty, 'discountPct', s.discount_pct) order by s.min_qty) from sales.price_slabs s where s.price_list_item_id = x.id), '[]') as slabs
+         from mdm.dealer_profiles dp
+         join sales.price_lists pl on pl.price_group = dp.price_group and pl.status = 'Active' and pl.valid_from <= $2::date and (pl.valid_to is null or pl.valid_to >= $2::date)
+         join sales.price_list_items x on x.price_list_id = pl.id join mdm.item_packs p on p.id = x.item_pack_id join mdm.items i on i.id = p.item_id
+        where dp.party_id = $1 and p.status = 'Active' and i.status = 'Active' order by i.code, p.pack_size`, [partyId, date]);
+    res.json({ data: rows.rows });
+  }));
+
   // ------------------------------------------------------------------ live preview (nothing saved)
   r.post('/calculate', requirePermission('sales.quotation:create'), asyncHandler(async (req, res) => {
     const d = parse(quotationSchema, req.body);

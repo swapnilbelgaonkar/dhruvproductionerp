@@ -91,10 +91,18 @@ describe('Price lists (CRM-010)', () => {
     expect(items.body.data[0].slabs).toHaveLength(2);
     await f.ops.post(`/api/v1/price-lists/${id}/items`, { itemPackId: f.packA, rate: 200, slabs: [] }).expect(422);
 
-    // a copy is the way to revise prices; it may not overlap the active list once submitted
+    // a copy is the way to revise prices. It cannot start on or before the active list …
+    const early = await f.ops.post(`/api/v1/price-lists/${id}/copy`, { code: uniq('PL-'), name: '[TEST] early', priceGroup: f.priceGroup, validFrom: '2026-01-01' }).expect(201);
+    expect((await f.ops.post(`/api/v1/price-lists/${early.body.id}/submit`).expect(422)).body.error.code).toBe('PRICE_LIST_OVERLAP');
+    // … and a later one supersedes it on approval: the old list closes the day before
     const copy = await f.ops.post(`/api/v1/price-lists/${id}/copy`, { code: uniq('PL-'), name: '[TEST] Rabi', priceGroup: f.priceGroup, validFrom: '2026-06-01' }).expect(201);
-    expect((await f.ops.get(`/api/v1/price-lists/${copy.body.id}/items`).expect(200)).body.data).toHaveLength(1);
-    expect((await f.ops.post(`/api/v1/price-lists/${copy.body.id}/submit`).expect(422)).body.error.code).toBe('PRICE_LIST_OVERLAP');
+    const copied = (await f.ops.get(`/api/v1/price-lists/${copy.body.id}/items`).expect(200)).body.data;
+    expect(copied).toHaveLength(1);
+    await f.ops.post(`/api/v1/price-lists/${copy.body.id}/items`, { itemPackId: f.packA, rate: 260, slabs: [] }).expect(201);
+    const sub = await f.ops.post(`/api/v1/price-lists/${copy.body.id}/submit`).expect(200);
+    await approve(f.nsm, sub.body.approvalRequestId);
+    await approve(f.fh, sub.body.approvalRequestId);
+    expect((await f.ops.get(`/api/v1/price-lists/${id}`).expect(200)).body.validTo).toBe('2026-05-31');
   });
 });
 

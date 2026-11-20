@@ -2,6 +2,8 @@ import pg from 'pg';
 
 // numeric -> string (never float) ; bigint count -> number
 pg.types.setTypeParser(20, (v) => Number(v));
+// DATE columns are business dates: keep them as YYYY-MM-DD strings so no timezone can shift the day.
+pg.types.setTypeParser(1082, (v) => v);
 
 export type Db = pg.Pool;
 export type Tx = pg.PoolClient;

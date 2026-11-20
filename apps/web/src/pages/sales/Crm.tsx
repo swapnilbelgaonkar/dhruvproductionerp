@@ -513,6 +513,8 @@ export function OpportunityDetailPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const dealers = useActiveDealers();
+  const { can } = useAuth();
+  const nav = useNavigate();
   const q = useQuery({ queryKey: ['opportunity', id], queryFn: () => api<OppDetail>(`/crm/opportunities/${id}`) });
   const [dialog, setDialog] = useState<null | 'edit' | 'activity' | 'reopen' | 'WON' | 'LOST'>(null);
   const [e, setE] = useState({ title: '', value: '', probability: '', expectedClose: '', partyId: '' });
@@ -529,6 +531,8 @@ export function OpportunityDetailPage() {
         subtitle={<span className="inline-flex flex-wrap items-center gap-2"><span className="font-semibold num">{o.code}</span><StatusBadge status={o.stage === 'WON' ? 'Approved' : o.stage === 'LOST' ? 'Rejected' : 'Pending'} label={STAGE_LABEL[o.stage]} />
           {o.leadId && <Link to={`/sales/leads/${o.leadId}`} className="font-semibold text-primary">From lead →</Link>}</span>}
         actions={<>
+          {o.partyId && (OPEN_STAGES as readonly string[]).includes(o.stage) && can('sales.quotation:create') &&
+            <Button variant="secondary" onClick={() => nav(`/sales/quotations/new?partyId=${o.partyId}&opportunityId=${o.id}`)}>Create quotation</Button>}
           {a.includes('edit') && <Button variant="secondary" onClick={() => { setE({ title: o.title, value: String(Number(o.value)), probability: String(o.probability), expectedClose: o.expectedClose?.slice(0, 10) ?? '', partyId: o.partyId ?? '' }); setDialog('edit'); }}>Edit</Button>}
           {a.includes('stage') && <Button variant="danger" onClick={() => setDialog('LOST')}>Mark lost</Button>}
           {a.includes('stage') && <Button icon={<Trophy size={18} />} onClick={() => setDialog('WON')}>Mark won</Button>}

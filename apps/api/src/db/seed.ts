@@ -107,6 +107,10 @@ async function seedDemoUsers(tx: pg.PoolClient, password: string) {
   await person('SMP-SE', '[SAMPLE] Sales Executive Niphad', 'SE', tsm, taluka, 'se@demo.local', ['SALES_SE']);
   await person('SMP-DOC', '[SAMPLE] Document Verifier', null, null, state, 'verifier@demo.local', ['DOC_VERIFIER']);
   await person('SMP-CRD', '[SAMPLE] Credit Controller', null, null, state, 'credit@demo.local', ['CREDIT_CONTROLLER']);
+  // pricing and quotation approvals (Stage 2 part 3)
+  await person('SMP-NSM', '[SAMPLE] National Sales Manager', 'NSM', null, state, 'nsm@demo.local', ['SALES_NSM']);
+  await person('SMP-OPS', '[SAMPLE] Sales Operations', null, null, state, 'ops@demo.local', ['SALES_OPS']);
+  await person('SMP-FIN', '[SAMPLE] Finance Head', null, null, state, 'finance@demo.local', ['FINANCE_HEAD']);
   await audit(tx, SYSTEM, { action: 'demo.users_seeded', entityType: 'iam.user', reason: '[SAMPLE] demo hierarchy for UAT' });
 }
 
@@ -147,7 +151,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       const pw = process.env.DEMO_PASSWORD;
       if (!pw) throw new Error('Set DEMO_PASSWORD to use --demo-users');
       await seedDemoUsers(client as unknown as pg.PoolClient, pw);
-      console.log('[SAMPLE] demo sales hierarchy and users seeded (rsm/tsm/se/verifier/credit @demo.local)');
+      console.log('[SAMPLE] demo sales hierarchy and users seeded (rsm/tsm/se/nsm/ops/finance/verifier/credit @demo.local)');
     }
     await client.query('commit');
     await client.end();

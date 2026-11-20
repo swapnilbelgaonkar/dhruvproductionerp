@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { gstRegistrationSchema, INDIAN_STATES, ITEM_TYPES, itemPackSchema, itemSchema, legalEntitySchema, plantSchema, WAREHOUSE_TYPES, warehouseSchema } from '@dhruv/contracts';
+import { gstRegistrationSchema, INDIAN_STATES, ITEM_TYPES, itemPackSchema, itemSchema, legalEntitySchema, plantSchema, priceListSchema, WAREHOUSE_TYPES, warehouseSchema } from '@dhruv/contracts';
+import { PriceListCopy, PriceListItems } from '../sales/PriceLists';
 import { DocumentsPanel } from '../../components/DocumentsPanel';
 import { Plus } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,12 +14,12 @@ import { useToast } from '../../components/toast';
 import { Button, Card, ErrorBanner, Field, Input, KeyValues, Modal, PageHeader, Select, Skeleton, StatusBadge, Textarea } from '../../components/ui';
 import { api, ApiError, type Page } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { fmtDateTime } from '../../lib/format';
+import { fmtDate, fmtDateTime } from '../../lib/format';
 
 type Row = Record<string, string | number | null> & { id: string; code: string; name: string; status: string; version: number };
 
 type RefKind = 'legalEntity' | 'plant' | 'gst' | 'category' | 'hsn' | 'uom';
-interface FieldDef { name: string; label: string; kind: 'text' | 'textarea' | 'state' | 'select' | 'ref' | 'number' | 'checkbox'; required?: boolean; hint?: string; options?: readonly string[]; ref?: RefKind; upper?: boolean; defaultValue?: unknown }
+interface FieldDef { name: string; label: string; kind: 'text' | 'textarea' | 'state' | 'select' | 'ref' | 'number' | 'checkbox' | 'date'; required?: boolean; hint?: string; options?: readonly string[]; ref?: RefKind; upper?: boolean; defaultValue?: unknown }
 export interface MasterConfig {
   key: string; api: string; base: string; title: string; singular: string; perm: string; subtitle: string; entityType: string;
   schema: ZodObject<ZodRawShape>; fields: FieldDef[]; columns: Column<Row>[]; details: (r: Row) => [string, ReactNode][];
@@ -118,6 +119,28 @@ export const MASTERS: Record<string, MasterConfig> = {
     details: (r) => [['Code', r.code], ['Name', r.name], ['Type', r.itemType], ['Category', r.categoryName ? `${r.categoryName} (licence: ${r.licenceRequired})` : '—'], ['Base unit', r.baseUom],
       ['HSN', r.hsnCode], ['Shelf life', r.shelfLifeDays ? `${r.shelfLifeDays} days` : '—'], ['Storage class', r.storageClass],
       ['Controls', [r.lotControlled && 'Lot', r.serialControlled && 'Box serial', r.hazardous && 'Hazardous'].filter(Boolean).join(' · ') || '—'], ['Formulation', r.formulation]],
+  },
+  priceLists: {
+    key: 'price-lists', entityType: 'sales.price_list', api: '/price-lists', base: '/sales/price-lists', title: 'Price Lists', singular: 'Price list', perm: 'sales.price_list',
+    subtitle: 'Dealer prices per price group with volume slabs. A list applies only after sales head and finance approval.', schema: priceListSchema,
+    fields: [
+      { name: 'code', label: 'Code', kind: 'text', required: true, upper: true, hint: 'e.g. PL-KHARIF-26' },
+      { name: 'name', label: 'Name', kind: 'text', required: true },
+      { name: 'priceGroup', label: 'Dealer price group', kind: 'text', required: true, upper: true, hint: 'Matches the price group on the dealer, e.g. STANDARD' },
+      { name: 'validFrom', label: 'Valid from', kind: 'date', required: true },
+      { name: 'validTo', label: 'Valid to (optional)', kind: 'date', hint: 'Leave empty for open-ended' },
+      { name: 'notes', label: 'Notes', kind: 'textarea' },
+    ],
+    columns: [
+      { key: 'code', header: 'Code', render: (r) => <span className="font-semibold">{r.code}</span> },
+      { key: 'name', header: 'Name', render: (r) => r.name },
+      { key: 'group', header: 'Price group', render: (r) => r.priceGroup },
+      { key: 'valid', header: 'Validity', render: (r) => <span className="num">{fmtDate(r.validFrom as string)} – {r.validTo ? fmtDate(r.validTo as string) : 'open'}</span> },
+      { key: 'items', header: 'Products', render: (r) => <span className="num">{r.itemCount}</span> },
+      { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+    ],
+    details: (r) => [['Code', r.code], ['Name', r.name], ['Dealer price group', r.priceGroup], ['Valid from', fmtDate(r.validFrom as string)],
+      ['Valid to', r.validTo ? fmtDate(r.validTo as string) : 'Open-ended'], ['Notes', r.notes]],
   },
 };
 
@@ -230,6 +253,7 @@ export function MasterDetailPage({ c }: { c: MasterConfig }) {
           {a.includes('submit') && <Button loading={act.isPending} onClick={() => act.mutate('submit')}>Submit for approval</Button>}
           {a.includes('reactivate') && <Button loading={act.isPending} onClick={() => act.mutate('reactivate')}>Request reactivation</Button>}
           {a.includes('deactivate') && <Button variant="danger" onClick={() => setDeactivate(true)}>Deactivate</Button>}
+          {c.key === 'price-lists' && <PriceListCopy list={r} />}
         </>} />
       <ErrorBanner error={act.error} />
       {r.status === 'Submitted' && <div className="mb-6 rounded-md bg-warning-bg px-4 py-3 text-warning-text">Waiting for approval. It cannot be edited until a decision is made.</div>}
@@ -237,6 +261,7 @@ export function MasterDetailPage({ c }: { c: MasterConfig }) {
         <Card title="Details"><KeyValues items={c.details(r)} /></Card>
         {c.key === 'legal-entities' && <GstRegistrations leId={r.id} editable={a.includes('edit')} />}
         {c.key === 'items' && <ItemPacks itemId={r.id} packs={(r as unknown as { packs: Pack[] }).packs} editable={a.includes('edit')} />}
+        {c.key === 'price-lists' && <PriceListItems listId={r.id} editable={a.includes('edit')} />}
         <DocumentsPanel entityType={c.entityType} entityId={r.id} />
         <Card title="Approval history">
           {r.approvals.length === 0 ? <p className="text-ink-2">Not yet submitted.</p> : (
@@ -287,7 +312,7 @@ export function MasterFormPage({ c }: { c: MasterConfig }) {
   const f = useForm<Record<string, unknown>>({
     resolver: zodResolver(schema),
     defaultValues: Object.fromEntries(c.fields.map((x) => [x.name, x.defaultValue ?? (x.kind === 'checkbox' ? false : '')])),
-    values: existing.data ? Object.fromEntries(c.fields.map((x) => [x.name, existing.data[x.name] ?? (x.kind === 'checkbox' ? false : '')])) : undefined,
+    values: existing.data ? Object.fromEntries(c.fields.map((x) => [x.name, x.kind === 'date' ? String(existing.data[x.name] ?? '').slice(0, 10) : existing.data[x.name] ?? (x.kind === 'checkbox' ? false : '')])) : undefined,
   });
   const le = f.watch('legalEntityId') as string | undefined;
   if (editing && existing.isLoading) return <Skeleton className="h-96" />;
@@ -321,6 +346,7 @@ export function MasterFormPage({ c }: { c: MasterConfig }) {
               : fd.kind === 'select' ? <Select id={fd.name} invalid={!!err} {...reg}><option value="">Select…</option>{fd.options!.map((o) => <option key={o} value={o}>{o}</option>)}</Select>
               : fd.kind === 'ref' ? <RefSelect id={fd.name} kind={fd.ref!} legalEntityId={le} invalid={!!err} value={(f.watch(fd.name) as string) ?? ''} {...reg} />
               : fd.kind === 'number' ? <Input id={fd.name} type="number" inputMode="numeric" invalid={!!err} {...reg} />
+              : fd.kind === 'date' ? <Input id={fd.name} type="date" invalid={!!err} {...reg} />
               : <Input id={fd.name} invalid={!!err} className={fd.upper ? 'uppercase' : undefined} {...reg} />;
             return <div key={fd.name} className={fd.kind === 'textarea' ? 'md:col-span-2' : undefined}><Field label={fd.label} htmlFor={fd.name} required={fd.required} error={err} hint={fd.hint}>{control}</Field></div>;
           })}

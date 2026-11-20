@@ -33,6 +33,8 @@ export interface LifecycleConfig {
   validateWrite?: (tx: Tx, data: Record<string, unknown>, id: string | null) => Promise<void>;
   /** block deactivation while dependent records are still active */
   validateDeactivate?: (tx: Tx, row: Record<string, unknown>) => Promise<void>;
+  /** runs in the approving transaction once the record is Active */
+  onActivated?: (tx: Tx, id: string, actor: Actor) => Promise<void>;
 }
 
 const perm = (c: LifecycleConfig, action: string) => `${c.resource}:${action}`;
@@ -58,7 +60,7 @@ async function setStatus(tx: Tx, c: LifecycleConfig, id: string, status: string,
 
 export function lifecycleRoutes(db: Db, c: LifecycleConfig) {
   registerSubjectHandler(c.resource, {
-    onApproved: (tx, r: ApprovalRequestRow, a) => setStatus(tx, c, r.subject_id, 'Active', a),
+    onApproved: async (tx, r: ApprovalRequestRow, a) => { await setStatus(tx, c, r.subject_id, 'Active', a); await c.onActivated?.(tx, r.subject_id, a); },
     onRejected: (tx, r, a) => setStatus(tx, c, r.subject_id, 'Rejected', a),
     onReturned: (tx, r, a) => setStatus(tx, c, r.subject_id, 'Draft', a),
     onCancelled: (tx, r, a) => setStatus(tx, c, r.subject_id, 'Draft', a),

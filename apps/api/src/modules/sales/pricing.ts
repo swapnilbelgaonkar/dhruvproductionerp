@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { priceListItemSchema, priceListSchema } from '@dhruv/contracts';
-import { withTx, type Db, type Tx } from '../../db/pool';
+import { withTx, type Actor, type Db, type Tx } from '../../db/pool';
 import { audit } from '../../lib/audit';
 import { Errors } from '../../lib/errors';
 import { asyncHandler, parse } from '../../lib/http';
@@ -19,11 +19,23 @@ export async function priceFor(dbx: Db | Tx, priceGroup: string, itemPackId: str
   return r as { price_list_id: string; code: string; rate: string; slabs: { minQty: number; discountPct: number }[] } | undefined;
 }
 
+/**
+ * Active lists of the same group whose dates overlap this one and that it cannot supersede (they start on or after it).
+ * An older list is superseded instead: on approval its validity is closed the day before the new list starts.
+ */
 async function overlapping(tx: Tx, row: Record<string, unknown>) {
   return (await tx.query(
-    `select code from sales.price_lists where id <> $1 and price_group = $2 and status = 'Active'
+    `select code from sales.price_lists where id <> $1 and price_group = $2 and status = 'Active' and valid_from >= $3::date
         and daterange(valid_from, coalesce(valid_to, 'infinity'::date), '[]') && daterange($3::date, coalesce($4::date, 'infinity'::date), '[]')`,
     [row.id, row.price_group, row.valid_from, row.valid_to])).rows;
+}
+
+async function supersedeOlder(tx: Tx, id: string, actor: Actor) {
+  const pl = (await tx.query(`select price_group, valid_from from sales.price_lists where id = $1`, [id])).rows[0];
+  const closed = (await tx.query(
+    `update sales.price_lists set valid_to = $3::date - 1, updated_by = $4 where id <> $1 and price_group = $2 and status = 'Active'
+        and valid_from < $3::date and (valid_to is null or valid_to >= $3::date) returning id, code, valid_to`, [id, pl.price_group, pl.valid_from, actor.userId])).rows;
+  for (const c of closed) await audit(tx, actor, { action: 'sales.price_list.superseded', entityType: 'sales.price_list', entityId: c.id, after: { validTo: c.valid_to, by: id } });
 }
 
 export function pricingRoutes(db: Db) {
@@ -34,6 +46,14 @@ export function pricingRoutes(db: Db) {
     if (!['Draft', 'Rejected'].includes(pl.status)) throw Errors.state('Prices can be changed while the list is Draft or Rejected. Copy it to create a new version.');
     return pl;
   };
+
+  // packs that can be priced: active packs of active finished goods
+  r.get('/saleable-packs', requirePermission('sales.price_list:view'), asyncHandler(async (_req, res) => {
+    const rows = await db.query(
+      `select p.id, i.code as "itemCode", i.name as "itemName", p.pack_code as "packCode", p.pack_size as "packSize", p.pack_uom as "packUom", p.container
+         from mdm.item_packs p join mdm.items i on i.id = p.item_id where p.status = 'Active' and i.status = 'Active' and i.item_type = 'FG' order by i.code, p.pack_size`);
+    res.json({ data: rows.rows });
+  }));
 
   r.get('/:id/items', requirePermission('sales.price_list:view'), asyncHandler(async (req, res) => {
     const rows = await db.query(
@@ -104,8 +124,9 @@ export function pricingRoutes(db: Db) {
       const n = Number((await tx.query(`select count(*) from sales.price_list_items where price_list_id = $1`, [row.id])).rows[0].count);
       if (!n) throw Errors.rule('PRICE_LIST_EMPTY', 'Add at least one product price before submitting.');
       const o = await overlapping(tx, row);
-      if (o.length) throw Errors.rule('PRICE_LIST_OVERLAP', `Active list ${o.map((x) => x.code).join(', ')} already covers price group ${row.price_group} for these dates. Shorten its validity first.`);
+      if (o.length) throw Errors.rule('PRICE_LIST_OVERLAP', `Active list ${o.map((x) => x.code).join(', ')} for price group ${row.price_group} starts on or after this list. A new list must start later than the one it replaces.`);
     },
+    onActivated: supersedeOlder,
   }));
   return r;
 }

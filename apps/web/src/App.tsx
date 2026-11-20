@@ -12,6 +12,7 @@ import { DepartmentsPage, EmployeeDetailPage, EmployeeFormPage, EmployeesPage, T
 import { OverviewPage } from './pages/Overview';
 import { DealerDetailPage, DealerFormPage, DealersPage } from './pages/sales/Dealers';
 import { ActivitiesPage, LeadDetailPage, LeadsPage, OpportunityDetailPage, PipelinePage } from './pages/sales/Crm';
+import { QuotationDetailPage, QuotationFormPage, QuotationPrintPage, QuotationsPage } from './pages/sales/Quotations';
 import { CategoriesPage, HsnPage, UomPage } from './pages/masters/ProductMasters';
 
 function Protected({ perm, children }: { perm?: string; children: JSX.Element }) {
@@ -44,6 +45,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
       <Route element={<AppShell />}>
         <Route index element={<OverviewPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
@@ -57,10 +59,15 @@ export function App() {
         <Route path="sales/dealers/new" element={<Protected perm="mdm.dealer:create"><DealerFormPage /></Protected>} />
         <Route path="sales/dealers/:id" element={<Protected perm="mdm.dealer:view"><DealerDetailPage /></Protected>} />
         <Route path="sales/dealers/:id/edit" element={<Protected perm="mdm.dealer:edit_draft"><DealerFormPage /></Protected>} />
+        <Route path="sales/quotations" element={<Protected perm="sales.quotation:view"><QuotationsPage /></Protected>} />
+        <Route path="sales/quotations/new" element={<Protected perm="sales.quotation:create"><QuotationFormPage /></Protected>} />
+        <Route path="sales/quotations/:id" element={<Protected perm="sales.quotation:view"><QuotationDetailPage /></Protected>} />
+        <Route path="sales/quotations/:id/edit" element={<Protected perm="sales.quotation:edit"><QuotationFormPage /></Protected>} />
         {master('legalEntities')}
         {master('plants')}
         {master('warehouses')}
         {master('items')}
+        {master('priceLists')}
         <Route path="products/categories" element={<Protected perm="mdm.product_category:view"><CategoriesPage /></Protected>} />
         <Route path="products/hsn" element={<Protected perm="mdm.hsn:view"><HsnPage /></Protected>} />
         <Route path="products/uom" element={<Protected perm="mdm.uom:view"><UomPage /></Protected>} />
