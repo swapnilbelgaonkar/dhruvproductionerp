@@ -221,3 +221,24 @@ export const activitySchema = z.object({
 export const activityCompleteSchema = z.object({
   outcome: trimmed(1000), nextAction: z.object({ kind: z.enum(ACTIVITY_KINDS), title: trimmed(200), plannedAt: z.string().datetime({ offset: true }) }).optional().nullable(),
 });
+
+// ---------- Pricing & quotations (BRD §4 #9, §5.1) ----------
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date required');
+export const priceListSchema = z.object({
+  code, name: trimmed(120), priceGroup: z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]{1,30}$/, 'Letters, digits, - or _'),
+  validFrom: isoDay, validTo: isoDay.optional().nullable(), notes: optionalText(500),
+});
+export const priceListItemSchema = z.object({
+  itemPackId: uuid, rate: z.number().positive('Rate must be above zero'),
+  slabs: z.array(z.object({ minQty: z.number().positive(), discountPct: z.number().positive().max(99.99) })).max(10).default([]),
+}).refine((v) => new Set(v.slabs.map((s) => s.minQty)).size === v.slabs.length, { message: 'Each slab needs a different minimum quantity', path: ['slabs'] });
+
+export const quotationLineInput = z.object({
+  itemPackId: uuid, qty: z.number().positive('Quantity must be above zero'), extraDiscountPct: z.number().min(0).max(100).default(0),
+});
+export const quotationSchema = z.object({
+  partyId: uuid, legalEntityId: uuid, billToId: uuid, shipToId: uuid, quoteDate: isoDay.optional(),
+  contactPerson: optionalText(100), paymentTerms: trimmed(300), deliveryTerms: trimmed(300), notes: optionalText(1000),
+  opportunityId: uuid.optional().nullable(),
+  lines: z.array(quotationLineInput).min(1, 'Add at least one item').max(100),
+}).refine((q) => new Set(q.lines.map((l) => l.itemPackId)).size === q.lines.length, { message: 'Each product pack can appear only once', path: ['lines'] });

@@ -32,6 +32,8 @@ export const PERMISSIONS = [
   ...P('Sales', 'crm.opportunity', ['view', 'create', 'edit', 'reopen'], 'opportunities'),
   ...P('Sales', 'crm.activity', ['view', 'create'], 'sales activities'),
   ...P('Sales', 'mdm.dealer', ['view', 'create', 'edit_draft', 'submit', 'verify_documents', 'view_sensitive', 'suspend'], 'dealers and their KYC'),
+  ...P('Sales', 'sales.price_list', ['view', 'create', 'edit_draft', 'submit', 'approve', 'deactivate'], 'price lists and volume slabs'),
+  ...P('Sales', 'sales.quotation', ['view', 'create', 'edit', 'submit', 'send', 'cancel'], 'quotations'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -40,17 +42,22 @@ const VIEW = ALL.filter((c) => c.endsWith(':view'));
 const ORG_VIEW = VIEW.filter((c) => (c.startsWith('org.') || c.startsWith('mdm.')) && !c.startsWith('mdm.dealer'));
 const MASTER = (c: string) => (c.startsWith('org.') || c.startsWith('mdm.')) && !c.startsWith('mdm.dealer');
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
-const DEALER_SALES = ['mdm.dealer:view', 'mdm.dealer:create', 'mdm.dealer:edit_draft', 'mdm.dealer:submit', ...CRM_BASE];
+const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
+  'sales.quotation:send', 'sales.quotation:cancel'];
+const PRICE_MANAGE = ['sales.price_list:view', 'sales.price_list:create', 'sales.price_list:edit_draft', 'sales.price_list:submit', 'sales.price_list:deactivate'];
+const DEALER_SALES = ['mdm.dealer:view', 'mdm.dealer:create', 'mdm.dealer:edit_draft', 'mdm.dealer:submit', ...CRM_BASE, ...QUOTE_SALES];
 /** BRD p.3: lead allocation from ASM upward; reopening closed opportunities from RSM upward. */
 const tierCrm = (t: string) => [...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM', 'SASM', 'ASM'].includes(t) ? ['crm.lead:assign'] : []),
-  ...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM'].includes(t) ? ['crm.opportunity:reopen'] : [])];
+  ...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM'].includes(t) ? ['crm.opportunity:reopen'] : []),
+  ...(['BH', 'NSM'].includes(t) ? PRICE_MANAGE : [])];
 const DEALER_EXTRA: Record<string, string[]> = {
-  SALES_OPS: [...DEALER_SALES, 'crm.lead:assign'],
+  SALES_OPS: [...DEALER_SALES, 'crm.lead:assign', ...PRICE_MANAGE],
   DOC_VERIFIER: ['mdm.dealer:view', 'mdm.dealer:verify_documents', 'mdm.dealer:view_sensitive'],
-  CREDIT_CONTROLLER: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend'],
-  FINANCE_HEAD: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend', 'mdm.tax_rate:configure', 'mdm.hsn:create', 'mdm.hsn:edit'],
-  ACCOUNTS_EXEC: ['mdm.dealer:view'],
-  MANAGEMENT_VIEWER: ['mdm.dealer:view', 'crm.lead:view', 'crm.opportunity:view', 'crm.activity:view'],
+  CREDIT_CONTROLLER: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend', 'sales.quotation:view'],
+  FINANCE_HEAD: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend', 'mdm.tax_rate:configure', 'mdm.hsn:create', 'mdm.hsn:edit',
+    'sales.price_list:view', 'sales.quotation:view'],
+  ACCOUNTS_EXEC: ['mdm.dealer:view', 'sales.price_list:view', 'sales.quotation:view'],
+  MANAGEMENT_VIEWER: ['mdm.dealer:view', 'crm.lead:view', 'crm.opportunity:view', 'crm.activity:view', 'sales.price_list:view', 'sales.quotation:view'],
 };
 
 interface RoleDef { code: string; name: string; department: string; description: string; privileged?: boolean; requiresMfa?: boolean; permissions: string[] }
@@ -117,6 +124,21 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
   { docType: 'mdm.item', name: 'Item activation', description: 'Maker-checker before a product or material can be used in transactions', definition: masterActivation('Master data approval') },
   { docType: 'iam.role_grant', name: 'Privileged role grant', description: 'A privileged role takes effect only after an executive approves it (SEC-018)',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [{ kind: 'role', label: 'Executive approval', roles: ['EXEC_ADMIN', 'SUPER_ADMIN'] }] }] } },
+  { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',
+    definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
+      { kind: 'role', key: 'sales', label: 'Sales head approval', roles: ['SALES_BH', 'SALES_NSM'] },
+      { kind: 'role', key: 'finance', label: 'Finance approval', roles: ['FINANCE_HEAD'] },
+    ] }] } },
+  // Quotation discount approval (QUO-005, D01 hybrid). List price and slab schemes need no approval; an extra discount does.
+  // Until D15 activates the tier limits, the initiator's reporting manager approves; afterwards the authority ladder decides.
+  { docType: 'sales.quotation', name: 'Quotation discount approval', description: 'Extra discount beyond the initiator’s own authority needs approval',
+    definition: { distinctApprovers: true, rules: [
+      { name: 'No extra discount', when: { fact: 'maxDiscountPct', op: 'lte', value: 0 }, steps: [] },
+      { name: 'Within own authority', when: { fact: 'withinOwnAuthority', op: 'eq', value: true }, steps: [] },
+      { name: 'Authority ladder', when: { fact: 'limitsActive', op: 'eq', value: true }, steps: [
+        { kind: 'authority_ladder', label: 'Discount approval', amountFact: 'ladderAmount', discountFact: 'maxDiscountPct', notifySkipped: true }] },
+      { name: 'Reporting manager (limits pending D15)', steps: [{ kind: 'reporting_manager', label: 'Discount approval (reporting manager)' }] },
+    ] } },
   // D01 approved: hybrid routing. Used by sales orders in Stage 2; simulation is available now.
   { docType: 'sales.order', name: 'Sales order approval (D01 hybrid)', description: 'Lowest covering tier in the initiator’s chain, skipped tiers notified, then Accounts review',
     definition: { distinctApprovers: true, rules: [{ name: 'Hybrid routing', steps: [
