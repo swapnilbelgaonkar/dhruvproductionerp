@@ -3,7 +3,7 @@
 Order follows D12 (business flow). Stage 2 parts:
 
 1. Dealer onboarding — **done** (this report)
-2. Leads, BANT, opportunities and activities (CRM)
+2. Leads, BANT, opportunities and activities (CRM) — **done**
 3. Pricing, quotations
 4. Sales orders with hybrid approval (D01)
 
@@ -48,3 +48,30 @@ Order follows D12 (business flow). Stage 2 parts:
 - Dealer 360° view (needs quotations, orders, invoices) — Stage 2 part 4 and Stage 6.
 - Changing commercial terms of an active dealer (change request) — with master change requests.
 - Credit exposure and overdue freeze — with invoices and receipts (Stage 6, D18).
+
+## Part 2 — CRM: leads, BANT, opportunities, activities (BRD §4 sub-modules 1–5, MP §7.1–7.5)
+
+| Area | What works | RTM |
+|---|---|---|
+| CRM summary | Open and qualified leads, overdue follow-ups, 90-day conversion rate, open pipeline value and weighted value, won and lost this month, my activities due and overdue. All figures respect territory scope | CRM-002 |
+| Leads | Code LEAD-2026-00001. Source (exhibition, IndiaMART, field visit, referral, dealer enquiry, website), requirement and expected quantity, owner, territory, next follow-up. An existing dealer with the same mobile is linked automatically | CRM-003 |
+| Duplicates | A second **open** lead with the same mobile is blocked and the existing lead is named | CRM-004 |
+| Ownership | Reassignment from ASM upward (BRD p.3 "lead allocation") with a reason; the new owner gets a notification; the history stays in the audit log | CRM-005 |
+| BANT | Budget 25 + Authority 25 + Need (1–5 × 5) + Timeline (≤90 days 25, ≤180 days 15, ≤1 year 5). Qualifying needs the score in setting `crm.bant.qualifyScore` (default 60). Disqualifying needs a reason | CRM-006 |
+| Conversion | A qualified lead converts to an opportunity; the two are linked both ways | CRM-007 |
+| Pipeline (Kanban) | Requirement → Sample/Trial → Quote sent → PO expected → Won/Lost (X19 resolved). Cards move by drag-and-drop or a keyboard-accessible "Move to" menu. Default win % per stage is a setting. **Won** needs a registered **active** dealer; **Lost** needs a loss reason. Every move is kept in an append-only stage history. Closed opportunities can be reopened from RSM upward, with a reason | CRM-007 |
+| Activities | Call, meeting, dealer visit, field visit, agronomist discussion, follow-up, task. Each is recorded as done (outcome required) or planned. Visits capture GPS when the browser allows it. Completing a planned activity can schedule the next one. A done activity moves a New lead to Contacted. My activities shows overdue, today and upcoming; only the owner can complete or cancel | CRM-008 |
+| Access | Territory scope on leads, opportunities and activities (lists, details and search). Sales tiers create and edit; ASM+ reassign; RSM+ reopen; Management Viewer read-only | SEC-011 |
+
+### Evidence
+- `apps/api/test/crm.test.ts` has 4 tests:
+  - BANT scoring
+  - the full lead → opportunity → won-blocked → won → reopen → lost cycle
+  - territory isolation and reassignment with notification
+  - planned activity → complete with next action, owner-only
+- Totals: **39 API + 4 contract tests passing**.
+- A browser run also passed. The SE created a lead, logged a call, scored BANT at 90, qualified it and converted it. In the pipeline the SE moved the opportunity, saw "won" refused without a dealer, and recorded a loss to a competitor. The SE then completed a planned visit and scheduled the next action. The RSM sees the leads of the whole area.
+
+### Not yet built in Stage 2
+- Pricing (price lists, schemes), quotations and sales orders — parts 3 and 4.
+- Remaining sales sub-modules: samples, field trials, targets, competitor intelligence, beat plans, contracts, outstanding recovery, executive analytics, exports — later Stage 2 increments, after orders and invoices.

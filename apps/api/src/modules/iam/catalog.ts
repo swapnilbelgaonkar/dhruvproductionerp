@@ -28,6 +28,9 @@ export const PERMISSIONS = [
   ...P('Product masters', 'mdm.tax_rate', ['configure'], 'effective-dated GST rates'),
   ...P('Product masters', 'mdm.product_category', ['view', 'create', 'edit', 'deactivate'], 'product categories'),
   ...P('Product masters', 'mdm.item', ['view', 'create', 'edit_draft', 'submit', 'approve', 'deactivate'], 'items and pack sizes'),
+  ...P('Sales', 'crm.lead', ['view', 'create', 'edit', 'assign'], 'leads'),
+  ...P('Sales', 'crm.opportunity', ['view', 'create', 'edit', 'reopen'], 'opportunities'),
+  ...P('Sales', 'crm.activity', ['view', 'create'], 'sales activities'),
   ...P('Sales', 'mdm.dealer', ['view', 'create', 'edit_draft', 'submit', 'verify_documents', 'view_sensitive', 'suspend'], 'dealers and their KYC'),
 ];
 
@@ -36,14 +39,18 @@ const VIEW = ALL.filter((c) => c.endsWith(':view'));
 // dealer data is sales-owned and territory-scoped, so it is granted explicitly below rather than with the general master views
 const ORG_VIEW = VIEW.filter((c) => (c.startsWith('org.') || c.startsWith('mdm.')) && !c.startsWith('mdm.dealer'));
 const MASTER = (c: string) => (c.startsWith('org.') || c.startsWith('mdm.')) && !c.startsWith('mdm.dealer');
-const DEALER_SALES = ['mdm.dealer:view', 'mdm.dealer:create', 'mdm.dealer:edit_draft', 'mdm.dealer:submit'];
+const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
+const DEALER_SALES = ['mdm.dealer:view', 'mdm.dealer:create', 'mdm.dealer:edit_draft', 'mdm.dealer:submit', ...CRM_BASE];
+/** BRD p.3: lead allocation from ASM upward; reopening closed opportunities from RSM upward. */
+const tierCrm = (t: string) => [...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM', 'SASM', 'ASM'].includes(t) ? ['crm.lead:assign'] : []),
+  ...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM'].includes(t) ? ['crm.opportunity:reopen'] : [])];
 const DEALER_EXTRA: Record<string, string[]> = {
-  SALES_OPS: DEALER_SALES,
+  SALES_OPS: [...DEALER_SALES, 'crm.lead:assign'],
   DOC_VERIFIER: ['mdm.dealer:view', 'mdm.dealer:verify_documents', 'mdm.dealer:view_sensitive'],
   CREDIT_CONTROLLER: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend'],
   FINANCE_HEAD: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend', 'mdm.tax_rate:configure', 'mdm.hsn:create', 'mdm.hsn:edit'],
   ACCOUNTS_EXEC: ['mdm.dealer:view'],
-  MANAGEMENT_VIEWER: ['mdm.dealer:view'],
+  MANAGEMENT_VIEWER: ['mdm.dealer:view', 'crm.lead:view', 'crm.opportunity:view', 'crm.activity:view'],
 };
 
 interface RoleDef { code: string; name: string; department: string; description: string; privileged?: boolean; requiresMfa?: boolean; permissions: string[] }
@@ -71,7 +78,7 @@ export const ROLES: RoleDef[] = [
     permissions: [...VIEW, 'sys.audit:export', 'sys.audit:verify', 'wf.approval:view_all'] },
   // Business roles (doc 07 §3). Module permissions are added as each module is built.
   ...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM', 'SASM', 'ASM', 'TSM', 'SE'] as const).map((t) => ({
-    code: `SALES_${t}`, name: `Sales — ${t}`, department: 'Sales', description: `Sales hierarchy tier ${t}`, permissions: [...ORG_VIEW, ...DEALER_SALES] })),
+    code: `SALES_${t}`, name: `Sales — ${t}`, department: 'Sales', description: `Sales hierarchy tier ${t}`, permissions: [...ORG_VIEW, ...DEALER_SALES, ...tierCrm(t)] })),
   ...[
     ['MANAGEMENT_VIEWER', 'Management Viewer', 'Executive'], ['SALES_OPS', 'Sales Operations', 'Sales'], ['DOC_VERIFIER', 'Document Verifier', 'Compliance'],
     ['ACCOUNTS_EXEC', 'Accounts Executive', 'Finance'], ['CREDIT_CONTROLLER', 'Credit Controller', 'Finance'], ['FINANCE_HEAD', 'Finance Head', 'Finance'],

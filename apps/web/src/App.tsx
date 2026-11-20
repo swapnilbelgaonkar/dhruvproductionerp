@@ -11,6 +11,7 @@ import { MASTERS, MasterDetailPage, MasterFormPage, MasterListPage } from './pag
 import { DepartmentsPage, EmployeeDetailPage, EmployeeFormPage, EmployeesPage, TerritoriesPage } from './pages/masters/SimpleMasters';
 import { OverviewPage } from './pages/Overview';
 import { DealerDetailPage, DealerFormPage, DealersPage } from './pages/sales/Dealers';
+import { ActivitiesPage, LeadDetailPage, LeadsPage, OpportunityDetailPage, PipelinePage } from './pages/sales/Crm';
 import { CategoriesPage, HsnPage, UomPage } from './pages/masters/ProductMasters';
 
 function Protected({ perm, children }: { perm?: string; children: JSX.Element }) {
@@ -47,6 +48,11 @@ export function App() {
         <Route index element={<OverviewPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="approvals/:id" element={<ApprovalDetailPage />} />
+        <Route path="sales/leads" element={<Protected perm="crm.lead:view"><LeadsPage /></Protected>} />
+        <Route path="sales/leads/:id" element={<Protected perm="crm.lead:view"><LeadDetailPage /></Protected>} />
+        <Route path="sales/opportunities" element={<Protected perm="crm.opportunity:view"><PipelinePage /></Protected>} />
+        <Route path="sales/opportunities/:id" element={<Protected perm="crm.opportunity:view"><OpportunityDetailPage /></Protected>} />
+        <Route path="sales/activities" element={<Protected perm="crm.activity:view"><ActivitiesPage /></Protected>} />
         <Route path="sales/dealers" element={<Protected perm="mdm.dealer:view"><DealersPage /></Protected>} />
         <Route path="sales/dealers/new" element={<Protected perm="mdm.dealer:create"><DealerFormPage /></Protected>} />
         <Route path="sales/dealers/:id" element={<Protected perm="mdm.dealer:view"><DealerDetailPage /></Protected>} />

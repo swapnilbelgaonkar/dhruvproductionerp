@@ -190,6 +190,12 @@ export function searchRoutes(db: Db) {
       parts.push(`(select 'Dealer', p.id, p.code, p.legal_name, '/sales/dealers/' || p.id from mdm.parties p join mdm.dealer_profiles dp on dp.party_id = p.id
                     where (p.code ilike $1 or p.legal_name ilike $1 or p.gstin ilike $1 or p.mobile like $1) and ${scope} limit 5)`);
     }
+    for (const [perm, table, label, base] of [['crm.lead:view', 'sales.leads', 'Lead', '/sales/leads/'], ['crm.opportunity:view', 'sales.opportunities', 'Opportunity', '/sales/opportunities/']] as const) {
+      if (!can(req, perm)) continue;
+      const ids = await territoryScope(db, req, perm);
+      const scope = ids === null ? 'true' : `exists (select 1 from org.territories rt join org.territories ut on rt.path <@ ut.path where rt.id = x.territory_id and ut.id = any('{${ids.join(',')}}'::uuid[]))`;
+      parts.push(`(select '${label}', x.id, x.code, x.company, '${base}' || x.id from ${table} x where (x.code ilike $1 or x.company ilike $1) and ${scope} limit 5)`);
+    }
     if (can(req, 'mdm.item:view')) parts.push(`(select 'Item', id, code, name, '/products/items/' || id from mdm.items where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'iam.user:view')) parts.push(`(select 'User', id, full_name, email::text, '/admin/users/' || id from iam.users where email ilike $1 or full_name ilike $1 limit 5)`);
     parts.push(`(select 'Approval', a.id, a.doc_no, a.subject_label, '/approvals/' || a.id from wf.approval_requests a

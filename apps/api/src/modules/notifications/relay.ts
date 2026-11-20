@@ -26,6 +26,14 @@ async function approvalNotes(tx: Tx, e: OutboxRow): Promise<Note[]> {
   }
 }
 
+async function leadNotes(tx: Tx, e: OutboxRow): Promise<Note[]> {
+  if (e.event_type !== 'crm.lead_assigned') return [];
+  const l = (await tx.query(
+    `select l.id, l.code, l.company, u.id as user_id from sales.leads l join iam.users u on u.employee_id = l.owner_id and u.status = 'Active' where l.id = $1`,
+    [e.aggregate_id])).rows[0];
+  return l ? [{ userId: l.user_id, kind: 'action', title: `New lead assigned — ${l.code}`, body: l.company, link: `/sales/leads/${l.id}` }] : [];
+}
+
 /**
  * Transactional-outbox relay (PLT-004): reads committed events and turns them into in-app notifications.
  * Safe to run on several instances (SKIP LOCKED) and to retry (unique dedupe key per user and event).
@@ -40,7 +48,7 @@ export async function relayOutbox(db: Db, batch = 100): Promise<number> {
     for (const e of rows) {
       try {
         await client.query('savepoint ev');
-        const notes = e.aggregate_type === 'wf.approval' ? await approvalNotes(client, e) : [];
+        const notes = e.aggregate_type === 'wf.approval' ? await approvalNotes(client, e) : e.aggregate_type === 'crm.lead' ? await leadNotes(client, e) : [];
         for (const n of notes) {
           await client.query(
             `insert into sys.notifications (user_id, kind, title, body, link, dedupe_key) values ($1,$2,$3,$4,$5,$6)

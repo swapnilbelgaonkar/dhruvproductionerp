@@ -184,3 +184,40 @@ export const signatorySchema = z.object({
 });
 export const licenceVerifySchema = z.object({ verification: z.enum(['Verified', 'Rejected']), remarks: z.string().trim().max(500).optional().default('') })
   .refine((v) => v.verification === 'Verified' || v.remarks.length > 0, { message: 'Give the reason for rejection', path: ['remarks'] });
+
+// ---------- CRM (BRD §4 #1–5) ----------
+export const LEAD_SOURCES = ['EXHIBITION', 'INDIAMART', 'FIELD_VISIT', 'REFERRAL', 'DEALER_ENQUIRY', 'WEBSITE', 'OTHER'] as const;
+export const OPP_STAGES = ['REQUIREMENT', 'SAMPLE_TRIAL', 'QUOTE_SENT', 'PO_EXPECTED', 'WON', 'LOST'] as const;
+export const OPEN_STAGES = ['REQUIREMENT', 'SAMPLE_TRIAL', 'QUOTE_SENT', 'PO_EXPECTED'] as const;
+export const LOSS_REASONS = ['PRICE', 'COMPETITOR', 'NO_BUDGET', 'NO_NEED', 'TIMING', 'PRODUCT_FIT', 'NO_RESPONSE', 'OTHER'] as const;
+export const ACTIVITY_KINDS = ['CALL', 'MEETING', 'DEALER_VISIT', 'FIELD_VISIT', 'AGRONOMIST', 'FOLLOW_UP', 'TASK'] as const;
+
+export const leadSchema = z.object({
+  company: trimmed(150), contactPerson: trimmed(100), mobile: z.string().trim().regex(/^[6-9][0-9]{9}$/, '10-digit Indian mobile number'),
+  email: z.string().trim().toLowerCase().email().optional().nullable(),
+  source: z.enum(LEAD_SOURCES), sourceDetail: optionalText(200), territoryId: uuid, ownerId: uuid,
+  productInterest: trimmed(300), expectedQty: z.number().min(0).optional().nullable(), expectedUom: z.string().optional().nullable(),
+  followUpAt: z.string().datetime({ offset: true }).optional().nullable(), partyId: uuid.optional().nullable(), notes: optionalText(2000),
+});
+export const bantSchema = z.object({
+  budget: z.boolean(), authority: z.boolean(), decisionMaker: optionalText(100),
+  needScore: z.number().int().min(1).max(5), timeline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date required'),
+});
+export const leadTransferSchema = z.object({ ownerId: uuid, territoryId: uuid.optional(), reason: trimmed(500) });
+export const leadDisqualifySchema = z.object({ reason: trimmed(500) });
+export const opportunitySchema = z.object({
+  title: trimmed(200), value: z.number().min(0), probability: z.number().int().min(0).max(100),
+  expectedClose: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(), productInterest: optionalText(300), partyId: uuid.optional().nullable(),
+});
+export const stageChangeSchema = z.object({
+  stage: z.enum(OPP_STAGES), lossReason: z.enum(LOSS_REASONS).optional().nullable(), note: z.string().trim().max(1000).optional().default(''),
+}).refine((s) => s.stage !== 'LOST' || !!s.lossReason, { message: 'Choose why it was lost', path: ['lossReason'] });
+export const activitySchema = z.object({
+  subjectType: z.enum(['lead', 'opportunity', 'dealer']), subjectId: uuid, kind: z.enum(ACTIVITY_KINDS), title: trimmed(200),
+  notes: optionalText(2000), plannedAt: z.string().datetime({ offset: true }),
+  done: z.boolean().default(false), outcome: optionalText(1000),
+  latitude: z.number().min(-90).max(90).optional().nullable(), longitude: z.number().min(-180).max(180).optional().nullable(),
+}).refine((a) => !a.done || !!a.outcome, { message: 'Record the outcome', path: ['outcome'] });
+export const activityCompleteSchema = z.object({
+  outcome: trimmed(1000), nextAction: z.object({ kind: z.enum(ACTIVITY_KINDS), title: trimmed(200), plannedAt: z.string().datetime({ offset: true }) }).optional().nullable(),
+});
