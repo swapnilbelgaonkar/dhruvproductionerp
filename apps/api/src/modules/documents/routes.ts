@@ -7,15 +7,21 @@ import { audit } from '../../lib/audit';
 import { safeEqual } from '../../lib/crypto';
 import { AppError, Errors } from '../../lib/errors';
 import { asyncHandler, parse, str } from '../../lib/http';
-import { actorOf, can, inLegalEntityScope } from '../../middleware/context';
+import { actorOf, can, inLegalEntityScope, territoryScope } from '../../middleware/context';
 import { sniffMime, type FileStorage } from './storage';
 
 /** Which records can hold documents, and which permissions govern them. */
-const ENTITIES: Record<string, { table: string; view: string; edit: string[]; scope: 'id' | 'legal_entity_id' | null }> = {
+interface EntityRule {
+  table: string; view: string; edit: string[]; scope: 'id' | 'legal_entity_id' | 'territory' | null;
+  /** permission needed to open documents whose type is marked sensitive (X26) */
+  sensitivePerm?: string;
+}
+const ENTITIES: Record<string, EntityRule> = {
   'org.legal_entity': { table: 'org.legal_entities', view: 'org.legal_entity:view', edit: ['org.legal_entity:edit_draft'], scope: 'id' },
   'org.plant': { table: 'org.plants', view: 'org.plant:view', edit: ['org.plant:edit_draft'], scope: 'legal_entity_id' },
   'org.warehouse': { table: 'org.warehouses', view: 'org.warehouse:view', edit: ['org.warehouse:edit_draft'], scope: 'legal_entity_id' },
   'mdm.item': { table: 'mdm.items', view: 'mdm.item:view', edit: ['mdm.item:edit_draft'], scope: null },
+  'mdm.party': { table: 'mdm.parties', view: 'mdm.dealer:view', edit: ['mdm.dealer:edit_draft'], scope: 'territory', sensitivePerm: 'mdm.dealer:view_sensitive' },
 };
 
 async function loadEntity(dbx: Db | Tx, req: Request, entityType: string, entityId: string, mode: 'view' | 'edit') {
@@ -24,8 +30,23 @@ async function loadEntity(dbx: Db | Tx, req: Request, entityType: string, entity
   const perm = mode === 'view' ? e.view : e.edit.find((p) => can(req, p));
   if (!perm || !can(req, perm)) throw Errors.forbidden(mode === 'view' ? e.view : e.edit[0]);
   const row = (await dbx.query(`select * from ${e.table} where id = $1`, [entityId])).rows[0];
-  if (!row || (e.scope && !inLegalEntityScope(req, perm, row[e.scope]))) throw Errors.notFound('Record');
+  if (!row) throw Errors.notFound('Record');
+  if ((e.scope === 'id' || e.scope === 'legal_entity_id') && !inLegalEntityScope(req, perm, row[e.scope])) throw Errors.notFound('Record');
+  if (e.scope === 'territory') {
+    const ids = await territoryScope(dbx, req, perm);
+    if (ids !== null) {
+      const ok = await dbx.query(
+        `select 1 from mdm.dealer_profiles dp join org.territories dt on dt.id = dp.territory_id join org.territories ut on dt.path <@ ut.path
+          where dp.party_id = $1 and ut.id = any($2::uuid[])`, [entityId, ids]);
+      if (!ok.rowCount) throw Errors.notFound('Record');
+    }
+  }
   return row;
+}
+
+function assertSensitiveAccess(req: Request, entityType: string, sensitive: boolean) {
+  const perm = ENTITIES[entityType]?.sensitivePerm;
+  if (sensitive && perm && !can(req, perm)) throw Errors.forbidden(perm);
 }
 
 export function documentRoutes(db: Db, cfg: Config, storage: FileStorage) {
@@ -128,6 +149,7 @@ export function documentRoutes(db: Db, cfg: Config, storage: FileStorage) {
          join sys.document_types t on t.code = d.document_type where v.id = $1`, [req.params.versionId])).rows[0];
     if (!v) throw Errors.notFound('Document');
     await loadEntity(db, req, v.entity_type, v.entity_id, 'view');
+    assertSensitiveAccess(req, v.entity_type, v.sensitive);
     const exp = Math.floor(Date.now() / 1000) + 300;
     await withTx(db, (tx) => audit(tx, actorOf(req), { action: 'document.link_issued', entityType: v.entity_type, entityId: v.entity_id, after: { versionId: v.id, title: v.title, sensitive: v.sensitive } }));
     res.json({ url: `/api/v1/documents/files/${v.id}?exp=${exp}&sig=${sign(v.id, req.auth!.user.id, exp)}`, expiresAt: new Date(exp * 1000).toISOString() });
@@ -139,10 +161,11 @@ export function documentRoutes(db: Db, cfg: Config, storage: FileStorage) {
     if (!Number.isFinite(exp) || exp < Date.now() / 1000) throw new AppError(410, 'LINK_EXPIRED', 'This download link has expired. Open the document again.');
     if (!safeEqual(sig, sign(req.params.versionId!, req.auth!.user.id, exp))) throw Errors.forbidden('document link');
     const v = (await db.query(
-      `select f.storage_key, f.mime, f.original_name, d.entity_type, d.entity_id from sys.document_versions v join sys.files f on f.id = v.file_id
-         join sys.documents d on d.id = v.document_id where v.id = $1`, [req.params.versionId])).rows[0];
+      `select f.storage_key, f.mime, f.original_name, d.entity_type, d.entity_id, t.sensitive from sys.document_versions v join sys.files f on f.id = v.file_id
+         join sys.documents d on d.id = v.document_id join sys.document_types t on t.code = d.document_type where v.id = $1`, [req.params.versionId])).rows[0];
     if (!v) throw Errors.notFound('Document');
     await loadEntity(db, req, v.entity_type, v.entity_id, 'view');
+    assertSensitiveAccess(req, v.entity_type, v.sensitive);
     await withTx(db, (tx) => audit(tx, actorOf(req), { action: 'document.downloaded', entityType: v.entity_type, entityId: v.entity_id, after: { versionId: req.params.versionId } }));
     res.setHeader('Content-Type', v.mime);
     res.setHeader('X-Content-Type-Options', 'nosniff');

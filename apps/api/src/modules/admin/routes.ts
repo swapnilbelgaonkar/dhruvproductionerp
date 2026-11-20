@@ -7,7 +7,7 @@ import { Errors } from '../../lib/errors';
 import { asyncHandler, pageParams, parse, str } from '../../lib/http';
 import { financialYear } from '../../lib/numbering';
 import { requirePermission } from '../../middleware/auth';
-import { actorOf, can, legalEntityScope } from '../../middleware/context';
+import { actorOf, can, legalEntityScope, territoryScope } from '../../middleware/context';
 
 export function auditRoutes(db: Db) {
   const r = Router();
@@ -184,6 +184,12 @@ export function searchRoutes(db: Db) {
     if (can(req, 'org.warehouse:view')) parts.push(`(select 'Warehouse', id, code, name, '/masters/warehouses/' || id from org.warehouses where (code ilike $1 or name ilike $1) and ${scoped('org.warehouse:view', 'legal_entity_id')} limit 5)`);
     if (can(req, 'org.territory:view')) parts.push(`(select 'Territory', id, code, name, '/masters/territories?focus=' || id from org.territories where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'org.employee:view')) parts.push(`(select 'Employee', id, emp_code, full_name, '/masters/employees/' || id from org.employees where emp_code ilike $1 or full_name ilike $1 limit 5)`);
+    if (can(req, 'mdm.dealer:view')) {
+      const ids = await territoryScope(db, req, 'mdm.dealer:view');
+      const scope = ids === null ? 'true' : `exists (select 1 from org.territories dt join org.territories ut on dt.path <@ ut.path where dt.id = dp.territory_id and ut.id = any('{${ids.join(',')}}'::uuid[]))`;
+      parts.push(`(select 'Dealer', p.id, p.code, p.legal_name, '/sales/dealers/' || p.id from mdm.parties p join mdm.dealer_profiles dp on dp.party_id = p.id
+                    where (p.code ilike $1 or p.legal_name ilike $1 or p.gstin ilike $1 or p.mobile like $1) and ${scope} limit 5)`);
+    }
     if (can(req, 'mdm.item:view')) parts.push(`(select 'Item', id, code, name, '/products/items/' || id from mdm.items where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'iam.user:view')) parts.push(`(select 'User', id, full_name, email::text, '/admin/users/' || id from iam.users where email ilike $1 or full_name ilike $1 limit 5)`);
     parts.push(`(select 'Approval', a.id, a.doc_no, a.subject_label, '/approvals/' || a.id from wf.approval_requests a

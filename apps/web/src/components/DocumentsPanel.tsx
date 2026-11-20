@@ -36,7 +36,7 @@ function UploadZone({ file, setFile }: { file: File | null; setFile: (f: File | 
   );
 }
 
-export function DocumentsPanel({ entityType, entityId }: { entityType: string; entityId: string }) {
+export function DocumentsPanel({ entityType, entityId, onChanged }: { entityType: string; entityId: string; onChanged?: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
   const key = ['documents', entityType, entityId];
@@ -51,7 +51,7 @@ export function DocumentsPanel({ entityType, entityId }: { entityType: string; e
     mutationFn: () => open === 'new'
       ? uploadFile('/documents', file!, { ...meta, entityType, entityId, validUntil: meta.validUntil || undefined })
       : uploadFile(`/documents/${(open as Doc).id}/versions`, file!, { validUntil: meta.validUntil || undefined, note: meta.note }),
-    onSuccess: async () => { toast('success', 'Document uploaded.'); setOpen(null); setFile(null); setMeta({ documentType: '', title: '', validUntil: '', note: '' }); await qc.invalidateQueries({ queryKey: key }); },
+    onSuccess: async () => { toast('success', 'Document uploaded.'); setOpen(null); setFile(null); setMeta({ documentType: '', title: '', validUntil: '', note: '' }); await qc.invalidateQueries({ queryKey: key }); onChanged?.(); },
   });
   const download = async (v: Version) => {
     try { const { url } = await api<{ url: string }>(`/documents/versions/${v.id}/link`, { method: 'POST' }); window.open(url + '&inline=1', '_blank', 'noopener'); }
@@ -112,7 +112,7 @@ export function DocumentsPanel({ entityType, entityId }: { entityType: string; e
         </div>
       </Modal>
       <ReasonDialog open={!!archive} title={`Archive ${archive?.title ?? ''}`} confirmLabel="Archive" danger onClose={() => setArchive(null)} description="Archived documents stay in history but are no longer current."
-        onConfirm={async (reason) => { await api(`/documents/${archive!.id}/archive`, { body: { reason } }); toast('success', 'Archived.'); await qc.invalidateQueries({ queryKey: key }); }} />
+        onConfirm={async (reason) => { await api(`/documents/${archive!.id}/archive`, { body: { reason } }); toast('success', 'Archived.'); await qc.invalidateQueries({ queryKey: key }); onChanged?.(); }} />
     </Card>
   );
 }

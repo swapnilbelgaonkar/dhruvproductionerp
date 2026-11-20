@@ -17,6 +17,7 @@ import { idempotency } from './middleware/idempotency';
 import { documentRoutes } from './modules/documents/routes';
 import { LocalDiskStorage, type FileStorage } from './modules/documents/storage';
 import { mdmRoutes } from './modules/mdm/routes';
+import { dealerRoutes } from './modules/dealers/routes';
 import { notificationRoutes } from './modules/notifications/routes';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
@@ -55,6 +56,7 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/search', searchRoutes(db));
   v1.use('/documents', documentRoutes(db, cfg, storage));
   v1.use('/notifications', notificationRoutes(db));
+  v1.use('/dealers', dealerRoutes(db));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);

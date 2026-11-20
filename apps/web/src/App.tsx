@@ -10,6 +10,7 @@ import { LoginPage } from './pages/auth/Login';
 import { MASTERS, MasterDetailPage, MasterFormPage, MasterListPage } from './pages/masters/LifecycleMaster';
 import { DepartmentsPage, EmployeeDetailPage, EmployeeFormPage, EmployeesPage, TerritoriesPage } from './pages/masters/SimpleMasters';
 import { OverviewPage } from './pages/Overview';
+import { DealerDetailPage, DealerFormPage, DealersPage } from './pages/sales/Dealers';
 import { CategoriesPage, HsnPage, UomPage } from './pages/masters/ProductMasters';
 
 function Protected({ perm, children }: { perm?: string; children: JSX.Element }) {
@@ -46,6 +47,10 @@ export function App() {
         <Route index element={<OverviewPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="approvals/:id" element={<ApprovalDetailPage />} />
+        <Route path="sales/dealers" element={<Protected perm="mdm.dealer:view"><DealersPage /></Protected>} />
+        <Route path="sales/dealers/new" element={<Protected perm="mdm.dealer:create"><DealerFormPage /></Protected>} />
+        <Route path="sales/dealers/:id" element={<Protected perm="mdm.dealer:view"><DealerDetailPage /></Protected>} />
+        <Route path="sales/dealers/:id/edit" element={<Protected perm="mdm.dealer:edit_draft"><DealerFormPage /></Protected>} />
         {master('legalEntities')}
         {master('plants')}
         {master('warehouses')}

@@ -72,6 +72,44 @@ async function seedProductsFromBrd(tx: pg.PoolClient) {
   await audit(tx, SYSTEM, { action: 'mdm.seed_from_brd', entityType: 'mdm.product_category', reason: 'PROVISIONAL from BRD v2.4 p.9 — confirm licence mapping (D08) and add GST rates (D27)' });
 }
 
+/**
+ * Demo sales hierarchy and users for UAT and demonstrations (development/staging only).
+ * Every record is tagged [SAMPLE]; role grants here bypass approval, so this refuses to run in production.
+ */
+async function seedDemoUsers(tx: pg.PoolClient, password: string) {
+  if (process.env.NODE_ENV === 'production') throw new Error('--demo-users is not allowed in production');
+  passwordPolicy.parse(password);
+  const terr = async (code: string) => (await tx.query<{ id: string }>(`select id from org.territories where code = $1`, [code])).rows[0]?.id;
+  const state = await terr('ST-MH');
+  if (!state) throw new Error('Run with --sample first (territories)');
+  const node = async (parent: string, code: string, name: string, level: number) => {
+    const p = (await tx.query<{ path: string }>(`select path::text from org.territories where id = $1`, [parent])).rows[0]!.path;
+    return (await tx.query<{ id: string }>(`insert into org.territories (parent_id, code, name, level, path) values ($1,$2,$3,$4,$5::ltree)
+      on conflict (code) do update set name = excluded.name returning id`, [parent, code, name, level, `${p}.${code.replace(/-/g, '_')}`])).rows[0]!.id;
+  };
+  const district = await node(state, 'DT-NASHIK', '[SAMPLE] Nashik District', 6);
+  const taluka = await node(district, 'TK-NIPHAD', '[SAMPLE] Niphad Taluka', 7);
+  const pw = await hash(password);
+  const person = async (code: string, name: string, tier: string | null, manager: string | null, territory: string, email: string, roles: string[]) => {
+    const e = (await tx.query<{ id: string }>(`insert into org.employees (emp_code, full_name, sales_tier, manager_id, territory_id) values ($1,$2,$3,$4,$5)
+      on conflict (emp_code) do update set full_name = excluded.full_name returning id`, [code, name, tier, manager, territory])).rows[0]!.id;
+    const u = (await tx.query<{ id: string }>(`insert into iam.users (email, full_name, password_hash, must_change_password, employee_id) values ($1,$2,$3,false,$4)
+      on conflict (email) do update set full_name = excluded.full_name returning id`, [email, name, pw, e])).rows[0]!.id;
+    const scope = tier ? { legalEntityIds: [], plantIds: [], warehouseIds: [], territoryIds: [] } : { all: true };
+    for (const r of roles) {
+      await tx.query(`insert into iam.user_roles (user_id, role_id, scope, status, reason, granted_at) select $1, id, $2, 'Active', '[SAMPLE] demo seed', now() from iam.roles where code = $3
+        and not exists (select 1 from iam.user_roles ur where ur.user_id = $1 and ur.role_id = iam.roles.id and ur.status = 'Active')`, [u, JSON.stringify(scope), r]);
+    }
+    return e;
+  };
+  const rsm = await person('SMP-RSM', '[SAMPLE] Regional Manager MH', 'RSM', null, state, 'rsm@demo.local', ['SALES_RSM']);
+  const tsm = await person('SMP-TSM', '[SAMPLE] Territory Manager Niphad', 'TSM', rsm, taluka, 'tsm@demo.local', ['SALES_TSM']);
+  await person('SMP-SE', '[SAMPLE] Sales Executive Niphad', 'SE', tsm, taluka, 'se@demo.local', ['SALES_SE']);
+  await person('SMP-DOC', '[SAMPLE] Document Verifier', null, null, state, 'verifier@demo.local', ['DOC_VERIFIER']);
+  await person('SMP-CRD', '[SAMPLE] Credit Controller', null, null, state, 'credit@demo.local', ['CREDIT_CONTROLLER']);
+  await audit(tx, SYSTEM, { action: 'demo.users_seeded', entityType: 'iam.user', reason: '[SAMPLE] demo hierarchy for UAT' });
+}
+
 async function seedSample(tx: pg.PoolClient) {
   const d = await tx.query<{ id: string }>(
     `insert into org.departments (code, name) values ('SALES', '[SAMPLE] Sales'), ('QC', '[SAMPLE] Quality Control') on conflict (code) do nothing returning id`);
@@ -105,6 +143,12 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     if (args.has('--org-from-brd')) { await seedOrgFromBrd(client as unknown as pg.PoolClient); console.log('provisional BRD organisation seeded'); }
     if (args.has('--products-from-brd')) { await seedProductsFromBrd(client as unknown as pg.PoolClient); console.log('provisional BRD categories and HSN codes seeded (no GST rates)'); }
     if (args.has('--sample')) { await seedSample(client as unknown as pg.PoolClient); console.log('[SAMPLE] data seeded'); }
+    if (args.has('--demo-users')) {
+      const pw = process.env.DEMO_PASSWORD;
+      if (!pw) throw new Error('Set DEMO_PASSWORD to use --demo-users');
+      await seedDemoUsers(client as unknown as pg.PoolClient, pw);
+      console.log('[SAMPLE] demo sales hierarchy and users seeded (rsm/tsm/se/verifier/credit @demo.local)');
+    }
     await client.query('commit');
     await client.end();
   })().catch(async (e) => { console.error(e); await client.query('rollback').catch(() => 0); process.exit(1); });

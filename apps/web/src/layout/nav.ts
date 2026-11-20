@@ -1,4 +1,4 @@
-import { Barcode, Buildings, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
+import { Barcode, Buildings, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -8,6 +8,9 @@ export const NAV: NavGroup[] = [
   { items: [
     { to: '/', label: 'Overview', icon: Gauge },
     { to: '/approvals', label: 'Approvals', icon: CheckSquareOffset },
+  ] },
+  { label: 'Sales', items: [
+    { to: '/sales/dealers', label: 'Dealers', icon: Storefront, perm: 'mdm.dealer:view' },
   ] },
   { label: 'Masters', items: [
     { to: '/masters/legal-entities', label: 'Legal Entities', icon: Buildings, perm: 'org.legal_entity:view' },

@@ -78,10 +78,10 @@ export const conditionSchema: z.ZodType<Condition> = z.lazy(() =>
   }),
 );
 export const stepDefSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('role'), label: trimmed(120), roles: z.array(z.string()).min(1), slaHours: z.number().positive().optional() }),
-  z.object({ kind: z.literal('reporting_manager'), label: trimmed(120), slaHours: z.number().positive().optional() }),
+  z.object({ kind: z.literal('role'), key: z.string().optional(), label: trimmed(120), roles: z.array(z.string()).min(1), slaHours: z.number().positive().optional() }),
+  z.object({ kind: z.literal('reporting_manager'), key: z.string().optional(), label: trimmed(120), slaHours: z.number().positive().optional() }),
   z.object({
-    kind: z.literal('authority_ladder'), label: trimmed(120), amountFact: z.string().default('amount'),
+    kind: z.literal('authority_ladder'), key: z.string().optional(), label: trimmed(120), amountFact: z.string().default('amount'),
     discountFact: z.string().default('maxDiscountPct'), notifySkipped: z.boolean().default(true), slaHours: z.number().positive().optional(),
   }),
 ]);
@@ -145,3 +145,42 @@ export const documentMetaSchema = z.object({
   documentType: z.string().min(1), entityType: z.string().min(1), entityId: uuid,
   title: trimmed(200), validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(), note: z.string().max(500).optional().default(''),
 });
+
+// ---------- Dealers (BRD §3.1, MP Part 6) ----------
+export const CONSTITUTIONS = ['PROPRIETORSHIP', 'PARTNERSHIP', 'LLP', 'PVT_LTD', 'PUBLIC_LTD', 'FPO'] as const;
+export const DEALER_CATEGORIES = ['DISTRIBUTOR', 'DEALER', 'RETAILER', 'INSTITUTION'] as const;
+export const DEALER_LICENCE_TYPES = ['FERTILIZER', 'PESTICIDE', 'BIOSTIMULANT'] as const;
+export const ID_TYPES = ['PAN', 'AADHAAR', 'PASSPORT', 'VOTER_ID', 'DRIVING_LICENCE'] as const;
+
+const mobile = z.string().trim().regex(/^[6-9][0-9]{9}$/, '10-digit Indian mobile number');
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date required');
+
+export const dealerSchema = z.object({
+  legalName: trimmed(150), tradeName: optionalText(150), constitution: z.enum(CONSTITUTIONS),
+  pan: panSchema, gstRegistered: z.boolean(), gstin: gstinSchema.optional().nullable(),
+  contactPerson: trimmed(100), mobile, email: z.string().trim().toLowerCase().email().optional().nullable(),
+  dealerCategory: z.enum(DEALER_CATEGORIES), territoryId: uuid, salesOwnerId: uuid,
+  licenceTypes: z.array(z.enum(DEALER_LICENCE_TYPES)).default([]),
+  priceGroup: z.string().trim().min(1).max(30).default('STANDARD'),
+  creditDays: z.number().int().min(0).max(365), creditLimit: z.number().min(0),
+  annualTarget: z.number().min(0).optional().nullable(), targetFy: z.string().regex(/^\d{4}-\d{2}$/, 'e.g. 2026-27').optional().nullable(),
+}).superRefine((d, ctx) => {
+  if (d.gstRegistered && !d.gstin) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN is required for a GST-registered dealer' });
+  if (d.gstin && d.gstin.slice(2, 12) !== d.pan) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN characters 3–12 must equal the PAN' });
+  if (d.creditLimit > 0 && d.creditDays === 0) ctx.addIssue({ code: 'custom', path: ['creditDays'], message: 'Credit days are needed when a credit limit is given' });
+});
+export const addressSchema = z.object({
+  kind: z.enum(['REGISTERED', 'BILLING', 'SHIPPING']), label: optionalText(60), line1: trimmed(200), line2: optionalText(200),
+  city: trimmed(80), district: trimmed(80), stateCode: stateCodeSchema, pincode: z.string().regex(/^[1-9][0-9]{5}$/, '6-digit PIN code'),
+  isDefault: z.boolean().default(false),
+});
+export const licenceSchema = z.object({
+  licenceType: z.enum(DEALER_LICENCE_TYPES), number: trimmed(60), issuer: trimmed(150),
+  validFrom: isoDate, validTo: isoDate, documentId: uuid,
+}).refine((l) => l.validTo >= l.validFrom, { message: 'Valid-to must be after valid-from', path: ['validTo'] });
+export const signatorySchema = z.object({
+  fullName: trimmed(100), designation: trimmed(60), idType: z.enum(ID_TYPES),
+  idLast4: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{4}$/, 'Last 4 characters only — never the full number'), documentId: uuid,
+});
+export const licenceVerifySchema = z.object({ verification: z.enum(['Verified', 'Rejected']), remarks: z.string().trim().max(500).optional().default('') })
+  .refine((v) => v.verification === 'Verified' || v.remarks.length > 0, { message: 'Give the reason for rejection', path: ['remarks'] });

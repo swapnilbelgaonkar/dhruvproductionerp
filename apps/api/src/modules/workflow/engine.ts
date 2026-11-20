@@ -17,6 +17,8 @@ export interface SubjectHandler {
   onRejected(tx: Tx, req: ApprovalRequestRow, actor: Actor): Promise<void>;
   onReturned(tx: Tx, req: ApprovalRequestRow, actor: Actor): Promise<void>;
   onCancelled(tx: Tx, req: ApprovalRequestRow, actor: Actor): Promise<void>;
+  /** Optional gate run before a step is approved, e.g. all licences verified before document verification passes. */
+  beforeApprove?(tx: Tx, req: ApprovalRequestRow, stepKey: string | null, actor: Actor): Promise<void>;
 }
 
 const handlers = new Map<string, SubjectHandler>();
@@ -194,8 +196,8 @@ export async function decide(tx: Tx, actor: Actor, requestId: string, decision: 
   const req = (await tx.query<ApprovalRequestRow>(`select * from wf.approval_requests where id = $1 for update`, [requestId])).rows[0];
   if (!req) throw Errors.notFound('Approval request');
   if (!['Pending', 'OnHold'].includes(req.status)) throw Errors.state(`This request is already ${req.status}.`);
-  const step = (await tx.query<{ id: string; seq: number; status: string; approver_ids: string[] }>(
-    `select id, seq, status, approver_ids from wf.approval_steps where request_id = $1 and step_kind = 'approve' and status in ('Pending','OnHold')
+  const step = (await tx.query<{ id: string; seq: number; status: string; approver_ids: string[]; approver_rule: StepDef }>(
+    `select id, seq, status, approver_ids, approver_rule from wf.approval_steps where request_id = $1 and step_kind = 'approve' and status in ('Pending','OnHold')
       order by seq limit 1 for update`, [requestId])).rows[0] ?? null;
   const prior = (await tx.query<{ decided_by: string }>(
     `select decided_by from wf.approval_steps where request_id = $1 and status = 'Approved' and decided_by is not null`, [requestId])).rows.map((r) => r.decided_by);
@@ -226,6 +228,7 @@ export async function decide(tx: Tx, actor: Actor, requestId: string, decision: 
     case 'Reject': await setStep('Rejected'); await cancelWaiting(); await setReq('Rejected', true); await h.onRejected(tx, req, actor); break;
     case 'Return': await setStep('Returned'); await cancelWaiting(); await setReq('Returned', true); await h.onReturned(tx, req, actor); break;
     case 'Approve': {
+      await h.beforeApprove?.(tx, req, step?.approver_rule?.key ?? null, actor);
       await setStep('Approved');
       const next = (await tx.query<{ id: string; approver_ids: string[]; approver_rule: StepDef }>(
         `select id, approver_ids, approver_rule from wf.approval_steps where request_id = $1 and status = 'Waiting' and step_kind = 'approve' order by seq limit 1`, [req.id])).rows[0];

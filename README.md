@@ -6,6 +6,7 @@ Enterprise ERP for Dhruv Agro Technologies Pvt. Ltd. It covers chemical, fertili
 
 - **Stage 0** pre-development package: [`docs/pre-development/`](docs/pre-development/README.md). The BRD v2.4 and the UI reference image have been reconciled into it.
 - **Stage 1 Foundation, increments 1–2:** built and tested (platform, approvals, organisation and product masters, document vault, notifications). See [`docs/development/stage-1-foundation.md`](docs/development/stage-1-foundation.md).
+- **Stage 2 Sales, part 1 (dealer onboarding):** built and tested. See [`docs/development/stage-2-sales.md`](docs/development/stage-2-sales.md).
 - **Client decisions and pending items:** [`docs/pre-development/12-open-decision-register.md`](docs/pre-development/12-open-decision-register.md).
 
 ## Repository layout

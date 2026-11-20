@@ -65,10 +65,44 @@ export async function relayOutbox(db: Db, batch = 100): Promise<number> {
 
 export function startRelay(db: Db, intervalMs = 2000, onError: (e: unknown) => void = console.error) {
   let running = false;
+  const scan = () => scanLicenceExpiry(db).catch(onError);
+  const daily = setInterval(scan, 3_600_000); // hourly check; each alert is sent once
+  void scan();
   const timer = setInterval(async () => {
     if (running) return;
     running = true;
     try { while ((await relayOutbox(db)) > 0); } catch (e) { onError(e); } finally { running = false; }
   }, intervalMs);
-  return () => clearInterval(timer);
+  return () => { clearInterval(timer); clearInterval(daily); };
+}
+
+/**
+ * Licence expiry alerts (DLR-008, BRD p.8/p.19): notifies the dealer's sales owner and the document verifiers
+ * when a licence reaches each configured threshold (default 60 and 30 days) and when it expires. Each alert is sent once.
+ */
+export async function scanLicenceExpiry(db: Db): Promise<number> {
+  const thresholds = ((await db.query(`select value from sys.settings where key = 'licence.alertDays'`)).rows[0]?.value as number[] | undefined) ?? [60, 30];
+  const rows = (await db.query(
+    `select l.id, l.licence_type, l.number, l.valid_to, (l.valid_to - current_date) as days_left, p.id as party_id, p.code, p.legal_name, ou.id as owner_user
+       from mdm.party_licences l join mdm.parties p on p.id = l.party_id join mdm.dealer_profiles dp on dp.party_id = p.id
+       left join iam.users ou on ou.employee_id = dp.sales_owner_id and ou.status = 'Active'
+      where l.status = 'Active' and dp.status in ('Active','Suspended','Submitted') and l.valid_to - current_date <= $1`, [Math.max(...thresholds)])).rows;
+  if (!rows.length) return 0;
+  const verifiers = (await db.query(
+    `select distinct u.id from iam.user_roles ur join iam.roles r on r.id = ur.role_id join iam.users u on u.id = ur.user_id
+      where r.code = 'DOC_VERIFIER' and ur.status = 'Active' and u.status = 'Active'`)).rows.map((x) => x.id as string);
+  let n = 0;
+  for (const l of rows) {
+    const days = Number(l.days_left);
+    const bucket = days < 0 ? 'expired' : String([...thresholds].sort((a, b) => a - b).find((t) => days <= t));
+    const title = days < 0 ? `Licence expired — ${l.code}` : `Licence expires in ${days} days — ${l.code}`;
+    const body = `${l.legal_name}: ${String(l.licence_type).toLowerCase()} licence ${l.number}${days < 0 ? ' — billing for these products is blocked' : ''}`;
+    for (const userId of new Set([l.owner_user, ...verifiers].filter(Boolean) as string[])) {
+      const ins = await db.query(
+        `insert into sys.notifications (user_id, kind, title, body, link, dedupe_key) values ($1,'warning',$2,$3,$4,$5) on conflict (user_id, dedupe_key) do nothing`,
+        [userId, title, body, `/sales/dealers/${l.party_id}`, `licence:${l.id}:${bucket}`]);
+      n += ins.rowCount ?? 0;
+    }
+  }
+  return n;
 }
