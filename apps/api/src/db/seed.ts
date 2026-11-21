@@ -117,6 +117,9 @@ async function seedDemoUsers(tx: pg.PoolClient, password: string) {
   await person('SMP-ACC', '[SAMPLE] Accounts Executive', null, null, state, 'accounts@demo.local', ['ACCOUNTS_EXEC']);
   const storesHead = await person('SMP-SH', '[SAMPLE] Stores Head', null, null, state, 'stores-head@demo.local', ['STORES_HEAD']);
   await person('SMP-SK', '[SAMPLE] Storekeeper', null, storesHead, state, 'storekeeper@demo.local', ['STOREKEEPER']);
+  // quality control (Stage 3 part 3): the analyst tests, a different person (QC manager) decides
+  const qcManager = await person('SMP-QCM', '[SAMPLE] QC Manager', null, null, state, 'qc-manager@demo.local', ['QC_MANAGER']);
+  await person('SMP-QCA', '[SAMPLE] QC Analyst', null, qcManager, state, 'qc@demo.local', ['QC_ANALYST']);
   await audit(tx, SYSTEM, { action: 'demo.users_seeded', entityType: 'iam.user', reason: '[SAMPLE] demo hierarchy for UAT' });
 }
 

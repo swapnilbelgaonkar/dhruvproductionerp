@@ -260,6 +260,8 @@ const fromOpen = (l: OpenLine): DraftLine => ({ key: ++k, itemId: l.itemId, qty:
 export function PurchaseOrderDetailPage() {
   const { id } = useParams();
   const nav = useNavigate();
+  const { can } = useAuth();
+  const [close, setClose] = useState(false);
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['purchase-order', id], queryFn: () => api<PoDetail>(`/purchase-orders/${id}`) });
@@ -286,6 +288,8 @@ export function PurchaseOrderDetailPage() {
           {a.includes('issue') && <Button icon={<PaperPlaneTilt size={18} />} loading={busy('issue')} onClick={() => act.mutate({ path: 'issue', ok: '' })}>Issue to vendor</Button>}
           {a.includes('reissue') && <Button icon={<PaperPlaneTilt size={18} />} loading={busy('reissue')} onClick={() => act.mutate({ path: 'reissue', ok: '' })}>Re-issue</Button>}
           {a.includes('acknowledge') && <Button onClick={() => setAck('')}>Record acknowledgement</Button>}
+          {a.includes('close') && <Button variant="secondary" onClick={() => setClose(true)}>Close balance</Button>}
+          {['Issued', 'Acknowledged', 'PartiallyReceived'].includes(d.status) && can('purchase.grn:create') && <Button onClick={() => nav(`/stores/receipts/new?poId=${id}`)}>Receive goods</Button>}
         </>} />
       <ErrorBanner error={act.error} />
       {d.status === 'Submitted' && <div className="mb-6 rounded-md bg-warning-bg px-4 py-3 text-warning-text">Waiting for approval{d.approval ? <> — <Link className="font-semibold underline" to={`/approvals/${d.approval.id}`}>{d.approval.docNo}</Link></> : null}.</div>}
@@ -344,6 +348,9 @@ export function PurchaseOrderDetailPage() {
         <ErrorBanner error={act.error} />
         <Field label="Vendor's confirmation reference" htmlFor="ack-ref" required><Input id="ack-ref" maxLength={100} value={ack ?? ''} onChange={(e) => setAck(e.target.value)} /></Field>
       </Modal>
+      <ReasonDialog open={close} title={`Close the balance of ${d.docNo}`} confirmLabel="Close PO" onClose={() => setClose(false)}
+        description="No more deliveries are expected; the quantity not yet received is closed (PUR-007)."
+        onConfirm={async (reason) => { await api(`/purchase-orders/${id}/close`, { body: { reason } }); toast('success', 'Purchase order closed.'); await qc.invalidateQueries(); }} />
       <ReasonDialog open={cancel} danger title={`Cancel ${d.docNo}`} confirmLabel="Cancel PO" onClose={() => setCancel(false)} description="Linked requisition quantities become open to order again."
         onConfirm={async (reason) => { await api(`/purchase-orders/${id}/cancel`, { body: { reason } }); toast('success', 'Purchase order cancelled.'); await qc.invalidateQueries(); }} />
     </>

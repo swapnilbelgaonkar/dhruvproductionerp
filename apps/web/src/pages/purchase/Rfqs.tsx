@@ -246,7 +246,7 @@ export function RfqDetailPage() {
             <p className="text-[14px]">Score out of 100: landed cost {d.weights.price}, lead time {d.weights.leadTime}, vendor quality rating {d.weights.quality} (setting <span className="num">purchase.rfq.weights</span>, D34).
               Landed rate = net rate + share of the vendor's freight (spread by value). A new vendor is scored as average (3 of 5) until receipts and QC rate it. Non-compliant bids, expired quotes and vendors not eligible are not ranked.</p>
           </Card>
-          <Card title="Details"><KeyValues items={[['Legal entity', d.legalEntityName], ['Deliver to', `${d.warehouseCode} — ${d.warehouseName}`], ['Raised', `${d.createdBy}, ${fmtDateTime(d.createdAt)}`], ['Issued', fmtDateTime(d.issuedAt)], ['Notes', d.notes]]} /></Card>
+          <Card title="Details"><KeyValues items={[['Legal entity', d.legalEntityName], ['Deliver to', `${d.warehouseCode} — ${d.warehouseName}`], ['Raised', `${d.createdBy}, ${fmtDateTime(d.createdAt)}`], ['Issued', fmtDateTime(d.issuedAt)], ['Notes', d.notes]]} columns="narrow" /></Card>
         </aside>
       </div>
       {quoteFor && <QuoteDialog rfq={d} partyId={quoteFor} onClose={() => setQuoteFor(null)} onDone={async () => { setQuoteFor(null); setChoice({}); await qc.invalidateQueries(); }} />}

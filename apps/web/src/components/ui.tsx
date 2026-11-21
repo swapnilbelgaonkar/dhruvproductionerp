@@ -89,9 +89,10 @@ export function Card({ title, actions, children, className, padded = true }: { t
   );
 }
 
-export function KeyValues({ items }: { items: [string, ReactNode][] }) {
+/** `columns="narrow"` for side panels: one column, two on mid-size screens where the panel is full width. */
+export function KeyValues({ items, columns = 'wide' }: { items: [string, ReactNode][]; columns?: 'wide' | 'narrow' }) {
   return (
-    <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+    <dl className={clsx('grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2', columns === 'wide' ? 'lg:grid-cols-3' : 'xl:grid-cols-1')}>
       {items.map(([k, v]) => <div key={k}><dt className="text-[12px] font-medium uppercase tracking-wide text-ink-2">{k}</dt><dd className="mt-1 break-words text-[14px] text-ink">{v ?? '—'}</dd></div>)}
     </dl>
   );

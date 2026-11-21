@@ -4,7 +4,7 @@ Order follows D12 (business flow). Stage 3 parts:
 
 1. Vendor onboarding and purchase requisitions — **done**
 2. RFQ, comparative statement and purchase orders — **done**
-3. Goods receipt with quarantine, QC sampling and lot release, stock ledger
+3. Goods receipt with quarantine, QC sampling and lot release, stock ledger — **done**
 4. Supplier invoice three-way match, supplier returns and debit notes
 
 ## Part 1 — Vendor onboarding and purchase requisitions (BRD §3.2 p.8; MP §10.1; MDM-011, MDM-016, PUR-001/002)
@@ -82,7 +82,39 @@ Order follows D12 (business flow). Stage 3 parts:
 
 ### Not built yet
 - **PO amendment with re-approval (PUR-007)**: for now cancel and re-raise before receipt.
-- **Goods receipt, quarantine and QC release**: part 3 (lines already carry a received quantity).
 - **Emailing RFQs and POs to vendors**: needs the email integration; print/PDF for now.
 - **Single-source purchase with retrospective approval beyond the emergency flag (PUR-011)** and **budget checks (PUR-003)**: need D06 details.
 - **Client input**: confirm the D06 bands and the D34 RFQ weights; both are settings, no code change needed.
+
+## Part 3 — Goods receipt, quarantine, QC lot release and the stock ledger (BRD p.14–15; MP §10.5, Parts 11 and 13; PUR-008, TC-09)
+
+| Area | What works | RTM |
+|---|---|---|
+| Goods receipt | Number `GRN/2026-27/000001`. "Receive goods" on an issued, acknowledged or partly received PO (a **lapsed** PO is refused until purchase re-issues it). Challan number and date, vendor invoice number, vehicle, remarks; per PO line the challan quantity and the **counted** quantity (a difference is flagged), the vendor batch, manufacturing and expiry dates | PUR-008 |
+| Receipt checks | Cumulative receipts may exceed the ordered quantity by at most the tolerance (setting `purchase.grn.overReceiptPct`, D06 default 2%). A vendor batch is required for lot-controlled items. Expiry is derived from the manufacturing date and the item's shelf life when not given; material already expired is refused. Drafts can be edited or cancelled; a posted receipt is corrected by a supplier return (part 4) | PUR-008, TC-09 |
+| Posting into quarantine | Each line becomes a **lot** (`LOT/2026-27/000001`) held in the **quarantine** bucket of the receiving warehouse, valued at the PO net rate, with a QC inspection (`QCI/2026-27/000001`) created and QC analysts and managers notified. The PO moves to Partly received or Received | INV, QC |
+| Stock ledger | Append-only (`inv.stock_ledger`, updates and deletes refused by the database). Buckets: quarantine, unrestricted (released, usable), blocked (QC hold), rejected. Balances are sums of the ledger, never stored totals | INV |
+| QC sampling | The analyst draws the sample; its quantity is taken out of quarantine stock (0 for a non-destructive test) | QC |
+| QC results | Parameters, specification, result and pass/fail per test (pre-filled from the item's last inspection), the vendor's certificate of analysis (uploaded to the inspection), and the analyst's recommendation. A failed test cannot be recommended for release | QC |
+| QC decision (BRD p.15) | A **QC manager decides — never the analyst who recorded the results**. Release needs every test passed **and** the CoA received; the lot moves to unrestricted stock. Reject (reason required) moves it to rejected stock for return. Hold (reason required) blocks it until a later release or rejection | QC, doc 07 §6 |
+| Vendor rating | Recalculated at each release or rejection from the vendor's last 20 decided lots: 70% QC acceptance, 30% on-time delivery (received on or before the PO delivery date), on a 0–5 scale. It feeds the RFQ comparison's quality score | MDM-011, PUR-014 |
+| Short close | A partly received PO's balance can be closed with a reason when no more deliveries are expected (not while a draft receipt is open) | PUR-007 |
+| Stock & lots | Balances per item and warehouse by bucket with the value of released stock and the nearest expiry; lot register with QC status and on-hand; lot page with full **genealogy** (vendor, vendor batch, PO, receipt, inspection, decision) and every movement | INV, traceability |
+| Access | Storekeepers and the stores head receive and post; QC analysts sample and test; QC managers and the QC head decide; purchase, finance, plant, production, QA and management view what they need | SEC-010 |
+
+### Evidence
+- `apps/api/test/receipts-qc.test.ts` has 2 tests:
+  - receipt: open lines, tolerance (2,551 kg refused against 2,500 + 2%), batch required, expired material refused, sales refused; posting into quarantine; lot genealogy and expiry from the shelf life; sampling reduces quarantine; failed results cannot be recommended for release; the analyst cannot decide; release refused without the CoA; release moves the stock and rates the vendor 5.0; the remaining quantity within tolerance completes the PO; the ledger refuses deletion
+  - rejection to rejected stock (reason required, rating 1.5), hold to blocked and later release (rating 3.3, calculated by hand), short close of the PO balance
+- Totals: **57 API + 4 contract tests passing**. Typecheck and production build clean.
+- Browser run passed end to end on top of the part 1 and 2 runs: the storekeeper opened the acknowledged PO, chose "Receive goods", entered challan 1,500 kg and a counted 1,498.5 kg (flagged as different), the vendor batch and the manufacturing date, saved and posted into quarantine. The QC analyst drew a 0.5 kg sample, recorded zinc, moisture and lead results, attached the CoA and recommended release; the QC manager released the lot. Stock shows 1,498 kg released; the lot page shows its genealogy and the four movements; the PO is partly received. No browser errors.
+
+### Changed during this part
+- Tests drain the notification outbox fully before checking (a single relay call handles 100 events, and more modules now emit events).
+- Side-panel key-value cards use a single column.
+
+### Not built yet
+- **Supplier returns and debit notes** for rejected stock, and the **three-way match** of supplier invoices: part 4.
+- **Specification master with versioned limits** (QC enters specifications per inspection for now, pre-filled from the last one): Stage 5.
+- **Quarantine-lock override** (QC head + plant head, automatic deviation, D33) and **issue of stock to production**: with production (Stage 4) — nothing can consume quarantined stock today because no issue transaction exists yet.
+- **Separate quarantine store location / bin management**: quarantine is a stock status in the receiving warehouse for now.

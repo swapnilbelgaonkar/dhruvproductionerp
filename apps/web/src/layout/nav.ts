@@ -1,4 +1,4 @@
-import { Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -23,6 +23,11 @@ export const NAV: NavGroup[] = [
     { to: '/purchase/rfqs', label: 'RFQs & Comparison', icon: ListChecks, perm: 'purchase.rfq:view' },
     { to: '/purchase/orders', label: 'Purchase Orders', icon: Package, perm: 'purchase.order:view' },
     { to: '/purchase/vendors', label: 'Vendors', icon: Truck, perm: 'mdm.vendor:view' },
+  ] },
+  { label: 'Stores & Quality', items: [
+    { to: '/stores/receipts', label: 'Goods Receipts', icon: TrayArrowDown, perm: 'purchase.grn:view' },
+    { to: '/qc/inspections', label: 'QC — Incoming Lots', icon: Microscope, perm: 'qc.inspection:view' },
+    { to: '/stores/stock', label: 'Stock & Lots', icon: Stack, perm: 'inv.stock:view' },
   ] },
   { label: 'Masters', items: [
     { to: '/masters/legal-entities', label: 'Legal Entities', icon: Buildings, perm: 'org.legal_entity:view' },
