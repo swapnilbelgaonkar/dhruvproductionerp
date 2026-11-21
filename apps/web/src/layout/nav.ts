@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -31,10 +31,18 @@ export const NAV: NavGroup[] = [
     { to: '/qc/ipqc', label: 'QC — In-process', icon: Microscope, perm: 'qc.ipqc:record' },
     { to: '/qc/oos', label: 'OOS Investigations', icon: WarningOctagon, perm: 'qc.inspection:view' },
     { to: '/qc/master', label: 'QC Masters', icon: ListChecks, perm: 'qc.spec:view' },
-    { to: '/qa/releases', label: 'QA — Batch Release', icon: ShieldCheck, perm: 'qa.release:view' },
-    { to: '/qa/deviations', label: 'Deviations', icon: Warning, perm: 'qa.deviation:view' },
+
     { to: '/stores/returns', label: 'Supplier Returns', icon: ArrowUUpLeft, perm: 'purchase.return:view' },
     { to: '/stores/stock', label: 'Stock & Lots', icon: Stack, perm: 'inv.stock:view' },
+  ] },
+  { label: 'Quality Assurance', items: [
+    { to: '/qa/releases', label: 'Batch Release', icon: ShieldCheck, perm: 'qa.release:view' },
+    { to: '/qa/deviations', label: 'Deviations', icon: Warning, perm: 'qa.deviation:view' },
+    { to: '/qa/capas', label: 'CAPA', icon: ArrowsClockwise, perm: 'qa.capa:view' },
+    { to: '/qa/ncs', label: 'Non-conformances', icon: XSquare, perm: 'qa.nc:view' },
+    { to: '/qa/changes', label: 'Change Control', icon: GitDiff, perm: 'qa.change:view' },
+    { to: '/qa/complaints', label: 'Complaints', icon: ChatCircleText, perm: 'qa.complaint:view' },
+    { to: '/qa/recalls', label: 'Recalls', icon: Siren, perm: 'qa.recall:view' },
   ] },
   { label: 'Production', items: [
     { to: '/production/dashboard', label: 'Production Dashboard', icon: ChartBar, perm: 'mfg.order:view' },

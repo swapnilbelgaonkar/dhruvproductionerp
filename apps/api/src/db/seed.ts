@@ -126,7 +126,8 @@ async function seedDemoUsers(tx: pg.PoolClient, password: string) {
   await person('SMP-PPL', '[SAMPLE] Production Planner', null, plantHead, state, 'planner@demo.local', ['PRODUCTION_PLANNER']);
   await person('SMP-PSV', '[SAMPLE] Production Supervisor', null, plantHead, state, 'supervisor@demo.local', ['PRODUCTION_SUPERVISOR']);
   const qaHead = await person('SMP-QAH', '[SAMPLE] QA Head', null, null, state, 'qa-head@demo.local', ['QA_HEAD']);
-  await person('SMP-QAM', '[SAMPLE] QA Manager', null, qaHead, state, 'qa-manager@demo.local', ['QA_MANAGER']);
+  const qaManager = await person('SMP-QAM', '[SAMPLE] QA Manager', null, qaHead, state, 'qa-manager@demo.local', ['QA_MANAGER']);
+  await person('SMP-QAE', '[SAMPLE] QA Executive', null, qaManager, state, 'qa-exec@demo.local', ['QA_EXECUTIVE']);
   // read-only auditor: approval policies, audit log and every register, for demonstrations and audits
   await person('SMP-AUD', '[SAMPLE] Auditor (read-only)', null, null, state, 'auditor@demo.local', ['AUDITOR']);
   await audit(tx, SYSTEM, { action: 'demo.users_seeded', entityType: 'iam.user', reason: '[SAMPLE] demo hierarchy for UAT' });

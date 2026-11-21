@@ -41,6 +41,7 @@ import { deviationRoutes } from './modules/quality/deviations';
 import { qaReleaseRoutes } from './modules/quality/releases';
 import { qcMasterRoutes } from './modules/quality/qcmaster';
 import { oosRoutes, publicCoaRoutes } from './modules/quality/oos';
+import { qaRoutes } from './modules/quality/qa';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
@@ -104,6 +105,7 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/qa/releases', qaReleaseRoutes(db));
   v1.use('/qc/master', qcMasterRoutes(db));
   v1.use('/qc/oos', oosRoutes(db));
+  v1.use('/qa', qaRoutes(db));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);

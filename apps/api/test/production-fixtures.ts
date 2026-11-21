@@ -54,3 +54,22 @@ export async function approvedOrder(f: PF, qty: number) {
   await f.plantHead.post(`/api/v1/approvals/${s.body.approvalRequestId}/decisions`, { decision: 'Approve' }).expect(200);
   return o.body.id as string;
 }
+
+/** A completed 1,000 L batch (zinc and EDTA lots fully dosed, IPQC passed) with its FG lot in quarantine. */
+export async function completedBatch(f: PF) {
+  const analyst = await userAgent([{ code: 'QC_ANALYST' }]);
+  const znLot = await stockLot(f.zn, f.rmWh, 450, { cost: 60 });
+  const edtaLot = await stockLot(f.edta, f.rmWh, 600, { cost: 180 });
+  const id = await approvedOrder(f, 1000);
+  await f.planner.post(`/api/v1/production-orders/${id}/release`, {}).expect(200);
+  const o = (await f.keeper.get(`/api/v1/production-orders/${id}`).expect(200)).body;
+  await f.keeper.post(`/api/v1/production-orders/${id}/issue`, { lines: o.reservations.map((r: { id: string; qty: string }) => ({ reservationId: r.id, qty: Number(r.qty) })) }).expect(201);
+  const s = await f.supervisor.post('/api/v1/batches', { productionOrderId: id, operators: ['A'] }).expect(201);
+  const b = (await f.supervisor.get(`/api/v1/batches/${s.body.id}`).expect(200)).body;
+  for (const m of b.materials) await f.supervisor.post(`/api/v1/batches/${s.body.id}/dosing`, { orderMaterialId: m.id, entries: [{ lotId: b.lots[m.id][0].lotId, qty: m.planned }] }).expect(201);
+  const t = await f.supervisor.post(`/api/v1/batches/${s.body.id}/ipqc`, { stage: 'x' }).expect(201);
+  await analyst.post(`/api/v1/batches/ipqc/${t.body.id}/results`, { results: [{ parameter: 'pH', specification: '6–6.5', result: '6.2', pass: true }] }).expect(200);
+  const done = await f.supervisor.post(`/api/v1/batches/${s.body.id}/complete`, { outputQty: 975 }).expect(200);
+  const fgLot = (await db.query(`select id from inv.lots where lot_no = $1`, [done.body.fgLotNo])).rows[0].id as string;
+  return { orderId: id, batchId: s.body.id as string, fgLot, fgLotNo: done.body.fgLotNo as string, znLot, edtaLot };
+}

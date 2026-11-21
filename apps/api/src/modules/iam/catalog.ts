@@ -55,6 +55,11 @@ export const PERMISSIONS = [
   ...P('Production', 'mfg.packing', ['view', 'post'], 'packing runs, box serials and QR labels'),
   ...P('Quality', 'qc.spec', ['view', 'manage'], 'test methods and item specifications'),
   ...P('Quality', 'qc.instrument', ['view', 'manage'], 'laboratory instruments and their calibration'),
+  ...P('Quality', 'qa.capa', ['view', 'manage', 'verify'], 'corrective and preventive actions (verify = effectiveness check)'),
+  ...P('Quality', 'qa.nc', ['view', 'create', 'manage'], 'non-conformances'),
+  ...P('Quality', 'qa.change', ['view', 'create', 'manage'], 'change control'),
+  ...P('Quality', 'qa.complaint', ['view', 'create', 'manage'], 'customer complaints'),
+  ...P('Quality', 'qa.recall', ['view', 'drill', 'actual'], 'recalls (drill = mock recall; actual = trace and lock stock)'),
   ...P('Quality', 'qa.release', ['view', 'decide'], 'QA batch review and the disposition of finished goods (release, hold, reject, rework)'),
 ];
 
@@ -92,24 +97,29 @@ const PURCHASE_EXTRA: Record<string, string[]> = {
 const BOM_AUTHOR = ['mfg.settings:view', 'mfg.bom:view', 'mfg.bom:create', 'mfg.bom:edit', 'mfg.bom:submit'];
 const ORDER_PLAN = ['mfg.order:view', 'mfg.order:create', 'mfg.order:edit', 'mfg.order:submit', 'mfg.order:release', 'mfg.order:cancel', 'mfg.override:request', 'qa.deviation:view', 'inv.stock:view'];
 const PROD_VIEW = ['mfg.order:view', 'qa.deviation:view', 'mfg.batch:view', 'qa.release:view', 'mfg.packing:view'];
+/** QA core (Stage 5 part 2): QA runs the registers; plant, QC, stores and purchase can raise non-conformances and change requests. */
+const QA_SEE = ['qa.capa:view', 'qa.nc:view', 'qa.change:view', 'qa.complaint:view', 'qa.recall:view'];
+const QA_RAISE = [...QA_SEE, 'qa.nc:create', 'qa.change:create'];
+const QA_EXEC = [...QA_RAISE, 'qa.capa:manage', 'qa.nc:manage', 'qa.complaint:create', 'qa.complaint:manage'];
+const QA_MGR = [...QA_EXEC, 'qa.capa:verify', 'qa.change:manage', 'qa.recall:drill'];
 const PRODUCTION_EXTRA: Record<string, string[]> = {
-  PRODUCTION_PLANNER: [...BOM_AUTHOR, ...ORDER_PLAN, 'mfg.batch:view', 'mfg.packing:view'],
-  PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'mfg.override:request', 'inv.stock:view', 'mfg.batch:execute', 'mfg.packing:post'],
-  PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure', ...ORDER_PLAN, 'mfg.batch:view', 'mfg.batch:execute', 'mfg.batch:scrap', 'mfg.packing:view', 'mfg.packing:post'],
-  QA_EXECUTIVE: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW],
-  QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'inv.stock:view', 'qc.spec:view', 'qc.instrument:view'],
-  QA_HEAD: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'qa.release:decide', 'inv.stock:view', 'qc.spec:view', 'qc.instrument:view'],
-  QC_ANALYST: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'], QC_MANAGER: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'], QC_HEAD: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'],
-  STOREKEEPER: ['mfg.order:view', 'mfg.issue:post', 'mfg.batch:view', 'mfg.packing:view'], STORES_HEAD: ['mfg.bom:view', 'mfg.order:view', 'mfg.issue:post', 'mfg.batch:view', 'mfg.packing:view'],
-  PURCHASE_HEAD: ['mfg.bom:view', 'mfg.order:view'], FINANCE_HEAD: ['mfg.bom:view', ...PROD_VIEW],
-  MANAGEMENT_VIEWER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW],
+  PRODUCTION_PLANNER: [...BOM_AUTHOR, ...ORDER_PLAN, 'mfg.batch:view', 'mfg.packing:view', ...QA_RAISE],
+  PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'mfg.override:request', 'inv.stock:view', 'mfg.batch:execute', 'mfg.packing:post', ...QA_RAISE],
+  PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure', ...ORDER_PLAN, 'mfg.batch:view', 'mfg.batch:execute', 'mfg.batch:scrap', 'mfg.packing:view', 'mfg.packing:post', ...QA_RAISE],
+  QA_EXECUTIVE: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, ...QA_EXEC],
+  QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'inv.stock:view', 'qc.spec:view', 'qc.instrument:view', ...QA_MGR],
+  QA_HEAD: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'qa.release:decide', 'inv.stock:view', 'qc.spec:view', 'qc.instrument:view', ...QA_MGR, 'qa.recall:actual'],
+  QC_ANALYST: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record', ...QA_RAISE], QC_MANAGER: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record', ...QA_RAISE], QC_HEAD: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record', ...QA_RAISE],
+  STOREKEEPER: ['mfg.order:view', 'mfg.issue:post', 'mfg.batch:view', 'mfg.packing:view', ...QA_RAISE], STORES_HEAD: ['mfg.bom:view', 'mfg.order:view', 'mfg.issue:post', 'mfg.batch:view', 'mfg.packing:view'],
+  PURCHASE_HEAD: ['mfg.bom:view', 'mfg.order:view', ...QA_RAISE], FINANCE_HEAD: ['mfg.bom:view', ...PROD_VIEW],
+  MANAGEMENT_VIEWER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, ...QA_SEE],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
   'sales.quotation:send', 'sales.quotation:cancel',
   'sales.order:view', 'sales.order:create', 'sales.order:edit', 'sales.order:submit', 'sales.order:cancel'];
 const PRICE_MANAGE = ['sales.price_list:view', 'sales.price_list:create', 'sales.price_list:edit_draft', 'sales.price_list:submit', 'sales.price_list:deactivate'];
-const DEALER_SALES = ['mdm.dealer:view', 'mdm.dealer:create', 'mdm.dealer:edit_draft', 'mdm.dealer:submit', ...CRM_BASE, ...QUOTE_SALES];
+const DEALER_SALES = ['mdm.dealer:view', 'mdm.dealer:create', 'mdm.dealer:edit_draft', 'mdm.dealer:submit', ...CRM_BASE, ...QUOTE_SALES, 'qa.complaint:view', 'qa.complaint:create'];
 /** BRD p.3: lead allocation from ASM upward; reopening closed opportunities from RSM upward. */
 const tierCrm = (t: string) => [...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM', 'SASM', 'ASM'].includes(t) ? ['crm.lead:assign'] : []),
   ...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM'].includes(t) ? ['crm.opportunity:reopen'] : []),
@@ -247,6 +257,13 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
       { kind: 'role', key: 'qc', label: 'QC approval', roles: ['QC_MANAGER', 'QC_HEAD'] },
       { kind: 'role', key: 'qa', label: 'QA approval', roles: ['QA_MANAGER', 'QA_HEAD'] },
     ] }] } },
+  // QA-009: change control — the QA head approves; a high-risk change also needs the executive director
+  { docType: 'qa.change_request', name: 'Change control', description: 'QA head; high-risk changes also the executive director',
+    definition: { distinctApprovers: true, rules: [
+      { name: 'High risk', when: { fact: 'risk', op: 'eq', value: 'HIGH' }, steps: [
+        { kind: 'role', key: 'qa', label: 'QA head approval', roles: ['QA_HEAD'] }, { kind: 'role', key: 'exec', label: 'Executive director approval (high risk)', roles: ['EXEC_ADMIN'] }] },
+      { name: 'Default', steps: [{ kind: 'role', key: 'qa', label: 'QA head approval', roles: ['QA_HEAD'] }] },
+    ] } },
   { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
       { kind: 'role', key: 'sales', label: 'Sales head approval', roles: ['SALES_BH', 'SALES_NSM'] },

@@ -3,8 +3,8 @@
 Order follows D12 (business flow). Stage 5 parts:
 
 1. QC core: specification & method master, instruments & calibration, results against the specification, OOS investigation, controlled CoA — **done**
-2. QA core: CAPA, non-conformance, change control, complaints, recall with drill mode — next
-3. QA system: controlled documents & SOPs, training, audits, risk register, line clearance, QC and QA dashboards
+2. QA core: CAPA, non-conformance, change control, complaints, recall with drill mode — **done**
+3. QA system: controlled documents & SOPs, training, audits, risk register, line clearance, QC and QA dashboards — next
 
 ## Part 1 — QC core (BRD p.15 sub-modules 1, 3, 4, 5, 6; MP §13.3–13.7; QC-004…QC-008, QC-011, QC-013; TC-12)
 
@@ -37,3 +37,25 @@ Order follows D12 (business flow). Stage 5 parts:
 ### Not built yet
 - **Sample chain of custody and retention samples (QC-003, QC-010)**, **reagent and standard expiry**, **OOT trending**: with the QC dashboard (part 3).
 - **Instrument calibration due alerts**: with the alert scheduler in part 3.
+
+## Part 2 — QA core (BRD p.16; MP §14.4–14.5; QA-007, QA-008, QA-009, QA-013, QA-016; UAT-15)
+
+| Area | What works | RTM |
+|---|---|---|
+| CAPA | `CAPA/…`: title, source (deviation, non-conformance, complaint, audit, OOS, change, recall, other) with a link to it, problem, root cause, owner, due date, and actions (correction, corrective, preventive) each with an owner and due date | QA-007 |
+| Actions | Completed by their owner (or QA) with evidence; when the last is done the CAPA moves to the **effectiveness check** | QA-007 |
+| Effectiveness | Verified by a QA manager or head **who is not the owner**: effective → Closed; not effective → back to Open for more actions. Overdue CAPA are flagged | QA-007 |
+| Non-conformance | `NC/…`: material, process, supplier, product; severity; lot and supplier; closed with a disposition (use as is, rework, return, scrap) and justification. **A critical NC needs a CAPA** before it closes. Plant, QC, stores and purchase can raise one | QA-009 |
+| Change control | `CC/…`: type (formulation, specification, process, equipment, SOP, supplier), description, justification, impact, risk, target date. Submitted by the requester; the **QA head** approves, and a **high-risk** change also needs the **executive director** (policy `qa.change_request`); then implemented and closed with verification | QA-009 |
+| Complaints | `CMP/…`, logged by sales or QA: dealer, date, channel, category, severity. **The box serial from the label resolves the lot and product** (D24). QA records the findings and closes it as justified or not with the response to the dealer; a **justified major or critical complaint needs a CAPA**. From a complaint, QA can raise the CAPA or start a recall | QA-013 |
+| Recall | `RCL/…` from a lot: every lot made from it is traced recursively (forward genealogy), with produced quantity, stock on hand and boxes. **Drill** (QA manager) identifies only. **Actual** (QA head only) also **locks all their stock** (released and quarantine stock moved to blocked, lots put on hold). Trace (and lock) happen in one step; the time is recorded against the **2-hour target** (QA-016). Closed with the reconciliation | QA-008, QA-016, UAT-15 |
+
+### Evidence
+- `apps/api/test/qa-core.test.ts` has 2 tests:
+  - CAPA: a critical NC cannot close without a CAPA; the CAPA is opened from the NC, which then closes. An action can be completed only by its owner; completing both moves the CAPA to the effectiveness check. The owner cannot verify; the QA manager marks it not effective and it reopens; another action is added and completed, then verified effective and closed. Change control at high risk: QA head, then executive director; implemented; closed.
+  - A sales executive logs a complaint by box serial, which resolves to the lot; an unknown serial is refused. Closing without findings is refused; a justified major complaint without a CAPA is refused. A drill by a QA executive is refused; by the QA manager it traces the zinc lot to the FG lot made from it, without moving stock. An actual recall by the QA manager is refused; by the QA head it locks the FG lot's stock and puts it on hold, within the target time.
+- Totals: **73 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local): the sales executive logged a complaint against box BX-2026-27-00000003 for the Niphad dealer; it resolved to lot B/2026-27/000001. The QA executive recorded the findings and opened CAPA/2026-27/000001 with two actions. The QA manager ran a recall drill from the complaint: the lot, 969.8 L on hand and 50 boxes, traced in under a second.
+
+### New demo user
+`qa-exec` (@demo.local), reporting to the QA manager.
