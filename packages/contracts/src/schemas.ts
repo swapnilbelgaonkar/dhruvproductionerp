@@ -364,3 +364,28 @@ export const supplierInvoiceSchema = z.object({
   })).min(1).max(100),
 }).refine((i) => new Set(i.lines.map((l) => l.poLineId)).size === i.lines.length, { message: 'Each PO line can appear once', path: ['lines'] });
 export const invoiceExceptionSchema = z.object({ note: trimmed(1000) });
+
+// ---------- Production: plant & line settings, formulations (BRD p.18; MFG-006, MFG-009, MFG-019) ----------
+export const LINE_TYPES = ['REACTOR', 'BLENDER', 'GRANULATOR', 'FERMENTER', 'FILLING', 'PACKING', 'OTHER'] as const;
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM (24-hour)');
+export const productionLineSchema = z.object({
+  plantId: uuid, code, name: trimmed(120), lineType: z.enum(LINE_TYPES),
+  capacityPerShift: z.number().positive().optional().nullable(), capacityUom: z.string().trim().max(10).optional().nullable().transform((v) => v || null),
+  parameters: z.array(z.object({ name: trimmed(80), value: trimmed(80), unit: optionalText(20) })).max(30).default([]),
+}).refine((l) => (l.capacityPerShift == null) === (l.capacityUom == null), { message: 'Give both the capacity and its unit, or neither', path: ['capacityUom'] });
+export const shiftSchema = z.object({
+  plantId: uuid, code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{1,6}$/, 'Use 1–6 letters or digits'), name: trimmed(60),
+  startTime: hhmm, endTime: hhmm,
+}).refine((s) => s.startTime !== s.endTime, { message: 'Start and end cannot be the same', path: ['endTime'] });
+export const bomSchema = z.object({ itemId: uuid, code, name: trimmed(150) });
+export const bomVersionSchema = z.object({
+  batchSize: z.number().positive('Batch size must be above zero'), standardYieldPct: z.number().positive().max(100),
+  reactionTempC: z.number().min(-50).max(500).optional().nullable(), reactionTimeMin: z.number().int().positive().optional().nullable(),
+  processNotes: optionalText(2000), effectiveFrom: isoDay, changeNote: trimmed(500),
+  lines: z.array(z.object({
+    stepNo: z.number().int().positive().default(1), itemId: uuid, qty: z.number().positive('Quantity must be above zero'),
+    tolerancePct: z.number().min(0).max(100), notes: optionalText(300),
+    alternates: z.array(z.object({ itemId: uuid, factor: z.number().positive().default(1), notes: optionalText(300) })).max(5).default([]),
+  })).min(1, 'Add at least one ingredient').max(60),
+}).refine((v) => new Set(v.lines.map((l) => l.itemId)).size === v.lines.length, { message: 'Each ingredient can appear only once', path: ['lines'] })
+  .refine((v) => v.lines.every((l) => !l.alternates.some((a) => a.itemId === l.itemId)), { message: 'An ingredient cannot be its own substitute', path: ['lines'] });

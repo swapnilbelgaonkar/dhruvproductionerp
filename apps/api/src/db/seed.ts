@@ -120,6 +120,12 @@ async function seedDemoUsers(tx: pg.PoolClient, password: string) {
   // quality control (Stage 3 part 3): the analyst tests, a different person (QC manager) decides
   const qcManager = await person('SMP-QCM', '[SAMPLE] QC Manager', null, null, state, 'qc-manager@demo.local', ['QC_MANAGER']);
   await person('SMP-QCA', '[SAMPLE] QC Analyst', null, qcManager, state, 'qc@demo.local', ['QC_ANALYST']);
+  // production (Stage 4): planning drafts formulations and orders; the plant head and QA approve; QA releases finished goods
+  const plantHead = await person('SMP-PLH', '[SAMPLE] Plant Head Chakan', null, null, state, 'plant-head@demo.local', ['PLANT_HEAD']);
+  await person('SMP-PPL', '[SAMPLE] Production Planner', null, plantHead, state, 'planner@demo.local', ['PRODUCTION_PLANNER']);
+  await person('SMP-PSV', '[SAMPLE] Production Supervisor', null, plantHead, state, 'supervisor@demo.local', ['PRODUCTION_SUPERVISOR']);
+  const qaHead = await person('SMP-QAH', '[SAMPLE] QA Head', null, null, state, 'qa-head@demo.local', ['QA_HEAD']);
+  await person('SMP-QAM', '[SAMPLE] QA Manager', null, qaHead, state, 'qa-manager@demo.local', ['QA_MANAGER']);
   // read-only auditor: approval policies, audit log and every register, for demonstrations and audits
   await person('SMP-AUD', '[SAMPLE] Auditor (read-only)', null, null, state, 'auditor@demo.local', ['AUDITOR']);
   await audit(tx, SYSTEM, { action: 'demo.users_seeded', entityType: 'iam.user', reason: '[SAMPLE] demo hierarchy for UAT' });

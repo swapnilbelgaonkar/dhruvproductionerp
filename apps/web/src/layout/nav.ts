@@ -31,6 +31,10 @@ export const NAV: NavGroup[] = [
     { to: '/stores/returns', label: 'Supplier Returns', icon: ArrowUUpLeft, perm: 'purchase.return:view' },
     { to: '/stores/stock', label: 'Stock & Lots', icon: Stack, perm: 'inv.stock:view' },
   ] },
+  { label: 'Production', items: [
+    { to: '/production/formulations', label: 'Formulations (BOM)', icon: Flask, perm: 'mfg.bom:view' },
+    { to: '/production/settings', label: 'Plant & Line Settings', icon: SlidersHorizontal, perm: 'mfg.settings:view' },
+  ] },
   { label: 'Masters', items: [
     { to: '/masters/legal-entities', label: 'Legal Entities', icon: Buildings, perm: 'org.legal_entity:view' },
     { to: '/masters/plants', label: 'Plants', icon: Factory, perm: 'org.plant:view' },

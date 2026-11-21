@@ -44,6 +44,8 @@ export const PERMISSIONS = [
   ...P('Stores', 'purchase.return', ['view', 'create', 'post'], 'supplier returns and their debit notes'),
   ...P('Purchase', 'purchase.invoice', ['view', 'create', 'submit', 'cancel'], 'supplier invoices and the three-way match'),
   ...P('Quality', 'qc.inspection', ['view', 'record', 'decide'], 'QC inspection of received lots (record = sample and test; decide = release, reject or hold)'),
+  ...P('Production', 'mfg.settings', ['view', 'configure'], 'plant lines, machine parameters and shifts'),
+  ...P('Production', 'mfg.bom', ['view', 'create', 'edit', 'submit'], 'formulations (BOM) and their versions'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -75,6 +77,17 @@ const PURCHASE_EXTRA: Record<string, string[]> = {
   QA_EXECUTIVE: [...PR_RAISE, 'qc.inspection:view'], QA_MANAGER: ['mdm.vendor:view', ...PR_RAISE, 'qc.inspection:view', 'inv.stock:view'], QA_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'qc.inspection:view', 'inv.stock:view'],
   LOGISTICS_EXEC: [...PR_RAISE], LOGISTICS_HEAD: [...PR_RAISE],
   MANAGEMENT_VIEWER: ['mdm.vendor:view', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view', 'purchase.return:view', 'purchase.invoice:view'],
+};
+/** Production (Stage 4). Formulations are drafted by planning; the plant head and QA approve them through the approval policy. */
+const BOM_AUTHOR = ['mfg.settings:view', 'mfg.bom:view', 'mfg.bom:create', 'mfg.bom:edit', 'mfg.bom:submit'];
+const PRODUCTION_EXTRA: Record<string, string[]> = {
+  PRODUCTION_PLANNER: BOM_AUTHOR,
+  PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view'],
+  PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure'],
+  QA_EXECUTIVE: ['mfg.settings:view', 'mfg.bom:view'], QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view'], QA_HEAD: ['mfg.settings:view', 'mfg.bom:view'],
+  QC_ANALYST: ['mfg.bom:view'], QC_MANAGER: ['mfg.bom:view'], QC_HEAD: ['mfg.bom:view'],
+  STORES_HEAD: ['mfg.bom:view'], PURCHASE_HEAD: ['mfg.bom:view'], FINANCE_HEAD: ['mfg.bom:view'],
+  MANAGEMENT_VIEWER: ['mfg.settings:view', 'mfg.bom:view'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
@@ -132,7 +145,7 @@ export const ROLES: RoleDef[] = [
     ['QA_EXECUTIVE', 'QA Executive', 'QA'], ['QA_MANAGER', 'QA Manager', 'QA'], ['QA_HEAD', 'QA Head', 'QA'],
     ['LOGISTICS_EXEC', 'Logistics Executive', 'Logistics'], ['LOGISTICS_HEAD', 'Logistics Head', 'Logistics'],
   ].map(([code, name, department]) => ({ code: code!, name: name!, department: department!, description: name!,
-    permissions: [...ORG_VIEW, ...(DEALER_EXTRA[code!] ?? []), ...(PURCHASE_EXTRA[code!] ?? [])] })),
+    permissions: [...ORG_VIEW, ...(DEALER_EXTRA[code!] ?? []), ...(PURCHASE_EXTRA[code!] ?? []), ...(PRODUCTION_EXTRA[code!] ?? [])] })),
 ];
 
 const masterActivation = (label: string): PolicyDefinition => ({
@@ -191,6 +204,12 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
       { kind: 'role', key: 'purchase', label: 'Purchase head review', roles: ['PURCHASE_HEAD'] },
       { kind: 'role', key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] },
+    ] }] } },
+  // Doc 07 §6: a formulation version is approved by the plant head, then QA (escalation to the QA head)
+  { docType: 'mfg.bom_version', name: 'Formulation (BOM) version approval', description: 'Plant head, then QA manager or QA head, before a version can take effect',
+    definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
+      { kind: 'role', key: 'plant', label: 'Plant head approval', roles: ['PLANT_HEAD'] },
+      { kind: 'role', key: 'qa', label: 'QA approval', roles: ['QA_MANAGER', 'QA_HEAD'] },
     ] }] } },
   { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [

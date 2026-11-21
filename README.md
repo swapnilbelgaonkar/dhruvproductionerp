@@ -8,6 +8,7 @@ Enterprise ERP for Dhruv Agro Technologies Pvt. Ltd. It covers chemical, fertili
 - **Stage 1 Foundation, increments 1–2:** built and tested (platform, approvals, organisation and product masters, document vault, notifications). See [`docs/development/stage-1-foundation.md`](docs/development/stage-1-foundation.md).
 - **Stage 2 Sales (dealers, CRM, price lists, quotations, sales orders):** built and tested. See [`docs/development/stage-2-sales.md`](docs/development/stage-2-sales.md).
 - **Stage 3 Purchase, Stores and Quality (vendors, requisitions, RFQs, purchase orders, goods receipts, QC, returns, three-way match):** built and tested. See [`docs/development/stage-3-purchase.md`](docs/development/stage-3-purchase.md).
+- **Stage 4 Production, in progress:** part 1 (plant & line settings, formulations with approved, effective-dated versions) built and tested. See [`docs/development/stage-4-production.md`](docs/development/stage-4-production.md).
 - **Client decisions and pending items:** [`docs/pre-development/12-open-decision-register.md`](docs/pre-development/12-open-decision-register.md).
 
 ## Repository layout
@@ -73,7 +74,8 @@ Every demo user signs in as `<role>@demo.local` with that password:
 | Sales | `se`, `tsm`, `rsm`, `nsm`, `ops`, `verifier`, `credit`, `finance` |
 | Purchase | `purchase`, `purchase-head`, `accounts` |
 | Stores | `storekeeper`, `stores-head` |
-| Quality | `qc`, `qc-manager` |
+| Quality | `qc`, `qc-manager`, `qa-manager`, `qa-head` |
+| Production | `planner`, `supervisor`, `plant-head` |
 | Audit (read only) | `auditor` |
 
 Everything the seed creates is marked `[SAMPLE]`. Its tax rates and limits are illustrative, not client-confirmed.

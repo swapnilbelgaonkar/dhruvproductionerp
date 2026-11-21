@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { FormulationDetailPage, FormulationsPage, FormulationVersionFormPage, FormulationVersionLink, FormulationVersionPage } from './pages/production/Formulations';
+import { PlantSettingsPage } from './pages/production/PlantSettings';
 import { EmptyState, Skeleton } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { useAuth } from './lib/auth';
@@ -110,6 +112,13 @@ export function App() {
         <Route path="stores/lots/:id" element={<Protected perm="inv.stock:view"><LotDetailPage /></Protected>} />
         <Route path="qc/inspections" element={<Protected perm="qc.inspection:view"><InspectionsPage /></Protected>} />
         <Route path="qc/inspections/:id" element={<Protected perm="qc.inspection:view"><InspectionDetailPage /></Protected>} />
+        <Route path="production/formulations" element={<Protected perm="mfg.bom:view"><FormulationsPage /></Protected>} />
+        <Route path="production/formulations/:id" element={<Protected perm="mfg.bom:view"><FormulationDetailPage /></Protected>} />
+        <Route path="production/formulations/:id/versions/new" element={<Protected perm="mfg.bom:create"><FormulationVersionFormPage /></Protected>} />
+        <Route path="production/formulations/:id/versions/:vid" element={<Protected perm="mfg.bom:view"><FormulationVersionPage /></Protected>} />
+        <Route path="production/formulations/:id/versions/:vid/edit" element={<Protected perm="mfg.bom:edit"><FormulationVersionFormPage /></Protected>} />
+        <Route path="production/formulation-versions/:vid" element={<Protected perm="mfg.bom:view"><FormulationVersionLink /></Protected>} />
+        <Route path="production/settings" element={<Protected perm="mfg.settings:view"><PlantSettingsPage /></Protected>} />
         {master('legalEntities')}
         {master('plants')}
         {master('warehouses')}

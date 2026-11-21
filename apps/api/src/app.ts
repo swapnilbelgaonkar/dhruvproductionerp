@@ -32,6 +32,8 @@ import { stockRoutes } from './modules/stores/stock';
 import { inspectionRoutes } from './modules/quality/inspections';
 import { supplierReturnRoutes } from './modules/stores/returns';
 import { supplierInvoiceRoutes } from './modules/purchase/invoices';
+import { productionSettingsRoutes } from './modules/production/settings';
+import { bomRoutes } from './modules/production/boms';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
@@ -83,6 +85,8 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/qc/inspections', inspectionRoutes(db));
   v1.use('/supplier-returns', supplierReturnRoutes(db));
   v1.use('/supplier-invoices', supplierInvoiceRoutes(db));
+  v1.use('/production', productionSettingsRoutes(db));
+  v1.use('/boms', bomRoutes(db));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);
