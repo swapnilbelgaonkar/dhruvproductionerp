@@ -13,6 +13,8 @@ import { OverviewPage } from './pages/Overview';
 import { DealerDetailPage, DealerFormPage, DealersPage } from './pages/sales/Dealers';
 import { ActivitiesPage, LeadDetailPage, LeadsPage, OpportunityDetailPage, PipelinePage } from './pages/sales/Crm';
 import { QuotationDetailPage, QuotationFormPage, QuotationPrintPage, QuotationsPage } from './pages/sales/Quotations';
+import { VendorDetailPage, VendorFormPage, VendorsPage } from './pages/purchase/Vendors';
+import { RequisitionDetailPage, RequisitionFormPage, RequisitionsPage } from './pages/purchase/Requisitions';
 import { SalesOrderDetailPage, SalesOrderFormPage, SalesOrderPrintPage, SalesOrdersPage } from './pages/sales/SalesOrders';
 import { CategoriesPage, HsnPage, UomPage } from './pages/masters/ProductMasters';
 
@@ -69,6 +71,14 @@ export function App() {
         <Route path="sales/orders/new" element={<Protected perm="sales.order:create"><SalesOrderFormPage /></Protected>} />
         <Route path="sales/orders/:id" element={<Protected perm="sales.order:view"><SalesOrderDetailPage /></Protected>} />
         <Route path="sales/orders/:id/edit" element={<Protected perm="sales.order:edit"><SalesOrderFormPage /></Protected>} />
+        <Route path="purchase/vendors" element={<Protected perm="mdm.vendor:view"><VendorsPage /></Protected>} />
+        <Route path="purchase/vendors/new" element={<Protected perm="mdm.vendor:create"><VendorFormPage /></Protected>} />
+        <Route path="purchase/vendors/:id" element={<Protected perm="mdm.vendor:view"><VendorDetailPage /></Protected>} />
+        <Route path="purchase/vendors/:id/edit" element={<Protected perm="mdm.vendor:edit_draft"><VendorFormPage /></Protected>} />
+        <Route path="purchase/requisitions" element={<Protected perm="purchase.requisition:view"><RequisitionsPage /></Protected>} />
+        <Route path="purchase/requisitions/new" element={<Protected perm="purchase.requisition:create"><RequisitionFormPage /></Protected>} />
+        <Route path="purchase/requisitions/:id" element={<Protected perm="purchase.requisition:view"><RequisitionDetailPage /></Protected>} />
+        <Route path="purchase/requisitions/:id/edit" element={<Protected perm="purchase.requisition:edit"><RequisitionFormPage /></Protected>} />
         {master('legalEntities')}
         {master('plants')}
         {master('warehouses')}

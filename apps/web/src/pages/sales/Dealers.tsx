@@ -1,25 +1,23 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { addressSchema, CONSTITUTIONS, DEALER_CATEGORIES, DEALER_LICENCE_TYPES, dealerSchema, ID_TYPES, INDIAN_STATES } from '@dhruv/contracts';
-import { CheckCircle, Plus, SealCheck, UploadSimple, Warning, XCircle } from '@phosphor-icons/react';
+import { CONSTITUTIONS, DEALER_CATEGORIES, DEALER_LICENCE_TYPES, dealerSchema } from '@dhruv/contracts';
+import { Plus, Warning } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 import { DataTable } from '../../components/DataTable';
 import { DocumentsPanel } from '../../components/DocumentsPanel';
+import { AddressesCard, ApprovalHistoryCard, ChecklistCard, CONSTITUTION_LABEL, GstinRow, LicencesCard, LICENCE_LABEL, SignatoriesCard,
+  type ApprovalRef, type PartyAddress, type PartyLicence, type PartySignatory, type Readiness } from '../../components/parties/PartyParts';
 import { ReasonDialog } from '../../components/ReasonDialog';
 import { useToast } from '../../components/toast';
-import { Button, Card, ErrorBanner, Field, Input, KeyValues, Modal, PageHeader, Select, Skeleton, StatusBadge } from '../../components/ui';
-import { api, ApiError, uploadFile, type Page } from '../../lib/api';
+import { Button, Card, ErrorBanner, Field, Input, KeyValues, PageHeader, Select, Skeleton, StatusBadge } from '../../components/ui';
+import { api, ApiError, type Page } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { fmtDate, fmtDateTime, fmtINR } from '../../lib/format';
 
-const CONSTITUTION_LABEL: Record<string, string> = { PROPRIETORSHIP: 'Proprietorship', PARTNERSHIP: 'Partnership', LLP: 'LLP', PVT_LTD: 'Private Limited', PUBLIC_LTD: 'Public Limited', FPO: 'Farmer Producer Company (FPO)' };
-const LICENCE_LABEL: Record<string, string> = { FERTILIZER: 'Fertilizer (FCO 1985)', PESTICIDE: 'Pesticide (Insecticides Act 1968)', BIOSTIMULANT: 'Bio-stimulant (FCO Sch. VI)' };
-const LICENCE_DOC: Record<string, string> = { FERTILIZER: 'FERTILIZER_LICENCE', PESTICIDE: 'PESTICIDE_LICENCE', BIOSTIMULANT: 'BIOSTIMULANT_REGISTRATION' };
-const today = () => new Date().toISOString().slice(0, 10);
 
 interface DealerRow { id: string; code: string; legalName: string; tradeName: string | null; constitution: string; gstin: string | null; territory: string; salesOwner: string; status: string; creditLimit: string; licenceTypes: string[]; nextLicenceExpiry: string | null }
 
@@ -142,41 +140,8 @@ interface Dealer {
   contactPerson: string; mobile: string; email: string | null; dealerCategory: string; territory: string; salesOwner: string; licenceTypes: string[];
   priceGroup: string; creditDays: number; creditLimit: string; annualTarget: string | null; targetFy: string | null; status: string; statusReason: string | null;
   activatedAt: string | null; version: number;
-  addresses: { id: string; kind: string; label: string | null; line1: string; line2: string | null; city: string; district: string; stateCode: string; pincode: string }[];
-  licences: { id: string; licenceType: string; number: string; issuer: string; validFrom: string; validTo: string; verification: string; remarks: string | null; verifiedBy: string | null; verifiedAt: string | null; documentId: string; status: string }[];
-  signatories: { id: string; fullName: string; designation: string; idType: string; idLast4: string }[];
-  approvals: { id: string; doc_no: string; status: string; submitted_at: string; initiator: string }[];
-  readiness: { ready: boolean; policy: string; checks: { key: string; label: string; ok: boolean; detail?: string }[] } | null;
+  addresses: PartyAddress[]; licences: PartyLicence[]; signatories: PartySignatory[]; approvals: ApprovalRef[]; readiness: Readiness | null;
   allowedActions: string[]; canEditDetails: boolean; canAddLicence: boolean; canVerify: boolean;
-}
-
-function FilePick({ onFile, label = 'Choose file' }: { onFile: (f: File) => void; label?: string }) {
-  const ref = useRef<HTMLInputElement>(null);
-  return <>
-    <Button type="button" size="sm" variant="secondary" icon={<UploadSimple size={16} />} onClick={() => ref.current?.click()}>{label}</Button>
-    <input ref={ref} type="file" accept="application/pdf,image/png,image/jpeg" className="sr-only" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
-  </>;
-}
-
-/** BRD p.7 "same-line" rule: the GST certificate upload sits on the same row as the GSTIN. */
-function GstinRow({ d, canUpload }: { d: Dealer; canUpload: boolean }) {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const docs = useQuery({ queryKey: ['documents', 'mdm.party', d.id], queryFn: () => api<{ data: { documentType: string; status: string; title: string }[] }>(`/documents?entityType=mdm.party&entityId=${d.id}`) });
-  const has = docs.data?.data.some((x) => x.documentType === 'GST_CERTIFICATE' && x.status === 'Active');
-  const up = async (file: File) => {
-    try { await uploadFile('/documents', file, { documentType: 'GST_CERTIFICATE', entityType: 'mdm.party', entityId: d.id, title: `GST certificate ${d.gstin}` }); toast('success', 'GST certificate uploaded.'); await qc.invalidateQueries(); }
-    catch (e) { toast('error', (e as Error).message); }
-  };
-  return (
-    <div className="flex flex-wrap items-center gap-3 rounded-md bg-canvas px-4 py-3">
-      <span className="text-[12px] font-medium uppercase tracking-wide text-ink-2">GSTIN</span>
-      <span className="font-semibold num">{d.gstin}</span>
-      <span className="flex-1" />
-      {has ? <StatusBadge status="Active" label="Certificate uploaded" /> : <StatusBadge status="Pending" label="Certificate missing" />}
-      {canUpload && !has && <FilePick onFile={up} label="Upload certificate" />}
-    </div>
-  );
 }
 
 export function DealerDetailPage() {
@@ -185,16 +150,14 @@ export function DealerDetailPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['dealer', id], queryFn: () => api<Dealer>(`/dealers/${id}`) });
-  const [dialog, setDialog] = useState<null | 'address' | 'licence' | 'signatory' | 'suspend' | 'reactivate'>(null);
-  const [verify, setVerify] = useState<{ id: string; label: string; verification: 'Verified' | 'Rejected' } | null>(null);
+  const [dialog, setDialog] = useState<null | 'suspend' | 'reactivate'>(null);
   const submit = useMutation({ mutationFn: () => api<{ approvalDocNo: string }>(`/dealers/${id}/submit`, { method: 'POST' }),
     onSuccess: async (r) => { toast('success', `Submitted for approval as ${r.approvalDocNo}.`); await qc.invalidateQueries(); } });
-  const remove = async (path: string) => { try { await api(path, { method: 'POST' }); await qc.invalidateQueries({ queryKey: ['dealer', id] }); } catch (e) { toast('error', (e as Error).message); } };
   const d = q.data;
   if (q.isLoading) return <Skeleton className="h-96" />;
   if (!d) return <ErrorBanner error={q.error} />;
   const a = d.allowedActions;
-  const close = async () => { setDialog(null); await qc.invalidateQueries({ queryKey: ['dealer', id] }); await qc.invalidateQueries({ queryKey: ['documents', 'mdm.party', id] }); };
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ['dealer', id] }); void qc.invalidateQueries({ queryKey: ['documents', 'mdm.party', id] }); };
 
   return (
     <>
@@ -214,7 +177,7 @@ export function DealerDetailPage() {
           <Card title="Business & tax identity">
             <KeyValues items={[['Legal name', d.legalName], ['Trade name', d.tradeName], ['Constitution', CONSTITUTION_LABEL[d.constitution]], ['Contact person', d.contactPerson],
               ['Mobile', d.mobile], ['Email', d.email], ['PAN', d.pan], ['Dealer category', d.dealerCategory], ['Activated', fmtDateTime(d.activatedAt)]]} />
-            <div className="mt-5">{d.gstRegistered ? <GstinRow d={d} canUpload={d.canAddLicence} /> : <p className="text-ink-2">Not registered under GST.</p>}</div>
+            <div className="mt-5">{d.gstRegistered ? <GstinRow partyId={d.id} gstin={d.gstin} canUpload={d.canAddLicence} /> : <p className="text-ink-2">Not registered under GST.</p>}</div>
           </Card>
           <Card title="Commercial terms">
             <KeyValues items={[['Territory', d.territory], ['Sales owner', d.salesOwner], ['Credit limit', fmtINR(d.creditLimit)], ['Credit days', `${d.creditDays} days`],
@@ -222,165 +185,26 @@ export function DealerDetailPage() {
               ['Buys', d.licenceTypes.map((t) => LICENCE_LABEL[t]).join(', ') || 'Products needing no licence']]} />
           </Card>
 
-          <Card title="Addresses" actions={d.canEditDetails && <Button size="sm" variant="secondary" icon={<Plus size={16} />} onClick={() => setDialog('address')}>Add address</Button>}>
-            {d.addresses.length === 0 ? <p className="text-ink-2">No addresses yet. Registered, billing and at least one shipping address are needed.</p> : (
-              <ul className="grid gap-3 md:grid-cols-2">{d.addresses.map((x) => (
-                <li key={x.id} className="rounded-md border border-line p-4">
-                  <p className="flex items-center justify-between"><span className="text-[12px] font-semibold uppercase tracking-wide text-primary-hover">{x.kind}{x.label ? ` · ${x.label}` : ''}</span>
-                    {d.canEditDetails && <button className="text-[13px] font-semibold text-ink-2 hover:text-danger-text" onClick={() => remove(`/dealers/${id}/addresses/${x.id}/remove`)}>Remove</button>}</p>
-                  <p className="mt-1">{x.line1}{x.line2 ? `, ${x.line2}` : ''}</p>
-                  <p className="text-ink-2">{x.city}, {x.district}, {INDIAN_STATES[x.stateCode]} {x.pincode}</p>
-                </li>))}</ul>
-            )}
-          </Card>
-
-          <Card title="Statutory licences" actions={d.canAddLicence && <Button size="sm" variant="secondary" icon={<Plus size={16} />} onClick={() => setDialog('licence')}>{d.status === 'Active' ? 'Renew / add licence' : 'Add licence'}</Button>}>
-            {d.licences.length === 0 ? <p className="text-ink-2">{d.licenceTypes.length ? 'Add the licences listed under "Buys" with their certificates.' : 'No licence needed for the products selected.'}</p> : (
-              <ul className="divide-y divide-line">{d.licences.map((l) => {
-                const expired = l.validTo.slice(0, 10) < today();
-                return (
-                  <li key={l.id} className={clsx('flex flex-wrap items-center gap-3 py-3', l.status === 'Superseded' && 'opacity-55')}>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium">{LICENCE_LABEL[l.licenceType]} — <span className="num">{l.number}</span></span>
-                      <span className="block text-[13px] text-ink-2">{l.issuer} · {fmtDate(l.validFrom)} to <span className={clsx(expired && 'font-semibold text-danger-text')}>{fmtDate(l.validTo)}</span>
-                        {l.verifiedBy ? ` · ${l.verification} by ${l.verifiedBy}` : ''}{l.remarks ? ` · ${l.remarks}` : ''}</span>
-                    </span>
-                    {l.status === 'Superseded' ? <StatusBadge status="Inactive" label="Superseded" /> : expired ? <StatusBadge status="Rejected" label="Expired" />
-                      : <StatusBadge status={l.verification === 'Verified' ? 'Active' : l.verification === 'Rejected' ? 'Rejected' : 'Pending'} label={l.verification} />}
-                    {d.canVerify && l.status === 'Active' && l.verification === 'Pending' && <>
-                      <Button size="sm" icon={<SealCheck size={16} />} onClick={() => setVerify({ id: l.id, label: l.number, verification: 'Verified' })}>Verify</Button>
-                      <Button size="sm" variant="danger" onClick={() => setVerify({ id: l.id, label: l.number, verification: 'Rejected' })}>Reject</Button>
-                    </>}
-                  </li>
-                );
-              })}</ul>
-            )}
-          </Card>
-
-          <Card title="Proprietor / partners / directors" actions={d.canEditDetails && <Button size="sm" variant="secondary" icon={<Plus size={16} />} onClick={() => setDialog('signatory')}>Add person</Button>}>
-            {d.signatories.length === 0 ? <p className="text-ink-2">Add the authorised signatories with identity proof.</p> : (
-              <ul className="divide-y divide-line">{d.signatories.map((s) => (
-                <li key={s.id} className="flex items-center gap-3 py-3"><span className="flex-1"><span className="font-medium">{s.fullName}</span><span className="ml-2 text-ink-2">{s.designation} · {s.idType} ending {s.idLast4}</span></span>
-                  {d.canEditDetails && <button className="text-[13px] font-semibold text-ink-2 hover:text-danger-text" onClick={() => remove(`/dealers/${id}/signatories/${s.id}/remove`)}>Remove</button>}</li>))}</ul>
-            )}
-          </Card>
+          <AddressesCard base={`/dealers/${id}`} addresses={d.addresses} canEdit={d.canEditDetails} onChanged={refresh}
+            emptyText="No addresses yet. Registered, billing and at least one shipping address are needed." />
+          <LicencesCard base={`/dealers/${id}`} partyId={d.id} licences={d.licences} types={d.licenceTypes} offered={DEALER_LICENCE_TYPES} status={d.status}
+            canAdd={d.canAddLicence} canVerify={d.canVerify} onChanged={refresh} />
+          <SignatoriesCard base={`/dealers/${id}`} partyId={d.id} signatories={d.signatories} canEdit={d.canEditDetails} onChanged={refresh} />
 
           <DocumentsPanel entityType="mdm.party" entityId={d.id} onChanged={() => qc.invalidateQueries({ queryKey: ['dealer', id] })} />
           {d.status === 'Active' && <DealerBusiness partyId={d.id} />}
         </div>
 
         <div className="space-y-6">
-          {d.readiness && (
-            <Card title="Onboarding checklist">
-              <p className="mb-3 text-[13px] text-ink-2">KYC rules: {d.readiness.policy === 'BRD_STRICT' ? 'BRD strict (3 cheques, 5 directors for all)' : 'conditional (D07)'}.</p>
-              <ul className="space-y-2.5">{d.readiness.checks.map((c) => (
-                <li key={c.key} className="flex gap-2.5">
-                  {c.ok ? <CheckCircle size={20} weight="fill" className="mt-0.5 shrink-0 text-success-text" aria-label="Done" /> : <XCircle size={20} weight="fill" className="mt-0.5 shrink-0 text-danger-text" aria-label="Missing" />}
-                  <span><span className={clsx(c.ok ? 'text-ink' : 'font-medium')}>{c.label}</span>{c.detail && <span className="block text-[13px] text-ink-2">{c.detail}</span>}</span>
-                </li>))}</ul>
-              <p className={clsx('mt-4 rounded-md px-3 py-2 text-[14px] font-medium', d.readiness.ready ? 'bg-success-bg text-success-text' : 'bg-warning-bg text-warning-text')}>
-                {d.readiness.ready ? 'Ready to submit.' : `${d.readiness.checks.filter((c) => !c.ok).length} item(s) to complete.`}</p>
-            </Card>
-          )}
-          <Card title="Approval history">
-            {d.approvals.length === 0 ? <p className="text-ink-2">Not yet submitted.</p> : (
-              <ul className="divide-y divide-line">{d.approvals.map((x) => (
-                <li key={x.id} className="py-3"><Link to={`/approvals/${x.id}`} className="font-semibold text-primary">{x.doc_no}</Link>
-                  <span className="mt-1 flex items-center justify-between text-[13px] text-ink-2">{fmtDateTime(x.submitted_at)}<StatusBadge status={x.status} /></span></li>))}</ul>
-            )}
-          </Card>
+          {d.readiness && <ChecklistCard readiness={d.readiness} />}
+          <ApprovalHistoryCard approvals={d.approvals} />
         </div>
       </div>
 
-      {dialog === 'address' && <AddressDialog dealerId={d.id} onDone={close} onClose={() => setDialog(null)} />}
-      {dialog === 'licence' && <LicenceDialog dealer={d} onDone={close} onClose={() => setDialog(null)} />}
-      {dialog === 'signatory' && <SignatoryDialog dealerId={d.id} onDone={close} onClose={() => setDialog(null)} />}
       <ReasonDialog open={dialog === 'suspend' || dialog === 'reactivate'} danger={dialog === 'suspend'} title={dialog === 'suspend' ? 'Suspend dealer' : 'Reactivate dealer'} confirmLabel={dialog === 'suspend' ? 'Suspend' : 'Reactivate'}
         description={dialog === 'suspend' ? 'No new quotations or orders can be raised while suspended.' : 'The dealer can trade again.'} onClose={() => setDialog(null)}
         onConfirm={async (reason) => { await api(`/dealers/${id}/${dialog}`, { body: { reason } }); toast('success', 'Done.'); await qc.invalidateQueries(); }} />
-      <ReasonDialog open={verify?.verification === 'Rejected'} danger title={`Reject licence ${verify?.label ?? ''}`} confirmLabel="Reject" onClose={() => setVerify(null)}
-        description="Then return the application so the sales team can replace it."
-        onConfirm={async (remarks) => { await api(`/dealers/${id}/licences/${verify!.id}/verify`, { body: { verification: 'Rejected', remarks } }); toast('success', 'Licence rejected.'); await qc.invalidateQueries(); }} />
-      <Modal open={verify?.verification === 'Verified'} onClose={() => setVerify(null)} title={`Verify licence ${verify?.label ?? ''}`} width={460}
-        description="Confirm you have checked the certificate against the number, issuer and validity dates."
-        footer={<><Button variant="secondary" onClick={() => setVerify(null)}>Cancel</Button><Button onClick={async () => {
-          try { await api(`/dealers/${id}/licences/${verify!.id}/verify`, { body: { verification: 'Verified' } }); toast('success', 'Licence verified.'); setVerify(null); await qc.invalidateQueries(); }
-          catch (e) { toast('error', (e as Error).message); }
-        }}>Verify</Button></>}><span /></Modal>
     </>
-  );
-}
-
-function AddressDialog({ dealerId, onDone, onClose }: { dealerId: string; onDone: () => void; onClose: () => void }) {
-  const f = useForm<z.input<typeof addressSchema>>({ resolver: zodResolver(z.preprocess((o) => Object.fromEntries(Object.entries(o as Record<string, unknown>).map(([k, v]) => [k, v === '' ? null : v])), addressSchema)), defaultValues: { kind: 'REGISTERED', stateCode: '27' } });
-  const m = useMutation({ mutationFn: (v: object) => api(`/dealers/${dealerId}/addresses`, { body: v }), onSuccess: onDone });
-  const err = (k: string) => (f.formState.errors as Record<string, { message?: string }>)[k]?.message;
-  return (
-    <Modal open onClose={onClose} title="Add address" width={640} footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={m.isPending} onClick={f.handleSubmit((v) => m.mutate(v))}>Add</Button></>}>
-      <ErrorBanner error={m.error} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Type" htmlFor="akind" required><Select id="akind" {...f.register('kind')}><option value="REGISTERED">Registered (replaces current)</option><option value="BILLING">Billing (replaces current)</option><option value="SHIPPING">Shipping (add another)</option></Select></Field>
-        <Field label="Label (optional)" htmlFor="alabel" hint="e.g. Main godown"><Input id="alabel" {...f.register('label')} /></Field>
-        <div className="sm:col-span-2"><Field label="Address line 1" htmlFor="al1" required error={err('line1')}><Input id="al1" {...f.register('line1')} /></Field></div>
-        <div className="sm:col-span-2"><Field label="Address line 2" htmlFor="al2"><Input id="al2" {...f.register('line2')} /></Field></div>
-        <Field label="City / village" htmlFor="acity" required error={err('city')}><Input id="acity" {...f.register('city')} /></Field>
-        <Field label="District" htmlFor="adist" required error={err('district')}><Input id="adist" {...f.register('district')} /></Field>
-        <Field label="State" htmlFor="astate" required><Select id="astate" {...f.register('stateCode')}>{Object.entries(INDIAN_STATES).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</Select></Field>
-        <Field label="PIN code" htmlFor="apin" required error={err('pincode')}><Input id="apin" inputMode="numeric" maxLength={6} {...f.register('pincode')} /></Field>
-      </div>
-    </Modal>
-  );
-}
-
-function LicenceDialog({ dealer, onDone, onClose }: { dealer: Dealer; onDone: () => void; onClose: () => void }) {
-  const [v, setV] = useState({ licenceType: dealer.licenceTypes[0] ?? 'FERTILIZER', number: '', issuer: '', validFrom: '', validTo: '' });
-  const [file, setFile] = useState<File | null>(null);
-  const m = useMutation({
-    mutationFn: async () => {
-      const doc = await uploadFile<{ id: string }>('/documents', file!, { documentType: LICENCE_DOC[v.licenceType], entityType: 'mdm.party', entityId: dealer.id, title: `${v.licenceType.toLowerCase()} licence ${v.number}`, validUntil: v.validTo });
-      return api(`/dealers/${dealer.id}/licences`, { body: { ...v, documentId: doc.id } });
-    },
-    onSuccess: onDone,
-  });
-  return (
-    <Modal open onClose={onClose} title="Add licence" width={620} description="The certificate is stored in the document vault and checked by a document verifier."
-      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={m.isPending} disabled={!file || !v.number || !v.issuer || !v.validFrom || !v.validTo} onClick={() => m.mutate()}>Add licence</Button></>}>
-      <ErrorBanner error={m.error} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Licence type" htmlFor="ltype" required><Select id="ltype" value={v.licenceType} onChange={(e) => setV({ ...v, licenceType: e.target.value })}>{DEALER_LICENCE_TYPES.map((t) => <option key={t} value={t}>{LICENCE_LABEL[t]}</option>)}</Select></Field>
-        <Field label="Licence number" htmlFor="lnum" required hint="e.g. FL-MH-12345"><Input id="lnum" className="uppercase" value={v.number} onChange={(e) => setV({ ...v, number: e.target.value.toUpperCase() })} /></Field>
-        <div className="sm:col-span-2"><Field label="Issuing authority" htmlFor="liss" required><Input id="liss" value={v.issuer} onChange={(e) => setV({ ...v, issuer: e.target.value })} /></Field></div>
-        <Field label="Valid from" htmlFor="lfrom" required><Input id="lfrom" type="date" value={v.validFrom} onChange={(e) => setV({ ...v, validFrom: e.target.value })} /></Field>
-        <Field label="Valid to" htmlFor="lto" required hint="Alerts at 60 and 30 days"><Input id="lto" type="date" value={v.validTo} onChange={(e) => setV({ ...v, validTo: e.target.value })} /></Field>
-        <div className="flex items-center gap-3 sm:col-span-2"><FilePick onFile={setFile} label="Certificate (PDF/image)" />{file && <span className="text-[14px]">{file.name}</span>}</div>
-      </div>
-    </Modal>
-  );
-}
-
-function SignatoryDialog({ dealerId, onDone, onClose }: { dealerId: string; onDone: () => void; onClose: () => void }) {
-  const [v, setV] = useState({ fullName: '', designation: 'Proprietor', idType: 'PAN', idLast4: '' });
-  const [file, setFile] = useState<File | null>(null);
-  const m = useMutation({
-    mutationFn: async () => {
-      const doc = await uploadFile<{ id: string }>('/documents', file!, { documentType: 'SIGNATORY_ID', entityType: 'mdm.party', entityId: dealerId, title: `ID proof — ${v.fullName}` });
-      return api(`/dealers/${dealerId}/signatories`, { body: { ...v, documentId: doc.id } });
-    },
-    onSuccess: onDone,
-  });
-  return (
-    <Modal open onClose={onClose} title="Add proprietor / partner / director" width={600}
-      description="Only the last 4 characters of the ID number are stored; the full proof is kept as a restricted document."
-      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={m.isPending} disabled={!file || !v.fullName || v.idLast4.length !== 4} onClick={() => m.mutate()}>Add</Button></>}>
-      <ErrorBanner error={m.error} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Full legal name" htmlFor="sname" required><Input id="sname" value={v.fullName} onChange={(e) => setV({ ...v, fullName: e.target.value })} /></Field>
-        <Field label="Designation" htmlFor="sdes" required><Input id="sdes" value={v.designation} onChange={(e) => setV({ ...v, designation: e.target.value })} /></Field>
-        <Field label="ID type" htmlFor="sidt" required><Select id="sidt" value={v.idType} onChange={(e) => setV({ ...v, idType: e.target.value })}>{ID_TYPES.map((t) => <option key={t}>{t}</option>)}</Select></Field>
-        <Field label="Last 4 characters of the ID" htmlFor="sid4" required hint="Never the full Aadhaar number"><Input id="sid4" maxLength={4} className="uppercase" value={v.idLast4} onChange={(e) => setV({ ...v, idLast4: e.target.value.toUpperCase() })} /></Field>
-        <div className="flex items-center gap-3 sm:col-span-2"><FilePick onFile={setFile} label="ID proof (PDF/image)" />{file && <span className="text-[14px]">{file.name}</span>}</div>
-      </div>
-    </Modal>
   );
 }
 
