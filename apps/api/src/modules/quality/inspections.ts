@@ -55,7 +55,7 @@ const insSelect = `select qi.id, qi.doc_no as "docNo", qi.status, qi.lot_id as "
     lt.party_id as "partyId", p.legal_name as "vendorName", g.id as "grnId", g.doc_no as "grnNo", g.receipt_date as "receiptDate", o.id as "poId", o.doc_no as "poNo",
     w.code as "warehouseCode", qi.sample_qty as "sampleQty", su.full_name as "sampledBy", qi.sampled_at as "sampledAt", qi.coa_received as "coaReceived",
     qi.coa_document_id as "coaDocumentId", tu.full_name as "testedBy", qi.tested_by as "testedById", qi.tested_at as "testedAt", qi.recommendation, qi.decision,
-    qi.decision_remarks as "decisionRemarks", du.full_name as "decidedBy", qi.decided_at as "decidedAt", qi.created_at as "createdAt", qi.version,
+    qi.decision_remarks as "decisionRemarks", qi.source_type as "sourceType", du.full_name as "decidedBy", qi.decided_at as "decidedAt", qi.created_at as "createdAt", qi.version,
     (select coalesce(sum(sl.qty), 0) from inv.stock_ledger sl where sl.lot_id = lt.id and sl.txn_type = 'GRN') as "receivedQty"
   from qc.inspections qi join inv.lots lt on lt.id = qi.lot_id join mdm.items i on i.id = qi.item_id left join mdm.parties p on p.id = lt.party_id
   left join purchase.goods_receipts g on g.id = qi.source_id left join purchase.purchase_orders o on o.id = g.purchase_order_id left join org.warehouses w on w.id = g.warehouse_id
@@ -155,6 +155,8 @@ export function inspectionRoutes(db: Db) {
       if (!['Tested', 'Hold'].includes(ins.status)) throw Errors.state(ins.status === 'Released' || ins.status === 'Rejected' ? 'This lot has already been decided.' : 'Record the test results first.');
       if (ins.testedById === req.auth!.user.id) throw Errors.sod('You recorded the results of this lot; another QC manager must decide it.');
       if (ins.status === 'Hold' && d.decision === 'Hold') throw Errors.state('The lot is already on hold.');
+      // finished goods (D04, BRD p.4/p.16): QC tests them, the QA head releases them — never QC alone
+      if (d.decision === 'Release' && ins.sourceType === 'PRODUCTION') throw Errors.rule('QA_RELEASE_REQUIRED', 'Finished goods are released by QA after the batch review, not by QC.');
       if (d.decision === 'Release') {
         const failed = Number((await tx.query(`select count(*) from qc.inspection_results where inspection_id = $1 and not pass`, [ins.id])).rows[0].count);
         if (failed) throw Errors.rule('RESULTS_FAILED', `${failed} test(s) failed — the lot cannot be released.`);

@@ -408,3 +408,24 @@ export const materialReturnSchema = z.object({
   lines: z.array(z.object({ orderMaterialId: uuid, lotId: uuid, qty: z.number().positive() })).min(1, 'Return at least one lot').max(100),
 });
 export const quarantineOverrideSchema = z.object({ orderMaterialId: uuid, lotId: uuid, qty: z.number().positive(), reason: trimmed(1000) });
+
+// ---------- Batch execution (MP §12.5–12.6; MFG-007, MFG-008, MFG-010; TC-11) ----------
+export const batchStartSchema = z.object({
+  shiftId: uuid.optional().nullable(), operators: z.array(z.string().trim().min(1).max(80)).min(1, 'Name at least one operator').max(10),
+});
+export const dosingSchema = z.object({
+  orderMaterialId: uuid,
+  entries: z.array(z.object({ lotId: uuid, qty: z.number().positive('Quantity must be above zero') })).min(1).max(10),
+  deviationReason: optionalText(1000),                      // needed when the dose goes beyond the tolerance (TC-11)
+}).refine((d) => new Set(d.entries.map((e) => e.lotId)).size === d.entries.length, { message: 'Each lot can appear once', path: ['entries'] });
+export const readingSchema = z.object({ parameter: trimmed(80), value: trimmed(40), unit: optionalText(20), inLimits: z.boolean().optional().nullable(), remarks: optionalText(300) });
+export const ipqcRequestSchema = z.object({ stage: trimmed(80) });
+export const ipqcResultsSchema = z.object({
+  results: z.array(z.object({ parameter: trimmed(120), specification: trimmed(200), result: trimmed(200), pass: z.boolean() })).min(1, 'Record at least one test').max(30),
+  remarks: optionalText(500),
+});
+export const batchCompleteSchema = z.object({
+  outputQty: z.number().positive('Output must be above zero'), processLossQty: z.number().min(0).default(0), recoveredQty: z.number().min(0).default(0),
+  wasteQty: z.number().min(0).default(0), remarks: optionalText(1000),
+  underDoseReason: optionalText(1000), balanceReason: optionalText(1000),
+});

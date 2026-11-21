@@ -4,8 +4,8 @@ Order follows D12 (business flow). Stage 4 parts:
 
 1. Plant & line settings and the formulation (BOM) master — **done**
 2. Production orders: release against the formulation in force, reservation of QC-released lots, material issue, quarantine override (D33) — **done**
-3. Batch execution: dosing with tolerance and deviations, IPQC, completion with mass balance, the finished-goods lot into quarantine — next
-4. Packaging, finished-goods QC and QA release (blocked by open deviations), transfer to WH-01, traceability, costing and the production dashboard
+3. Batch execution: dosing with tolerance and deviations, IPQC, completion with mass balance, the finished-goods lot into quarantine — **done**
+4. Packaging, finished-goods QC and QA release (blocked by open deviations), transfer to WH-01, traceability, costing and the production dashboard — next
 
 Pending client decisions use the recommended defaults from doc 12, marked provisional, so the build can continue (client instruction: build the system first, settle the remaining items last).
 
@@ -80,3 +80,30 @@ Pending client decisions use the recommended defaults from doc 12, marked provis
 ### Not built yet
 - **Batches, dosing, consumption and output**: part 3. Returns will then exclude what batches have consumed (already prepared).
 - **Plant operations calendar (Gantt) and line capacity scheduling (MFG-016/017)** and **MRP proposals from sales orders and forecasts (MFG-004)**: part 4.
+
+## Part 3 — Batch execution (BRD p.18 sub-modules 6, 7, 8 and 13; MP §12.5–12.6; MFG-007, MFG-008, MFG-010; TC-11)
+
+| Area | What works | RTM |
+|---|---|---|
+| Batch | Started from a released order once material is issued: number `B/2026-27/000001` (also the finished-goods lot number), line, shift and the operators. One open batch per order; the last batch takes the remainder of the order quantity. The first batch moves the order to In progress | MFG-007 |
+| Dosing | Per ingredient: the batch share of the requirement and its tolerance band. Only lots **issued to this order** for that ingredient can be dosed, up to what is still with production. Substitutes count at their factor. Top-ups add to the dose | MFG-007, MFG-008 |
+| Tolerance (TC-11) | A dose taking the ingredient beyond its +tolerance is **blocked** (`TOLERANCE_EXCEEDED`, with planned, total and limit). With a reason it is recorded as pending, a **deviation** is raised, and the plant head or another supervisor and then QA approve it (policy `mfg.dosing_deviation`; the person who dosed cannot approve). A rejection puts the batch on hold; it can then only be scrapped | TC-11, MFG-008 |
+| Under-dosing | Completing with an ingredient below its −tolerance needs a reason and raises a deviation | MFG-008 |
+| Process readings | Parameter, value, unit, within limits or not, remarks, who and when. The formulation's temperature, time and instructions are shown beside them | MFG-007 |
+| In-process QC (IPQC) | The supervisor asks QC for a test at a stage (`IPQC/…`). QC sees a worklist and records results per parameter; the person who asked cannot record them. A failed test raises a deviation. The batch completes only after the **latest test passed** | BRD p.18 sub-module 13 |
+| Completion | Output, process loss, recovered scrap and waste. **Yield** against planned and the formulation's standard yield | MFG-010 |
+| Mass balance | Input = output + process loss + recovered + waste. Computed in KG when every quantity converts to it (the item's own conversion, e.g. density, or a universal one), otherwise in the batch unit; reported as unaccounted. Beyond the tolerance (setting `mfg.massBalance.tolerancePct`, default 2%) completion needs a reason and raises a deviation | MFG-010 |
+| Finished-goods lot | Created on completion with the batch number, manufacturing date and expiry from the shelf life, **in quarantine** in the order's finished-goods warehouse (`PRODUCTION_OUTPUT`), at the actual material cost per unit. A QC inspection (`QCI/…`, source PRODUCTION) is queued. **QC cannot release a finished-goods lot**; QA releases it (part 4, D04) | MFG-018, QA-003 |
+| Material cost | The lots actually dosed at their issue cost: total and per unit of output | MFG-015 (material part) |
+| Order completion | The order becomes Completed when all its batches are complete. Scrapped batches do not count; a new batch can be started | MFG-007 |
+| Hold, resume, scrap | Hold and resume with a reason; the plant head scraps a batch, which raises a deviation | MFG-007 |
+
+### Evidence
+- `apps/api/test/batches.test.ts` has 2 tests:
+  - Normal batch: the planner cannot start one; one open batch at a time; order In progress; batch share and tolerance band; 460 kg of 450 ±2% blocked with the figures; a lot not issued to the order refused; within and under states; IPQC required, pending, failed (deviation), then passed; under-dosing needs a reason; a mass balance gap refused with the figures in KG; completion at 80% yield with no unaccounted quantity; FG lot in quarantine with its quantity and material cost; the QC inspection queued; the dosed quantity no longer returnable.
+  - Over-tolerance with a reason: pending approval blocks completion; the person who dosed cannot approve; plant head and QA approve. A second over-dose rejected puts the batch on hold; resume refused; the supervisor cannot scrap, the plant head can; the next batch can start.
+- Totals: **65 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local): the supervisor started batch 1 of PRD/2026-27/000001 on shift A. They dosed DM water and EDTA; 460 kg of zinc sulphate showed the tolerance warning and was reweighed to 452 kg. Three readings were recorded and QC was asked to test. The QC analyst recorded pH, zinc, specific gravity and appearance, all passing. The supervisor completed the batch at 975 L (97.5% yield, as standard); the mass balance was 1,452 kg in with 2.18 kg unaccounted, and lot B/2026-27/000001 went into quarantine with its QC inspection.
+
+### Not built yet
+- **Packaging run, QA release, transfer and traceability**: part 4.

@@ -9,6 +9,7 @@ import { Button, Card, EmptyState, ErrorBanner, Field, Input, KeyValues, Modal, 
 import { api, ApiError, type Page } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { fmtDate, fmtDateTime, fmtNum } from '../../lib/format';
+import { StartBatchDialog } from './Batches';
 
 interface OrderRow { id: string; docNo: string; plantCode: string; plantName: string; lineCode: string; lineName: string; itemId: string; itemCode: string; itemName: string; bomId: string; bomCode: string;
   bomVersionId: string | null; bomVersionNo: number | null; plannedQty: string; uom: string; batchCount: number; orderType: string; salesOrderId: string | null; salesOrderNo: string | null; priority: string;
@@ -21,7 +22,8 @@ interface Reservation { id: string; orderMaterialId: string; lotId: string; lotN
 interface Movement { id: string; docNo: string; direction: string; postedAt: string; postedBy: string; remarks: string | null; lines: { lotNo: string; itemCode: string; qty: number; uom: string; bucket: string }[] }
 interface Override { id: string; docNo: string; orderMaterialId: string; lotNo: string; qty: string; reason: string; status: string; statusReason: string | null; requestedBy: string; createdAt: string; deviationNo: string | null; approvalId: string | null }
 interface Deviation { id: string; docNo: string; category: string; title: string; status: string; createdAt: string; lotNo: string | null; lotStatus: string | null }
-interface OrderDetail extends OrderRow { materials: Material[]; reservations: Reservation[]; movements: Movement[]; overrides: Override[]; deviations: Deviation[]; allowedActions: string[];
+interface BatchSummary { id: string; batchNo: string; seq: number; plannedQty: string; status: string; startedAt: string; completedAt: string | null; outputQty: string | null; yieldPct: string | null; fgLotNo: string | null; fgLotStatus: string | null }
+interface OrderDetail extends OrderRow { batches: BatchSummary[]; materials: Material[]; reservations: Reservation[]; movements: Movement[]; overrides: Override[]; deviations: Deviation[]; allowedActions: string[];
   approval: { id: string; docNo: string; status: string; ruleName: string; steps: { seq: number; label: string; status: string }[] | null } | null }
 interface Shortage { itemCode: string; required: number; covered: number; short: number; uom: string }
 
@@ -178,7 +180,8 @@ export function ProductionOrderDetailPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['production-order', id], queryFn: () => api<OrderDetail>(`/production-orders/${id}`) });
-  const [dialog, setDialog] = useState<null | 'cancel' | 'hold' | 'resume' | 'issue' | 'return' | 'release-short'>(null);
+  const [dialog, setDialog] = useState<null | 'cancel' | 'hold' | 'resume' | 'issue' | 'return' | 'release-short' | 'batch'>(null);
+  const plants = useQuery({ queryKey: ['production-plants'], queryFn: () => api<{ data: PlantOpt[] }>('/production/plants') });
   const [shortages, setShortages] = useState<Shortage[]>([]);
   const [override, setOverride] = useState<Material | null>(null);
   const refresh = () => qc.invalidateQueries();
@@ -210,6 +213,7 @@ export function ProductionOrderDetailPage() {
           {a.includes('issue') && o.reservations.some((r) => r.status === 'Active') && <Button onClick={() => setDialog('issue')}>Issue material</Button>}
           {a.includes('submit') && <Button loading={submit.isPending} onClick={() => submit.mutate()}>Submit for approval</Button>}
           {a.includes('release') && <Button loading={release.isPending} onClick={() => release.mutate()}>Release to production</Button>}
+          {a.includes('start_batch') && <Button onClick={() => setDialog('batch')}>Start batch {o.batches.filter((x) => x.status === 'Completed').length + 1} of {o.batchCount}</Button>}
         </>} />
       <ErrorBanner error={submit.error ?? (release.error instanceof ApiError && release.error.code === 'MATERIAL_SHORTAGE' ? null : release.error) ?? reserve.error} />
       {o.statusReason && <div className="mb-6 rounded-md bg-neutral-bg px-4 py-3 text-neutral-text">{o.shortageAccepted && o.statusReason && ['Released', 'InProgress'].includes(o.status) ? 'At release, short of material: ' : ''}{o.statusReason}</div>}
@@ -255,6 +259,22 @@ export function ProductionOrderDetailPage() {
           </table></div>
         )}
       </Card>
+      {o.batches.length > 0 && (
+        <Card title="Batches" padded={false} className="mt-6">
+          <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-[14px]">
+            <thead><tr className="border-b border-line text-left text-[12px] uppercase tracking-wide text-ink-2">
+              <th className="px-5 py-3">Batch</th><th className="px-3 py-3 text-right">Planned</th><th className="px-3 py-3 text-right">Output</th><th className="px-3 py-3 text-right">Yield</th>
+              <th className="px-3 py-3">Finished-goods lot</th><th className="px-3 py-3">Started</th><th className="px-3 py-3">Status</th></tr></thead>
+            <tbody>{o.batches.map((x) => (
+              <tr key={x.id} className="border-b border-line last:border-0">
+                <td className="px-5 py-3"><Link className="font-semibold text-primary" to={`/production/batches/${x.id}`}>{x.batchNo}</Link></td>
+                <td className="px-3 py-3 text-right num">{fmtNum(n(x.plannedQty))} {o.uom}</td><td className="px-3 py-3 text-right num">{x.outputQty ? fmtNum(n(x.outputQty)) : '—'}</td>
+                <td className="px-3 py-3 text-right num">{x.yieldPct ? `${fmtNum(n(x.yieldPct))}%` : '—'}</td><td className="px-3 py-3">{x.fgLotNo ? `${x.fgLotNo} · ${x.fgLotStatus}` : '—'}</td>
+                <td className="px-3 py-3 num">{fmtDateTime(x.startedAt)}</td><td className="px-3 py-3"><StatusBadge status={x.status === 'InProgress' ? 'Pending' : x.status === 'Completed' ? 'Approved' : x.status === 'Scrapped' ? 'Rejected' : x.status} label={x.status === 'InProgress' ? 'In progress' : x.status === 'OnHold' ? 'On hold' : x.status} /></td>
+              </tr>))}</tbody>
+          </table></div>
+        </Card>
+      )}
       {o.reservations.length > 0 && (
         <Card title="Reserved lots" padded={false} className="mt-6">
           <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-[14px]">
@@ -300,6 +320,8 @@ export function ProductionOrderDetailPage() {
       </ReasonDialog>
       {dialog === 'issue' && <IssueDialog o={o} onClose={() => setDialog(null)} />}
       {dialog === 'return' && <ReturnDialog o={o} onClose={() => setDialog(null)} />}
+      {dialog === 'batch' && <StartBatchDialog orderId={o.id} defaultShiftId={o.shiftId} onClose={() => setDialog(null)}
+        shifts={(plants.data?.data.find((p) => p.id === o.plantId)?.shifts ?? []).filter((x) => x.status === 'Active')} />}
       {override && <OverrideDialog o={o} m={override} short={shortOf(override)} onClose={() => setOverride(null)} />}
     </>
   );

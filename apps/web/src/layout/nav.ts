@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -28,12 +28,14 @@ export const NAV: NavGroup[] = [
   { label: 'Stores & Quality', items: [
     { to: '/stores/receipts', label: 'Goods Receipts', icon: TrayArrowDown, perm: 'purchase.grn:view' },
     { to: '/qc/inspections', label: 'QC — Incoming Lots', icon: Microscope, perm: 'qc.inspection:view' },
+    { to: '/qc/ipqc', label: 'QC — In-process', icon: Microscope, perm: 'qc.ipqc:record' },
     { to: '/qa/deviations', label: 'Deviations', icon: Warning, perm: 'qa.deviation:view' },
     { to: '/stores/returns', label: 'Supplier Returns', icon: ArrowUUpLeft, perm: 'purchase.return:view' },
     { to: '/stores/stock', label: 'Stock & Lots', icon: Stack, perm: 'inv.stock:view' },
   ] },
   { label: 'Production', items: [
     { to: '/production/orders', label: 'Production Orders', icon: Factory, perm: 'mfg.order:view' },
+    { to: '/production/batches', label: 'Batches', icon: TestTube, perm: 'mfg.batch:view' },
     { to: '/production/formulations', label: 'Formulations (BOM)', icon: Flask, perm: 'mfg.bom:view' },
     { to: '/production/settings', label: 'Plant & Line Settings', icon: SlidersHorizontal, perm: 'mfg.settings:view' },
   ] },

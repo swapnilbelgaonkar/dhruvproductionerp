@@ -50,6 +50,8 @@ export const PERMISSIONS = [
   ...P('Stores', 'mfg.issue', ['post'], 'issue of reserved material to production and its return'),
   ...P('Production', 'mfg.override', ['request'], 'requests to use a quarantined lot (approved by the QC head and the plant head)'),
   ...P('Quality', 'qa.deviation', ['view', 'close'], 'deviations'),
+  ...P('Production', 'mfg.batch', ['view', 'execute', 'scrap'], 'batches (execute = start, dose, record readings, ask for IPQC, complete, hold)'),
+  ...P('Quality', 'qc.ipqc', ['record'], 'in-process QC results'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -85,16 +87,16 @@ const PURCHASE_EXTRA: Record<string, string[]> = {
 /** Production (Stage 4). Formulations are drafted by planning; the plant head and QA approve them through the approval policy. */
 const BOM_AUTHOR = ['mfg.settings:view', 'mfg.bom:view', 'mfg.bom:create', 'mfg.bom:edit', 'mfg.bom:submit'];
 const ORDER_PLAN = ['mfg.order:view', 'mfg.order:create', 'mfg.order:edit', 'mfg.order:submit', 'mfg.order:release', 'mfg.order:cancel', 'mfg.override:request', 'qa.deviation:view', 'inv.stock:view'];
-const PROD_VIEW = ['mfg.order:view', 'qa.deviation:view'];
+const PROD_VIEW = ['mfg.order:view', 'qa.deviation:view', 'mfg.batch:view'];
 const PRODUCTION_EXTRA: Record<string, string[]> = {
-  PRODUCTION_PLANNER: [...BOM_AUTHOR, ...ORDER_PLAN],
-  PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'mfg.override:request', 'inv.stock:view'],
-  PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure', ...ORDER_PLAN],
+  PRODUCTION_PLANNER: [...BOM_AUTHOR, ...ORDER_PLAN, 'mfg.batch:view'],
+  PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'mfg.override:request', 'inv.stock:view', 'mfg.batch:execute'],
+  PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure', ...ORDER_PLAN, 'mfg.batch:view', 'mfg.batch:execute', 'mfg.batch:scrap'],
   QA_EXECUTIVE: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW],
   QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close'],
   QA_HEAD: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close'],
-  QC_ANALYST: ['mfg.bom:view', ...PROD_VIEW], QC_MANAGER: ['mfg.bom:view', ...PROD_VIEW], QC_HEAD: ['mfg.bom:view', ...PROD_VIEW],
-  STOREKEEPER: ['mfg.order:view', 'mfg.issue:post'], STORES_HEAD: ['mfg.bom:view', 'mfg.order:view', 'mfg.issue:post'],
+  QC_ANALYST: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'], QC_MANAGER: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'], QC_HEAD: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'],
+  STOREKEEPER: ['mfg.order:view', 'mfg.issue:post', 'mfg.batch:view'], STORES_HEAD: ['mfg.bom:view', 'mfg.order:view', 'mfg.issue:post', 'mfg.batch:view'],
   PURCHASE_HEAD: ['mfg.bom:view', 'mfg.order:view'], FINANCE_HEAD: ['mfg.bom:view', ...PROD_VIEW],
   MANAGEMENT_VIEWER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW],
 };
@@ -228,6 +230,12 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
       { kind: 'role', key: 'qc', label: 'QC head approval', roles: ['QC_HEAD'] },
       { kind: 'role', key: 'plant', label: 'Plant head approval', roles: ['PLANT_HEAD'] },
+    ] }] } },
+  // TC-11: a dose beyond the ingredient's tolerance continues only after the supervisor level and QA approve its deviation
+  { docType: 'mfg.dosing_deviation', name: 'Dosing outside tolerance (TC-11)', description: 'Plant head or another supervisor, then QA, before the batch continues',
+    definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
+      { kind: 'role', key: 'plant', label: 'Production approval (plant head or supervisor)', roles: ['PLANT_HEAD', 'PRODUCTION_SUPERVISOR'] },
+      { kind: 'role', key: 'qa', label: 'QA approval', roles: ['QA_MANAGER', 'QA_HEAD'] },
     ] }] } },
   { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [

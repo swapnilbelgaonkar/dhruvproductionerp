@@ -286,8 +286,15 @@ export function productionOrderRoutes(db: Db) {
       `select a.id, a.doc_no as "docNo", a.status, a.rule_name as "ruleName",
               (select json_agg(json_build_object('seq', s.seq, 'label', s.label, 'kind', s.step_kind, 'status', s.status) order by s.seq) from wf.approval_steps s where s.request_id = a.id) as steps
          from wf.approval_requests a where a.subject_type = $1 and a.subject_id = $2 order by a.submitted_at desc limit 1`, [SUBJECT, o.id])).rows[0] ?? null;
+    const batches = (await db.query(
+      `select b.id, b.batch_no as "batchNo", b.seq, b.planned_qty as "plannedQty", b.status, b.started_at as "startedAt", b.completed_at as "completedAt", b.output_qty as "outputQty",
+              b.yield_pct as "yieldPct", fl.lot_no as "fgLotNo", fl.qc_status as "fgLotStatus"
+         from mfg.batches b left join inv.lots fl on fl.id = b.fg_lot_id where b.production_order_id = $1 order by b.seq`, [o.id])).rows;
     const netIssued = materials.reduce((a, m) => a + Number(m.netIssuedQty), 0);
-    res.json({ ...o, materials, reservations, movements, overrides, deviations, approval, allowedActions: actions(req, o, r4(netIssued)) });
+    const acts = actions(req, o, r4(netIssued));
+    const openBatch = batches.some((b) => ['InProgress', 'OnHold'].includes(b.status));
+    if (RUNNING.includes(o.status) && can(req, 'mfg.batch:execute') && !openBatch && batches.filter((b) => b.status === 'Completed').length < o.batchCount && netIssued > 0) acts.push('start_batch');
+    res.json({ ...o, materials, reservations, movements, overrides, deviations, approval, batches, allowedActions: acts });
   }));
 
   r.post('/', requirePermission(P('create')), asyncHandler(async (req, res) => {

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { FormulationDetailPage, FormulationsPage, FormulationVersionFormPage, FormulationVersionLink, FormulationVersionPage } from './pages/production/Formulations';
 import { PlantSettingsPage } from './pages/production/PlantSettings';
+import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
 import { OverrideLink, ProductionOrderDetailPage, ProductionOrderFormPage, ProductionOrdersPage } from './pages/production/ProductionOrders';
 import { DeviationDetailPage, DeviationsPage } from './pages/quality/Deviations';
 import { EmptyState, Skeleton } from './components/ui';
@@ -125,6 +126,9 @@ export function App() {
         <Route path="production/orders/:id" element={<Protected perm="mfg.order:view"><ProductionOrderDetailPage /></Protected>} />
         <Route path="production/orders/:id/edit" element={<Protected perm="mfg.order:edit"><ProductionOrderFormPage /></Protected>} />
         <Route path="production/overrides/:oid" element={<Protected perm="mfg.order:view"><OverrideLink /></Protected>} />
+        <Route path="production/batches" element={<Protected perm="mfg.batch:view"><BatchesPage /></Protected>} />
+        <Route path="production/batches/:id" element={<Protected perm="mfg.batch:view"><BatchDetailPage /></Protected>} />
+        <Route path="qc/ipqc" element={<Protected perm="qc.ipqc:record"><IpqcWorklistPage /></Protected>} />
         <Route path="qa/deviations" element={<Protected perm="qa.deviation:view"><DeviationsPage /></Protected>} />
         <Route path="qa/deviations/:id" element={<Protected perm="qa.deviation:view"><DeviationDetailPage /></Protected>} />
         <Route path="production/settings" element={<Protected perm="mfg.settings:view"><PlantSettingsPage /></Protected>} />
