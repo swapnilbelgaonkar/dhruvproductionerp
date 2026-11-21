@@ -266,6 +266,7 @@ export function DealerDetailPage() {
           </Card>
 
           <DocumentsPanel entityType="mdm.party" entityId={d.id} onChanged={() => qc.invalidateQueries({ queryKey: ['dealer', id] })} />
+          {d.status === 'Active' && <DealerBusiness partyId={d.id} />}
         </div>
 
         <div className="space-y-6">
@@ -380,5 +381,36 @@ function SignatoryDialog({ dealerId, onDone, onClose }: { dealerId: string; onDo
         <div className="flex items-center gap-3 sm:col-span-2"><FilePick onFile={setFile} label="ID proof (PDF/image)" />{file && <span className="text-[14px]">{file.name}</span>}</div>
       </div>
     </Modal>
+  );
+}
+
+type Doc = { id: string; docNo: string; revision?: number; status: string; grandTotal: string; quoteDate?: string; orderDate?: string };
+
+/** Recent quotations and orders of an active dealer, with shortcuts to create new ones. */
+function DealerBusiness({ partyId }: { partyId: string }) {
+  const { can } = useAuth();
+  const nav = useNavigate();
+  const seeQ = can('sales.quotation:view');
+  const seeO = can('sales.order:view');
+  const quotes = useQuery({ queryKey: ['quotations', 'dealer', partyId], enabled: seeQ, queryFn: () => api<Page<Doc>>(`/quotations?partyId=${partyId}&limit=5`) });
+  const orders = useQuery({ queryKey: ['sales-orders', 'dealer', partyId], enabled: seeO, queryFn: () => api<Page<Doc>>(`/sales-orders?partyId=${partyId}&limit=5`) });
+  if (!seeQ && !seeO) return null;
+  const list = (rows: Doc[] | undefined, base: string, empty: string) => (!rows?.length ? <p className="text-ink-2">{empty}</p> : (
+    <ul className="divide-y divide-line">{rows.map((x) => (
+      <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-[14px]">
+        <Link className="font-semibold text-primary num" to={`${base}/${x.id}`}>{x.docNo}{x.revision ? ` R${x.revision}` : ''}</Link>
+        <span className="text-ink-2 num">{fmtDate(x.orderDate ?? x.quoteDate)}</span><span className="num">{fmtINR(x.grandTotal)}</span><StatusBadge status={x.status} />
+      </li>))}</ul>
+  ));
+  return (
+    <Card title="Quotations and orders" actions={<div className="flex gap-2">
+      {can('sales.quotation:create') && <Button size="sm" variant="secondary" onClick={() => nav(`/sales/quotations/new?partyId=${partyId}`)}>New quotation</Button>}
+      {can('sales.order:create') && <Button size="sm" variant="secondary" onClick={() => nav(`/sales/orders/new?partyId=${partyId}`)}>New order</Button>}
+    </div>}>
+      <div className="grid gap-6 md:grid-cols-2">
+        {seeQ && <div><h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-2">Recent quotations ({quotes.data?.total ?? 0})</h3>{list(quotes.data?.data, '/sales/quotations', 'No quotations yet.')}</div>}
+        {seeO && <div><h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-2">Recent orders ({orders.data?.total ?? 0})</h3>{list(orders.data?.data, '/sales/orders', 'No orders yet.')}</div>}
+      </div>
+    </Card>
   );
 }

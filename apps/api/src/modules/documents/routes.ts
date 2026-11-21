@@ -70,9 +70,9 @@ export function documentRoutes(db: Db, cfg: Config, storage: FileStorage) {
     const docs = await db.query(
       `select d.id, d.document_type as "documentType", t.name as "typeName", t.sensitive, d.title, d.current_version as "currentVersion", d.valid_until as "validUntil",
               d.status, d.created_at as "createdAt",
-              (select json_agg(json_build_object('id', v.id, 'version', v.version, 'note', v.note, 'createdAt', v.created_at, 'createdBy', u.full_name,
+              coalesce((select json_agg(json_build_object('id', v.id, 'version', v.version, 'note', v.note, 'createdAt', v.created_at, 'createdBy', u.full_name,
                       'fileName', f.original_name, 'mime', f.mime, 'sizeBytes', f.size_bytes, 'avStatus', f.av_status, 'validUntil', v.valid_until) order by v.version desc)
-                 from sys.document_versions v join sys.files f on f.id = v.file_id left join iam.users u on u.id = v.created_by where v.document_id = d.id) as versions
+                 from sys.document_versions v join sys.files f on f.id = v.file_id left join iam.users u on u.id = v.created_by where v.document_id = d.id), '[]') as versions
          from sys.documents d join sys.document_types t on t.code = d.document_type
         where d.entity_type = $1 and d.entity_id = $2 order by d.status, t.name, d.title`, [entityType, entityId]);
     const editable = ENTITIES[entityType]!.edit.some((p) => can(req, p));

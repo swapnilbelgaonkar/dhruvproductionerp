@@ -5,7 +5,7 @@ Order follows D12 (business flow). Stage 2 parts:
 1. Dealer onboarding — **done**
 2. Leads, BANT, opportunities and activities (CRM) — **done**
 3. Pricing, quotations — **done**
-4. Sales orders with hybrid approval (D01)
+4. Sales orders with hybrid approval (D01) — **done**
 
 ## Part 1 — Dealer onboarding (BRD §3.1 p.7–8, MP Part 6)
 
@@ -73,7 +73,6 @@ Order follows D12 (business flow). Stage 2 parts:
 - A browser run also passed. The SE created a lead, logged a call, scored BANT at 90, qualified it and converted it. In the pipeline the SE moved the opportunity, saw "won" refused without a dealer, and recorded a loss to a competitor. The SE then completed a planned visit and scheduled the next action. The RSM sees the leads of the whole area.
 
 ### Not yet built in Stage 2
-- Sales orders — part 4.
 - Remaining sales sub-modules: samples, field trials, targets, competitor intelligence, beat plans, contracts, outstanding recovery, executive analytics, exports — later Stage 2 increments, after orders and invoices.
 
 ## Part 3 — Pricing and quotations (BRD §4 #9, §5.1 p.13; MP §7.7, Part 8)
@@ -114,7 +113,7 @@ Order follows D12 (business flow). Stage 2 parts:
 - New [SAMPLE] demo users: `nsm@`, `ops@` and `finance@demo.local`.
 
 ### Not built yet (and why)
-- **Convert to sales order**: part 4 (the next step).
+- **Convert to sales order**: done in part 4.
 - **Email to dealer**: needs the email integration (doc 09). For now the PDF comes from the browser's print dialog.
 - **Revision diff view**: every revision is kept and linked, but a side-by-side diff is not shown yet.
 - **Contract prices, promotional schemes and price exceptions** (rest of CRM-010): later, with the schemes sub-module.
@@ -123,3 +122,40 @@ Order follows D12 (business flow). Stage 2 parts:
   - GST rates for each HSN code (D27). Finance enters them in *HSN & GST Rates*. Without a rate, a product cannot be quoted.
   - The GSTIN of each legal entity, for the print header.
   - The bank details setting.
+
+## Part 4 — Sales orders with hybrid approval (BRD §4 #10, §5.2; MP Part 9; D01)
+
+| Area | What works | RTM |
+|---|---|---|
+| Two ways in | **Convert** an Approved, Sent or Accepted quotation that is still valid ("Convert to sales order" on the quotation), or enter a **direct order** for an active dealer. Number `SO/2026-27/000001` | SO-001, SO-002 |
+| Price lock | A converted order keeps the quotation's rates, slab schemes and extra discounts, even if the price list changes afterwards. GST is applied at the rate in force on the order date. Its products, dealer and addresses are locked; the order details can still be edited. A direct order is priced from the dealer's active price list, exactly like a quotation | SO-002, QUO-002 |
+| One order per quotation | A quotation converts once and becomes **Converted**, linked both ways. If that order is cancelled, the quotation returns to **Accepted** and can be converted again while it is still valid | SO-002 |
+| Order details | Order date (today or earlier; fixed once saved), required-by date, dealer PO number and date, terms, notes, contact. Dealer eligibility (active, verified licences) is checked on save and again on submit | SO-001, DLR-008 |
+| D01 hybrid approval | Policy `sales.order`: commercial approval by the **lowest tier in the initiator's chain** that covers both the order value and the highest extra discount (skipped tiers get a for-information copy), then **accounts review** (accounts executive, credit controller or finance head) | SO-004, D01 |
+| While D15 is parked | Tier limits are not active yet, so the commercial step goes to the initiator's **reporting manager**. This is a new option on the ladder step (`whenLimitsInactive: reporting_manager`). Once limits are activated, the ladder applies with no code change. The policy simulator already shows the post-activation route, with a warning | D15 |
+| Credit check | At submission the order records the dealer's credit limit, other open orders (Submitted or Approved) and the resulting exposure. **Over the limit**, a third step is added: *credit limit override* by the finance head. A dealer with no credit limit and no credit days is treated as **advance payment** (no override; accounts confirm payment). Outstanding invoices join the exposure once invoicing exists (Stage 6, D18) | SO-004, D18 |
+| Actions | Edit (Draft/Rejected), Submit, Cancel with a reason (Draft, Rejected, Approved — until dispatch exists), Print. Every change is audited | SO-003 |
+| A4 order acknowledgement | Same layout as the quotation, titled SALES ORDER, with order date, required-by date, dealer PO and the source quotation. Orders not yet approved print with a "not an approved order" banner | SO-009 |
+| Dealer page | Active dealers show their recent quotations and orders, with "New quotation" and "New order" shortcuts (the first part of the dealer 360° view) | DLR-010 |
+| Access | Territory scope as for quotations. Sales tiers and sales operations create, edit, submit and cancel; accounts, credit, finance and management view. Orders appear in global search (number, dealer or dealer PO) | SEC-011 |
+
+### Evidence
+- `apps/api/test/orders.test.ts` has 2 tests:
+  - conversion: the price list changes after the quotation but the order keeps the quoted rate; the quotation becomes Converted and cannot convert twice; locked lines refused, header edits allowed; reporting manager then accounts approval; territory isolation; cancel returns the quotation to Accepted and it converts again
+  - direct order: future date refused; the second open order takes the dealer over a ₹6,000 limit, so the finance head override is added and all three steps approve it; an approved order cannot be edited; an advance-payment dealer is not flagged
+- Totals: **49 API + 4 contract tests passing**. Typecheck and the production build are clean.
+- A browser run also passed:
+  1. The sales executive converted the sent quotation QT/2026-27/000001 with the dealer's PO number, added a required-by date (products shown locked) and submitted it. The TSM (reporting manager) and the credit controller approved it, and it printed as a sales order.
+  2. The executive entered a direct order of 450 × 5 L cans (₹5,43,375). With ₹13,122 already open against a ₹5 lakh limit, the order was flagged over the limit and the finance head override step was added.
+  3. The dealer page lists both quotations and both orders. No browser errors, and no horizontal scroll at phone width.
+
+### Changed during this part
+- The quotation editor became a shared sales-document editor (quotations and orders), and every header field now updates state safely; a fast click sequence could previously lose the default bill-to address.
+- The documents panel no longer fails on a document without a stored file version.
+
+### Not built yet (and why)
+- **Stock availability** in the accounts review: needs inventory (Stage 4).
+- **Dispatch, partial dispatch and short-close**: Stage 5 (logistics). Lines already carry a dispatched quantity for it.
+- **Receivables in the credit exposure** and the overdue-dealer freeze: Stage 6 (D18).
+- **Order amendment after approval**: for now, cancel and re-enter (or revise the quotation).
+- **Activating tier limits (D15)** is a business decision; when made, quotation and order routing switch to the authority ladder automatically.

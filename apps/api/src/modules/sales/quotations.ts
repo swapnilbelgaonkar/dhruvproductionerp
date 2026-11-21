@@ -309,11 +309,12 @@ export function quotationRoutes(db: Db) {
          from wf.approval_requests a where a.subject_type = $1 and a.subject_id = $2 order by a.submitted_at desc limit 1`, [SUBJECT, q.id])).rows[0] ?? null;
     const addresses = (await db.query(`select id, kind, label, line1, line2, city, district, state_code as "stateCode", pincode from mdm.party_addresses where id = any($1::uuid[])`,
       [[q.billToId, q.shipToId]])).rows;
+    const salesOrder = (await db.query(`select id, doc_no as "docNo", status from sales.sales_orders where quotation_id = $1 order by created_at desc limit 1`, [q.id])).rows[0] ?? null;
     const seller = (await db.query(
       `select le.name, le.registered_address as address, le.pan, g.gstin from org.legal_entities le
          left join org.gst_registrations g on g.legal_entity_id = le.id and g.state_code = $2 and g.status = 'Active' where le.id = $1`, [q.legalEntityId, q.sellerState])).rows[0];
     res.json({
-      ...q, lines, revisions, approval, allowedActions: allowedActions(req, q.status),
+      ...q, lines, revisions, approval, salesOrder, allowedActions: allowedActions(req, q.status),
       billTo: addresses.find((a) => a.id === q.billToId) ?? null, shipTo: addresses.find((a) => a.id === q.shipToId) ?? null,
       print: { seller, bankDetails: await getSetting(db, 'company.bankDetails', ''), amountInWords: amountInWords(Number(q.grandTotal)) },
     });

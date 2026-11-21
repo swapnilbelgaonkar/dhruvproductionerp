@@ -13,6 +13,7 @@ import { OverviewPage } from './pages/Overview';
 import { DealerDetailPage, DealerFormPage, DealersPage } from './pages/sales/Dealers';
 import { ActivitiesPage, LeadDetailPage, LeadsPage, OpportunityDetailPage, PipelinePage } from './pages/sales/Crm';
 import { QuotationDetailPage, QuotationFormPage, QuotationPrintPage, QuotationsPage } from './pages/sales/Quotations';
+import { SalesOrderDetailPage, SalesOrderFormPage, SalesOrderPrintPage, SalesOrdersPage } from './pages/sales/SalesOrders';
 import { CategoriesPage, HsnPage, UomPage } from './pages/masters/ProductMasters';
 
 function Protected({ perm, children }: { perm?: string; children: JSX.Element }) {
@@ -46,6 +47,7 @@ export function App() {
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
+      <Route path="sales/orders/:id/print" element={<Protected perm="sales.order:view"><SalesOrderPrintPage /></Protected>} />
       <Route element={<AppShell />}>
         <Route index element={<OverviewPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
@@ -63,6 +65,10 @@ export function App() {
         <Route path="sales/quotations/new" element={<Protected perm="sales.quotation:create"><QuotationFormPage /></Protected>} />
         <Route path="sales/quotations/:id" element={<Protected perm="sales.quotation:view"><QuotationDetailPage /></Protected>} />
         <Route path="sales/quotations/:id/edit" element={<Protected perm="sales.quotation:edit"><QuotationFormPage /></Protected>} />
+        <Route path="sales/orders" element={<Protected perm="sales.order:view"><SalesOrdersPage /></Protected>} />
+        <Route path="sales/orders/new" element={<Protected perm="sales.order:create"><SalesOrderFormPage /></Protected>} />
+        <Route path="sales/orders/:id" element={<Protected perm="sales.order:view"><SalesOrderDetailPage /></Protected>} />
+        <Route path="sales/orders/:id/edit" element={<Protected perm="sales.order:edit"><SalesOrderFormPage /></Protected>} />
         {master('legalEntities')}
         {master('plants')}
         {master('warehouses')}

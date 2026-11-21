@@ -63,7 +63,7 @@ export function DocumentsPanel({ entityType, entityId, onChanged }: { entityType
       <ErrorBanner error={q.error} />
       {docs.length === 0 ? <p className="text-ink-2">No documents attached.</p> : (
         <ul className="grid gap-3 md:grid-cols-2">
-          {docs.map((d) => {
+          {docs.filter((d) => d.versions.length > 0).map((d) => {
             const cur = d.versions[0]!;
             const Icon = cur.mime === 'application/pdf' ? FilePdf : FileImage;
             return (

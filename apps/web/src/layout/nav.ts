@@ -1,4 +1,4 @@
-import { Barcode, FileText, Tag, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
+import { Barcode, FileText, Tag, ShoppingCart, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -15,6 +15,7 @@ export const NAV: NavGroup[] = [
     { to: '/sales/activities', label: 'My Activities', icon: CalendarCheck, perm: 'crm.activity:view' },
     { to: '/sales/dealers', label: 'Dealers', icon: Storefront, perm: 'mdm.dealer:view' },
     { to: '/sales/quotations', label: 'Quotations', icon: FileText, perm: 'sales.quotation:view' },
+    { to: '/sales/orders', label: 'Sales Orders', icon: ShoppingCart, perm: 'sales.order:view' },
     { to: '/sales/price-lists', label: 'Price Lists', icon: Tag, perm: 'sales.price_list:view' },
   ] },
   { label: 'Masters', items: [

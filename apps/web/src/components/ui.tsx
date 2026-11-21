@@ -56,7 +56,7 @@ const FAMILY: Record<string, keyof typeof BADGE> = {
   Draft: 'neutral', Inactive: 'neutral', Waiting: 'neutral', Cancelled: 'neutral', Revoked: 'neutral', Retired: 'neutral', Deactivated: 'locked',
   Submitted: 'pending', Pending: 'pending', PendingApproval: 'pending',
   Active: 'positive', Approved: 'positive', Published: 'positive', Accepted: 'positive', Notified: 'special', Sent: 'special', Converted: 'special',
-  Rejected: 'negative', Returned: 'negative', Expired: 'negative', Superseded: 'locked',
+  Rejected: 'negative', Returned: 'negative', Expired: 'negative', Superseded: 'locked', Closed: 'locked',
   OnHold: 'hold', Suspended: 'hold',
 };
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
