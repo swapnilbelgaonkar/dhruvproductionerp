@@ -24,6 +24,21 @@ export function calcLine(l: LineIn, interState: boolean): LineOut {
   return { rate: rateP, listAmount, taxable, cgst, sgst, igst, lineTotal: taxable + cgst + sgst + igst };
 }
 
+/**
+ * Purchase line (PUR-006): rates are per base unit and may carry 4 decimals (₹/kg); amounts are rounded to the paisa once, on the line.
+ * An unregistered vendor charges no GST (reverse charge is outside this release).
+ */
+export function calcPurchaseLine(l: { qty: number; rate: number; discountPct: number; gstRate: number }, interState: boolean, gstApplies = true): LineOut & { netRate: number } {
+  const netRate = half(l.rate * (1 - l.discountPct / 100) * 10000) / 10000;
+  const listAmount = half(l.qty * l.rate * 100);
+  const taxable = half(l.qty * netRate * 100);
+  const g = gstApplies ? l.gstRate : 0;
+  let cgst = 0; let sgst = 0; let igst = 0;
+  if (interState) igst = half((taxable * g) / 100);
+  else { cgst = half((taxable * g) / 200); sgst = cgst; }
+  return { netRate, rate: half(netRate * 100), listAmount, taxable, cgst, sgst, igst, lineTotal: taxable + cgst + sgst + igst };
+}
+
 export function calcTotals(lines: LineOut[]): Totals {
   const sum = (k: keyof LineOut) => lines.reduce((a, l) => a + l[k], 0);
   const subTotal = sum('listAmount');

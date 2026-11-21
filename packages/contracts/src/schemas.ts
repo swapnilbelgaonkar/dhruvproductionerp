@@ -298,3 +298,34 @@ export const requisitionSchema = z.object({
   priority: z.enum(PR_PRIORITIES), purpose: trimmed(500),
   lines: z.array(requisitionLineInput).min(1, 'Add at least one item').max(100),
 }).refine((r) => new Set(r.lines.map((l) => l.itemId)).size === r.lines.length, { message: 'Each item can appear only once', path: ['lines'] });
+
+// ---------- RFQ and comparative statement (MP §10.2–10.3; PUR-004/005/014) ----------
+export const rfqSchema = z.object({
+  legalEntityId: uuid, warehouseId: uuid, responseDue: isoDay, notes: optionalText(1000),
+  lines: z.array(z.object({
+    itemId: uuid, qty: z.number().positive(), requiredBy: isoDay.optional().nullable(), specification: optionalText(500), requisitionLineId: uuid.optional().nullable(),
+  })).min(1, 'Add at least one item').max(100),
+  vendorIds: z.array(uuid).min(1, 'Invite at least one vendor').max(20),
+}).refine((r) => new Set(r.lines.map((l) => l.itemId)).size === r.lines.length, { message: 'Each item can appear only once', path: ['lines'] })
+  .refine((r) => new Set(r.vendorIds).size === r.vendorIds.length, { message: 'Each vendor can be invited once', path: ['vendorIds'] });
+export const vendorQuoteSchema = z.object({
+  partyId: uuid, quoteRef: trimmed(60), quoteDate: isoDay, validUntil: isoDay,
+  paymentTermsDays: z.number().int().min(0).max(180), deliveryDays: z.number().int().min(0).max(365), freight: z.number().min(0).default(0),
+  documentId: uuid.optional().nullable(), remarks: optionalText(500),
+  lines: z.array(z.object({ rfqLineId: uuid, rate: z.number().positive(), discountPct: z.number().min(0).max(100).default(0), compliant: z.boolean().default(true), remarks: optionalText(300) })).min(1),
+}).refine((q) => q.validUntil >= q.quoteDate, { message: 'Valid-until must be on or after the quote date', path: ['validUntil'] });
+export const rfqAwardSchema = z.object({
+  lines: z.array(z.object({ rfqLineId: uuid, vendorQuoteId: uuid, overrideReason: optionalText(500) })).min(1),
+});
+
+// ---------- Purchase orders (MP §10.4; PUR-006, PUR-013) ----------
+export const purchaseOrderLineInput = z.object({
+  itemId: uuid, qty: z.number().positive('Quantity must be above zero'), rate: z.number().positive('Rate must be above zero'),
+  discountPct: z.number().min(0).max(100).default(0), deliveryDate: isoDay.optional().nullable(), requisitionLineId: uuid.optional().nullable(),
+});
+export const purchaseOrderSchema = z.object({
+  partyId: uuid, legalEntityId: uuid, warehouseId: uuid, poDate: isoDay.optional(), deliveryDate: isoDay,
+  paymentTermsDays: z.number().int().min(0).max(180), deliveryTerms: trimmed(300), notes: optionalText(1000), emergency: z.boolean().default(false),
+  lines: z.array(purchaseOrderLineInput).min(1, 'Add at least one item').max(100),
+}).refine((p) => new Set(p.lines.map((l) => l.itemId)).size === p.lines.length, { message: 'Each item can appear only once', path: ['lines'] });
+export const poAcknowledgeSchema = z.object({ vendorAckRef: trimmed(100) });

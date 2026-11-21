@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountInWords, calcLine, calcTotals, schemeFor } from '../src/modules/sales/calc';
+import { amountInWords, calcPurchaseLine, calcLine, calcTotals, schemeFor } from '../src/modules/sales/calc';
 
 describe('Quotation maths (QUO-002)', () => {
   it('splits intra-state GST into CGST + SGST and rounds the grand total to the rupee', () => {
@@ -30,5 +30,17 @@ describe('Quotation maths (QUO-002)', () => {
   it('writes amounts in Indian words', () => {
     expect(amountInWords(480000)).toBe('Rupees Four Lakh Eighty Thousand Only');
     expect(amountInWords(12345678)).toBe('Rupees One Crore Twenty Three Lakh Forty Five Thousand Six Hundred Seventy Eight Only');
+  });
+});
+
+describe('Purchase line maths (PUR-006)', () => {
+  it('keeps 4-decimal rates and rounds once per line', () => {
+    const l = calcPurchaseLine({ qty: 2500, rate: 62.4375, discountPct: 2, gstRate: 18 }, false);
+    expect(l.netRate).toBe(61.1888);
+    expect(l.taxable).toBe(15297200);            // 2500 × 61.1888 = ₹1,52,972.00
+    expect(l.cgst).toBe(1376748); expect(l.sgst).toBe(1376748);
+    const igst = calcPurchaseLine({ qty: 10, rate: 100, discountPct: 0, gstRate: 5 }, true);
+    expect(igst).toMatchObject({ igst: 5000, cgst: 0, lineTotal: 105000 });
+    expect(calcPurchaseLine({ qty: 10, rate: 100, discountPct: 0, gstRate: 18 }, false, false)).toMatchObject({ cgst: 0, sgst: 0, lineTotal: 100000 });
   });
 });

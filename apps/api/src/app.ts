@@ -25,6 +25,8 @@ import { quotationRoutes } from './modules/sales/quotations';
 import { salesOrderRoutes } from './modules/sales/orders';
 import { vendorRoutes } from './modules/vendors/routes';
 import { requisitionRoutes } from './modules/purchase/requisitions';
+import { rfqRoutes } from './modules/purchase/rfqs';
+import { purchaseOrderRoutes } from './modules/purchase/orders';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
@@ -69,6 +71,8 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/sales-orders', salesOrderRoutes(db));
   v1.use('/vendors', vendorRoutes(db, cfg));
   v1.use('/purchase-requisitions', requisitionRoutes(db));
+  v1.use('/rfqs', rfqRoutes(db));
+  v1.use('/purchase-orders', purchaseOrderRoutes(db));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);

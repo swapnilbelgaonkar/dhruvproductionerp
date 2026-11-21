@@ -1,40 +1,9 @@
-import { gstinCheckDigit } from '@dhruv/contracts';
 import { describe, expect, it } from 'vitest';
 import { scanLicenceExpiry } from '../src/modules/notifications/relay';
 import { todayIST } from '../src/modules/sales/quotations';
 import { vendorEligibility } from '../src/modules/vendors/routes';
-import { db, uniq, userAgent, type Agent } from './helpers';
-
-const PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
-const L = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-const randomPan = () => Array.from({ length: 5 }, () => L[Math.floor(Math.random() * 26)]).join('') + String(Math.floor(1000 + Math.random() * 8999)) + L[Math.floor(Math.random() * 26)];
-const gstinFor = (pan: string, state = '27') => { const b = `${state}${pan}1Z`; return b + gstinCheckDigit(b); };
-const mobile = () => `9${String(Math.floor(100000000 + Math.random() * 899999999))}`;
-const inDays = (n: number) => { const d = new Date(`${todayIST()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-
-async function setup() {
-  const mdo = await userAgent([{ code: 'MASTER_DATA_OWNER' }]);
-  const emp = async (name: string, managerId: string | null) =>
-    (await mdo.post('/api/v1/employees', { empCode: uniq('E'), fullName: `[TEST] ${name}`, managerId }).expect(201)).body.id as string;
-  const storesHeadE = await emp('Stores head', null);
-  const keeperE = await emp('Storekeeper', storesHeadE);
-  const le = (await db.query(`insert into org.legal_entities (code, name, pan, state_code, status) values ($1,'[TEST] Buyer Pvt Ltd','AAAAA0000A','27','Active') returning id`, [uniq('LE')])).rows[0].id as string;
-  const wh = (await db.query(`insert into org.warehouses (legal_entity_id, code, name, type, state_code, status) values ($1,$2,'[TEST] RM store','RM','27','Active') returning id`, [le, uniq('WH')])).rows[0].id as string;
-  const item = async (type: string, name: string) => (await db.query(
-    `insert into mdm.items (code, name, item_type, base_uom, shelf_life_days, status) values ($1,$2,$3,'KG',365,'Active') returning id`, [uniq('RM'), name, type])).rows[0].id as string;
-  return {
-    le, wh, rm: await item('RM', '[TEST] Zinc sulphate'), pm: await item('PM', '[TEST] 1 kg pouch'),
-    pe: await userAgent([{ code: 'PURCHASE_EXEC' }]), ph: await userAgent([{ code: 'PURCHASE_HEAD' }]),
-    verifier: await userAgent([{ code: 'DOC_VERIFIER' }]), fh: await userAgent([{ code: 'FINANCE_HEAD' }]), acc: await userAgent([{ code: 'ACCOUNTS_EXEC' }]),
-    keeper: await userAgent([{ code: 'STOREKEEPER' }], { employeeId: keeperE }), storesHead: await userAgent([{ code: 'STORES_HEAD' }], { employeeId: storesHeadE }),
-    sales: await userAgent([{ code: 'SALES_SE' }]),
-  };
-}
-type F = Awaited<ReturnType<typeof setup>>;
-
-const upload = async (a: Agent, partyId: string, type: string, extra = '') =>
-  (await a.upload(`/api/v1/documents?documentType=${type}&entityType=mdm.party&entityId=${partyId}&title=${type}&fileName=${type}.pdf${extra}`, PDF, 'application/pdf').expect(201)).body.id as string;
-const approve = (a: Agent, id: string) => a.post(`/api/v1/approvals/${id}/decisions`, { decision: 'Approve' });
+import { db, uniq, userAgent } from './helpers';
+import { approve, gstinFor, inDays, mobile, randomPan, setup, upload, type F } from './purchase-fixtures';
 
 async function readyVendor(f: F) {
   const pan = randomPan();

@@ -37,6 +37,8 @@ export const PERMISSIONS = [
   ...P('Sales', 'sales.order', ['view', 'create', 'edit', 'submit', 'cancel'], 'sales orders'),
   ...P('Purchase', 'mdm.vendor', ['view', 'create', 'edit_draft', 'submit', 'verify_documents', 'verify_bank', 'view_sensitive', 'suspend'], 'vendors, their KYC and bank accounts'),
   ...P('Purchase', 'purchase.requisition', ['view', 'view_all', 'create', 'edit', 'submit', 'cancel'], 'purchase requisitions'),
+  ...P('Purchase', 'purchase.rfq', ['view', 'manage'], 'requests for quotation, vendor quotes and awards'),
+  ...P('Purchase', 'purchase.order', ['view', 'create', 'edit', 'submit', 'issue', 'cancel'], 'purchase orders'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -49,19 +51,21 @@ const MASTER = (c: string) => (c.startsWith('org.') || c.startsWith('mdm.')) && 
 /** Anyone who needs material can raise a requisition; purchase, stores heads and finance see all of them. */
 const PR_RAISE = ['purchase.requisition:view', 'purchase.requisition:create', 'purchase.requisition:edit', 'purchase.requisition:submit'];
 const VENDOR_BUY = ['mdm.vendor:view', 'mdm.vendor:create', 'mdm.vendor:edit_draft', 'mdm.vendor:submit'];
+const BUYING = ['purchase.rfq:view', 'purchase.rfq:manage', 'purchase.order:view', 'purchase.order:create', 'purchase.order:edit', 'purchase.order:submit',
+  'purchase.order:issue', 'purchase.order:cancel'];
 const PURCHASE_EXTRA: Record<string, string[]> = {
-  PURCHASE_EXEC: [...VENDOR_BUY, ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel'],
-  PURCHASE_HEAD: [...VENDOR_BUY, 'mdm.vendor:suspend', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel'],
+  PURCHASE_EXEC: [...VENDOR_BUY, ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING],
+  PURCHASE_HEAD: [...VENDOR_BUY, 'mdm.vendor:suspend', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING],
   DOC_VERIFIER: ['mdm.vendor:view', 'mdm.vendor:verify_documents', 'mdm.vendor:view_sensitive'],
-  FINANCE_HEAD: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.requisition:view', 'purchase.requisition:view_all'],
-  ACCOUNTS_EXEC: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive'],
-  STORES_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel'],
-  STOREKEEPER: ['mdm.vendor:view', ...PR_RAISE],
+  FINANCE_HEAD: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view'],
+  ACCOUNTS_EXEC: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.order:view'],
+  STORES_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', 'purchase.order:view'],
+  STOREKEEPER: ['mdm.vendor:view', ...PR_RAISE, 'purchase.order:view'],
   PRODUCTION_PLANNER: [...PR_RAISE], PRODUCTION_SUPERVISOR: [...PR_RAISE], PLANT_HEAD: [...PR_RAISE],
   QC_ANALYST: ['mdm.vendor:view', ...PR_RAISE], QC_MANAGER: ['mdm.vendor:view', ...PR_RAISE], QC_HEAD: ['mdm.vendor:view', ...PR_RAISE],
   QA_EXECUTIVE: [...PR_RAISE], QA_MANAGER: ['mdm.vendor:view', ...PR_RAISE], QA_HEAD: ['mdm.vendor:view', ...PR_RAISE],
   LOGISTICS_EXEC: [...PR_RAISE], LOGISTICS_HEAD: [...PR_RAISE],
-  MANAGEMENT_VIEWER: ['mdm.vendor:view', 'purchase.requisition:view', 'purchase.requisition:view_all'],
+  MANAGEMENT_VIEWER: ['mdm.vendor:view', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
@@ -159,6 +163,20 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
       { name: 'Emergency', when: { fact: 'priority', op: 'eq', value: 'EMERGENCY' }, steps: [{ kind: 'role', label: 'Emergency approval (purchase head)', roles: ['PURCHASE_HEAD'] }] },
       { name: 'Default', steps: [{ kind: 'reporting_manager', label: 'Department head approval' }] },
     ] } },
+  // Doc 07 §6 / D06 defaults (client may change the bands in Approval Policies): < ₹1 L purchase head; ₹1–10 L + finance head;
+  // > ₹10 L + executive director (BRD p.3, Admin 02). Emergency: purchase head now, finance head reviews afterwards (notified).
+  { docType: 'purchase.order', name: 'Purchase order approval (D06 value bands)', description: 'Purchase head; finance head from ₹1 lakh; executive director above ₹10 lakh',
+    definition: (() => {
+      const ph = { kind: 'role' as const, key: 'purchase', label: 'Purchase head approval', roles: ['PURCHASE_HEAD'] };
+      const fh = { kind: 'role' as const, key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] };
+      return { distinctApprovers: true, rules: [
+        { name: 'Emergency', when: { fact: 'emergency', op: 'eq' as const, value: true }, steps: [{ ...ph, label: 'Emergency approval (purchase head)' }] },
+        { name: 'Above ₹10 lakh', when: { fact: 'amount', op: 'gt' as const, value: 1000000 },
+          steps: [ph, fh, { kind: 'role' as const, key: 'executive', label: 'Executive director approval (above ₹10 lakh)', roles: ['EXEC_ADMIN'] }] },
+        { name: '₹1–10 lakh', when: { fact: 'amount', op: 'gt' as const, value: 100000 }, steps: [ph, fh] },
+        { name: 'Up to ₹1 lakh', steps: [ph] },
+      ] };
+    })() },
   { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
       { kind: 'role', key: 'sales', label: 'Sales head approval', roles: ['SALES_BH', 'SALES_NSM'] },

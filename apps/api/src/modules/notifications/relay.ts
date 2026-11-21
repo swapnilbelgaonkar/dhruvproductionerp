@@ -1,5 +1,6 @@
 import type { Db, Tx } from '../../db/pool';
 import { expireQuotations } from '../sales/quotations';
+import { lapseUnacknowledged } from '../purchase/orders';
 
 interface OutboxRow { id: string; aggregate_type: string; aggregate_id: string; event_type: string; payload: Record<string, unknown> }
 type Note = { userId: string; kind: 'action' | 'info' | 'success' | 'warning'; title: string; body: string; link: string };
@@ -74,7 +75,7 @@ export async function relayOutbox(db: Db, batch = 100): Promise<number> {
 
 export function startRelay(db: Db, intervalMs = 2000, onError: (e: unknown) => void = console.error) {
   let running = false;
-  const scan = () => Promise.all([scanLicenceExpiry(db), expireQuotations(db)]).catch(onError);
+  const scan = () => Promise.all([scanLicenceExpiry(db), expireQuotations(db), lapseUnacknowledged(db)]).catch(onError);
   const daily = setInterval(scan, 3_600_000); // hourly check; each alert is sent once
   void scan();
   const timer = setInterval(async () => {

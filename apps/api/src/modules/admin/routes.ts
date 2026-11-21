@@ -215,6 +215,9 @@ export function searchRoutes(db: Db) {
       parts.push(`(select 'Requisition', r.id, r.doc_no, left(r.purpose, 80), '/purchase/requisitions/' || r.id from purchase.requisitions r
                     where (r.doc_no ilike $1 or r.purpose ilike $1) and ${own} limit 5)`);
     }
+    if (can(req, 'purchase.order:view')) parts.push(`(select 'Purchase order', o.id, o.doc_no, p.legal_name, '/purchase/orders/' || o.id from purchase.purchase_orders o
+                    join mdm.parties p on p.id = o.party_id where o.doc_no ilike $1 or p.legal_name ilike $1 limit 5)`);
+    if (can(req, 'purchase.rfq:view')) parts.push(`(select 'RFQ', r.id, r.doc_no, coalesce(left(r.notes, 80), ''), '/purchase/rfqs/' || r.id from purchase.rfqs r where r.doc_no ilike $1 limit 5)`);
     if (can(req, 'sales.price_list:view')) parts.push(`(select 'Price list', id, code, name, '/sales/price-lists/' || id from sales.price_lists where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'mdm.item:view')) parts.push(`(select 'Item', id, code, name, '/products/items/' || id from mdm.items where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'iam.user:view')) parts.push(`(select 'User', id, full_name, email::text, '/admin/users/' || id from iam.users where email ilike $1 or full_name ilike $1 limit 5)`);
