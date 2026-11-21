@@ -31,11 +31,25 @@ async function prepare(): Promise<void> {
   await client.connect();
   try {
     await client.query('select pg_advisory_lock(727001)');
-    const fresh = !(await client.query(`select to_regclass('public.schema_migrations') as t`)).rows[0].t;
+    let fresh = !(await client.query(`select to_regclass('public.schema_migrations') as t`)).rows[0].t;
+    // demo only: a build carrying a different snapshot (DEMO_SNAPSHOT_ID) replaces the demo data once, when DEMO_REFRESH=1
+    const snapshotId = process.env.DEMO_SNAPSHOT_ID;
+    if (!fresh && process.env.DEMO_SNAPSHOT && snapshotId && process.env.DEMO_REFRESH === '1') {
+      const loaded = (await client.query(`select to_regclass('public.demo_snapshot') is not null as t`)).rows[0].t
+        ? (await client.query(`select id from public.demo_snapshot limit 1`)).rows[0]?.id : null;
+      if (loaded !== snapshotId) {
+        await client.query(`drop schema if exists sys, iam, org, wf, mdm, sales, purchase, inv, qc, mfg, qa cascade;
+                            drop table if exists public.schema_migrations, public.demo_snapshot`);
+        fresh = true;
+        console.log('demo data replaced by snapshot', snapshotId);
+      }
+    }
     if (fresh && process.env.DEMO_SNAPSHOT) {
       const sql = (await readFile(join(here, process.env.DEMO_SNAPSHOT), 'utf8'))
         .split('\n').filter((l) => !l.startsWith('\\')).join('\n'); // drop psql meta-commands
       await client.query(sql);
+      await client.query(`reset search_path`);
+      if (snapshotId) await client.query(`create table if not exists public.demo_snapshot (id text primary key); insert into public.demo_snapshot (id) values ('${snapshotId.replace(/[^a-f0-9]/g, '')}')`);
       console.log('demo snapshot loaded');
     }
     await migrate(url, () => undefined);

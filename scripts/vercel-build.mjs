@@ -7,7 +7,8 @@
  * Run from the repository root after `pnpm install`: node scripts/vercel-build.mjs
  */
 import { execSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
@@ -42,7 +43,12 @@ cpSync(join(api, 'migrations'), join(fn, 'migrations'), { recursive: true });
 
 const env = {};
 const snapshot = join(root, 'deploy/demo-snapshot.sql');
-if (existsSync(snapshot)) { cpSync(snapshot, join(fn, 'demo-snapshot.sql')); env.DEMO_SNAPSHOT = 'demo-snapshot.sql'; }
+if (existsSync(snapshot)) {
+  cpSync(snapshot, join(fn, 'demo-snapshot.sql'));
+  env.DEMO_SNAPSHOT = 'demo-snapshot.sql';
+  env.DEMO_SNAPSHOT_ID = createHash('sha256').update(readFileSync(snapshot)).digest('hex').slice(0, 16);
+  if (process.env.DEMO_REFRESH === '1') env.DEMO_REFRESH = '1';   // replace older demo data on the next cold start
+}
 
 writeFileSync(join(fn, 'package.json'), JSON.stringify({ type: 'module' }));
 writeFileSync(join(fn, '.vc-config.json'), JSON.stringify({
