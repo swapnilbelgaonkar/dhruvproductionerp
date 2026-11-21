@@ -319,9 +319,9 @@ export function QualityDashboardPage() {
   const q = useQuery({ queryKey: ['quality-dashboard'], queryFn: () => api<{ qc: Record<string, number | string | null>; qa: Record<string, number> }>('/qa/dashboard') });
   if (q.isLoading || !q.data) return <Skeleton className="h-96" />;
   const { qc, qa } = q.data;
-  const tile = (label: string, value: number | string | null, to: string, bad = false, note?: string) => (
+  const tile = (label: string, value: number | string | null | undefined, to: string, bad = false, note?: string) => (
     <Link to={to} className="card block p-5 transition hover:-translate-y-0.5"><p className="text-[13px] font-semibold text-ink-2">{label}</p>
-      <p className={`mt-2 text-[30px] font-semibold leading-none num ${bad && Number(value) > 0 ? 'text-danger-text' : ''}`}>{value === null ? '—' : value}</p>{note && <p className="mt-2 text-[13px] text-ink-2">{note}</p>}</Link>);
+      <p className={`mt-2 text-[30px] font-semibold leading-none num ${bad && Number(value) > 0 ? 'text-danger-text' : ''}`}>{value === null || value === undefined ? '—' : value}</p>{note && <p className="mt-2 text-[13px] text-ink-2">{note}</p>}</Link>);
   return (
     <>
       <PageHeader title="Quality Dashboard" subtitle="What needs QC and QA attention now." />
