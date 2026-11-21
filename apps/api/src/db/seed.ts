@@ -120,6 +120,8 @@ async function seedDemoUsers(tx: pg.PoolClient, password: string) {
   // quality control (Stage 3 part 3): the analyst tests, a different person (QC manager) decides
   const qcManager = await person('SMP-QCM', '[SAMPLE] QC Manager', null, null, state, 'qc-manager@demo.local', ['QC_MANAGER']);
   await person('SMP-QCA', '[SAMPLE] QC Analyst', null, qcManager, state, 'qc@demo.local', ['QC_ANALYST']);
+  // read-only auditor: approval policies, audit log and every register, for demonstrations and audits
+  await person('SMP-AUD', '[SAMPLE] Auditor (read-only)', null, null, state, 'auditor@demo.local', ['AUDITOR']);
   await audit(tx, SYSTEM, { action: 'demo.users_seeded', entityType: 'iam.user', reason: '[SAMPLE] demo hierarchy for UAT' });
 }
 

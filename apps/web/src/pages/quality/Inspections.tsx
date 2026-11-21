@@ -1,7 +1,8 @@
 import { CheckCircle, Plus, Trash, XCircle } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../lib/auth';
 import { DataTable, type Column } from '../../components/DataTable';
 import { FilePick } from '../../components/parties/PartyParts';
 import { useToast } from '../../components/toast';
@@ -46,6 +47,8 @@ let k = 0;
 
 export function InspectionDetailPage() {
   const { id } = useParams();
+  const { can } = useAuth();
+  const nav = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['inspection', id], queryFn: () => api<InsDetail>(`/qc/inspections/${id}`) });
@@ -88,7 +91,7 @@ export function InspectionDetailPage() {
     <>
       <PageHeader title={`${d.docNo} — ${d.itemCode}`} crumbs={<Link to="/qc/inspections" className="hover:text-primary">Quality Control</Link>}
         subtitle={<span className="inline-flex flex-wrap items-center gap-2">{badge(d.status)}<span>Lot <Link className="font-semibold text-primary num" to={`/stores/lots/${d.lotId}`}>{d.lotNo}</Link> · {d.itemName}{d.vendorName ? ` · ${d.vendorName}` : ''}</span></span>}
-        actions={a.includes('decide') ? <>
+        actions={d.status === 'Rejected' && d.grnId && can('purchase.return:create') ? <Button onClick={() => nav(`/stores/returns/new?goodsReceiptId=${d.grnId}`)}>Return to vendor</Button> : a.includes('decide') ? <>
           <Button variant="danger" onClick={() => setDecide('Reject')}>Reject lot</Button>
           {d.status !== 'Hold' && <Button variant="secondary" onClick={() => setDecide('Hold')}>Hold</Button>}
           <Button icon={<CheckCircle size={18} />} onClick={() => setDecide('Release')}>Release lot</Button>

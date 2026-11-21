@@ -5,7 +5,7 @@ Order follows D12 (business flow). Stage 3 parts:
 1. Vendor onboarding and purchase requisitions — **done**
 2. RFQ, comparative statement and purchase orders — **done**
 3. Goods receipt with quarantine, QC sampling and lot release, stock ledger — **done**
-4. Supplier invoice three-way match, supplier returns and debit notes
+4. Supplier invoice three-way match, supplier returns and debit notes — **done**
 
 ## Part 1 — Vendor onboarding and purchase requisitions (BRD §3.2 p.8; MP §10.1; MDM-011, MDM-016, PUR-001/002)
 
@@ -114,7 +114,32 @@ Order follows D12 (business flow). Stage 3 parts:
 - Side-panel key-value cards use a single column.
 
 ### Not built yet
-- **Supplier returns and debit notes** for rejected stock, and the **three-way match** of supplier invoices: part 4.
 - **Specification master with versioned limits** (QC enters specifications per inspection for now, pre-filled from the last one): Stage 5.
 - **Quarantine-lock override** (QC head + plant head, automatic deviation, D33) and **issue of stock to production**: with production (Stage 4) — nothing can consume quarantined stock today because no issue transaction exists yet.
 - **Separate quarantine store location / bin management**: quarantine is a stock status in the receiving warehouse for now.
+
+## Part 4 — Supplier returns, debit notes and the three-way match (BRD p.8, p.13–14; MP §10.5–10.6; PUR-009, PUR-010, TC-10)
+
+| Area | What works | RTM |
+|---|---|---|
+| Supplier return | Number `SRN/2026-27/000001`, raised by stores against the **original receipt and lot** (from the QC page: "Return to vendor"). Quantity per lot from rejected stock (default), released stock (damage found later) or blocked stock, never more than the lot holds. Reason, transporter and vehicle | PUR-010 |
+| Posting and debit note | Purchase posts the return (stores cannot): the stock leaves the ledger (`SUPPLIER_RETURN`), the PO's received quantity drops (a fully received PO reopens so the replacement can be received), and a **debit note** `DN/2026-27/000001` is raised at the PO net rate and GST (CGST+SGST or IGST as on the PO). The A4 **return challan & debit note** travels with the goods | PUR-010 |
+| Supplier invoice | Internal number `PINV/2026-27/000001`, booked against a PO with the vendor's own invoice number (the same number from the same vendor is refused), date, due date (default: PO payment terms), the invoice scan, and per line the quantity, rate, GST rate and GST charged | PUR-009 |
+| Three-way match | Per line: invoice vs **PO** (rate, GST rate) vs **QC-accepted receipts** not yet invoiced. Billable quantity = received in lots QC released, less returns, less earlier invoices; quantity still in QC is reported; rejected lots are never billable. Tolerances in setting `purchase.match.tolerances` (D06 defaults: quantity +0%, price ±0.5%, GST ±₹1 per line) | PUR-009, TC-10 |
+| Outcome | **Matched** — ready for payment (payables come with finance, Stage 6). **Exception** — reasons shown per line; re-run the match after a QC release or a return, or purchase justifies the variance and the **purchase head then the finance head** decide (policy `purchase.supplier_invoice`). Approved = variance accepted; Rejected = to be taken up with the vendor | PUR-009, doc 07 §6 |
+| Access | Stores raise returns; purchase posts them and books invoices; accounts book invoices; finance and management view | SEC-010 |
+
+### Evidence
+- `apps/api/test/returns-invoices.test.ts` has 2 tests:
+  - return: returnable stock per lot, over-return refused, stores cannot post, debit note ₹24,000 + 9% + 9% = ₹28,320, rejected stock emptied, the PO reopens to partly received at 600 kg
+  - match: an invoice before QC release is an exception ("600 still awaiting QC"); after release the re-match passes (+0.42% is within ±0.5%); totals checked to the paisa; duplicate vendor invoice number refused (case-insensitive); billable 0 after invoicing; a second invoice over the accepted quantity, +2.5% on rate and with the wrong GST is an exception that the purchase head and finance head approve
+- Totals: **59 API + 4 contract tests passing**. Typecheck and production build clean.
+- Browser run passed as the last link of the full chain: the second delivery (1,000 kg) was posted, QC found zinc at 31.8% and the QC manager rejected it; the storekeeper returned the lot from the QC page, purchase posted the return and printed the challan & debit note; accounts booked the vendor's invoice for the accepted quantity (matched) and a second invoice with a higher rate (exception, justified and sent to the purchase head).
+
+### Stage 3 status
+All four parts of the supply stage are built: vendor onboarding, requisitions, RFQ and comparison, purchase orders with value-band approval, goods receipt into quarantine, QC lot release, the stock ledger, supplier returns with debit notes and the three-way match.
+
+### Not built yet
+- **Payment of matched invoices and adjustment of debit notes**: vendor payables and payments come with finance (Stage 6).
+- **PO amendment with re-approval (PUR-007)** and **budget checks (PUR-003)**: need D06 details.
+- **Specification master (Stage 5)** and **issue of stock to production (Stage 4)**.

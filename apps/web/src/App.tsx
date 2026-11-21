@@ -17,6 +17,8 @@ import { VendorDetailPage, VendorFormPage, VendorsPage } from './pages/purchase/
 import { PurchaseOrderDetailPage, PurchaseOrderFormPage, PurchaseOrderPrintPage, PurchaseOrdersPage } from './pages/purchase/PurchaseOrders';
 import { ReceiptDetailPage, ReceiptFormPage, ReceiptsPage } from './pages/stores/Receipts';
 import { LotDetailPage, StockPage } from './pages/stores/Stock';
+import { ReturnDetailPage, ReturnFormPage, ReturnPrintPage, ReturnsPage } from './pages/stores/Returns';
+import { InvoiceDetailPage, InvoiceFormPage, InvoicesPage } from './pages/purchase/Invoices';
 import { InspectionDetailPage, InspectionsPage } from './pages/quality/Inspections';
 import { RfqDetailPage, RfqFormPage, RfqsPage } from './pages/purchase/Rfqs';
 import { RequisitionDetailPage, RequisitionFormPage, RequisitionsPage } from './pages/purchase/Requisitions';
@@ -54,6 +56,7 @@ export function App() {
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
+      <Route path="stores/returns/:id/print" element={<Protected perm="purchase.return:view"><ReturnPrintPage /></Protected>} />
       <Route path="purchase/orders/:id/print" element={<Protected perm="purchase.order:view"><PurchaseOrderPrintPage /></Protected>} />
       <Route path="sales/orders/:id/print" element={<Protected perm="sales.order:view"><SalesOrderPrintPage /></Protected>} />
       <Route element={<AppShell />}>
@@ -97,6 +100,12 @@ export function App() {
         <Route path="stores/receipts/new" element={<Protected perm="purchase.grn:create"><ReceiptFormPage /></Protected>} />
         <Route path="stores/receipts/:id" element={<Protected perm="purchase.grn:view"><ReceiptDetailPage /></Protected>} />
         <Route path="stores/receipts/:id/edit" element={<Protected perm="purchase.grn:create"><ReceiptFormPage /></Protected>} />
+        <Route path="stores/returns" element={<Protected perm="purchase.return:view"><ReturnsPage /></Protected>} />
+        <Route path="stores/returns/new" element={<Protected perm="purchase.return:create"><ReturnFormPage /></Protected>} />
+        <Route path="stores/returns/:id" element={<Protected perm="purchase.return:view"><ReturnDetailPage /></Protected>} />
+        <Route path="purchase/invoices" element={<Protected perm="purchase.invoice:view"><InvoicesPage /></Protected>} />
+        <Route path="purchase/invoices/new" element={<Protected perm="purchase.invoice:create"><InvoiceFormPage /></Protected>} />
+        <Route path="purchase/invoices/:id" element={<Protected perm="purchase.invoice:view"><InvoiceDetailPage /></Protected>} />
         <Route path="stores/stock" element={<Protected perm="inv.stock:view"><StockPage /></Protected>} />
         <Route path="stores/lots/:id" element={<Protected perm="inv.stock:view"><LotDetailPage /></Protected>} />
         <Route path="qc/inspections" element={<Protected perm="qc.inspection:view"><InspectionsPage /></Protected>} />
