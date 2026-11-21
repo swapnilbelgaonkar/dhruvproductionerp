@@ -57,6 +57,7 @@ const FAMILY: Record<string, keyof typeof BADGE> = {
   Submitted: 'pending', Pending: 'pending', PendingApproval: 'pending',
   Active: 'positive', Approved: 'positive', Published: 'positive', Accepted: 'positive', Notified: 'special', Sent: 'special', Converted: 'special',
   Rejected: 'negative', Returned: 'negative', Expired: 'negative', Superseded: 'locked', Closed: 'locked',
+  Acknowledged: 'positive', Received: 'positive', PartiallyReceived: 'pending', Issued: 'special', Awarded: 'positive', Lapsed: 'negative',
   OnHold: 'hold', Suspended: 'hold',
 };
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
@@ -82,7 +83,7 @@ export function PageHeader({ title, subtitle, actions, crumbs }: { title: string
 export function Card({ title, actions, children, className, padded = true }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; padded?: boolean }) {
   return (
     <section className={clsx('card', padded && 'p-6 md:p-7', className)}>
-      {(title || actions) && <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-[17px] font-semibold text-ink">{title}</h2>{actions}</div>}
+      {(title || actions) && <div className={clsx('mb-4 flex items-center justify-between gap-3', !padded && 'px-6 pt-5 md:px-7 md:pt-6')}><h2 className="text-[17px] font-semibold text-ink">{title}</h2>{actions}</div>}
       {children}
     </section>
   );

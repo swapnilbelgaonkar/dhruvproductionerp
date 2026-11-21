@@ -2,8 +2,8 @@
 
 Order follows D12 (business flow). Stage 3 parts:
 
-1. Vendor onboarding and purchase requisitions — **done** (this report)
-2. RFQ, comparative statement and purchase orders (D06 value bands, PO acceptance validity)
+1. Vendor onboarding and purchase requisitions — **done**
+2. RFQ, comparative statement and purchase orders — **done**
 3. Goods receipt with quarantine, QC sampling and lot release, stock ledger
 4. Supplier invoice three-way match, supplier returns and debit notes
 
@@ -48,4 +48,41 @@ Order follows D12 (business flow). Stage 3 parts:
 - **Changing an active vendor's items or terms**: needs a change request with re-approval (with master change requests).
 - **Budget check by cost centre (PUR-003)**: needs budgets (D06).
 - **Vendor rating**: calculated from receipts and QC results in part 3.
-- **Client input**: D06 (purchase value bands and tolerances) — defaults from doc 07 §6 will be used in part 2 unless you change them.
+- **Client input**: D06 (purchase value bands and tolerances) — the doc 07 §6 defaults are now live (see part 2).
+
+## Part 2 — RFQ, comparative statement and purchase orders (BRD p.8, p.13–14; MP §10.2–10.4; PUR-004…006, PUR-013/014; D06, D34)
+
+| Area | What works | RTM |
+|---|---|---|
+| RFQ | Number `RFQ/2026-27/000001`. Items (from an approved requisition with "Request quotes", or added directly), quantities, needed-by dates and specifications; deliver-to warehouse; response deadline; invited vendors — each must be active and approved for at least one of the items | PUR-004 |
+| Vendor quotes | Purchase keys in each vendor's quotation: reference, date, validity, payment terms, delivery days, total freight, and per line the rate, discount and whether it meets the specification (technical compliance). Recording again replaces the previous entry until award | PUR-004 |
+| Comparative statement | Per line: net rate, freight per unit (the vendor's freight spread over its quoted lines by value), **landed rate**, lead time, vendor rating and a score out of 100 — landed cost 60, lead time 20, quality rating 20 (setting `purchase.rfq.weights`, D34 provisional). A new vendor is scored as average (3/5) until receipts and QC rate it. Non-compliant bids, expired quotes and vendors that are not eligible are shown but not ranked | PUR-005, PUR-014 |
+| Award (X17) | The top-ranked bid is pre-selected per line. Purchase confirms; choosing any other qualified bid needs a written reason, which is stored with the award. Awarding drafts **one PO per vendor** at the quoted rates, discounts, payment terms and delivery days, linked to the RFQ and the requisition lines | PUR-005, PUR-014 |
+| Purchase order | Number `PO/2026-27/000001`. Vendor, legal entity, ship-to warehouse, PO and delivery dates, payment terms, delivery terms, notes, emergency flag; lines from approved requisitions ("Create purchase order" on the requisition, or "From requisitions" in the editor) or items the vendor is approved for. Rates may carry 4 decimals (₹/kg) | PUR-006 |
+| Controls | Vendor must be eligible (active, bank verified, licences valid, approved for every item) on save, submit and issue. A linked requisition line cannot be over-ordered; a requisition **closes** when fully ordered and **reopens** if a PO is cancelled | PUR-002, PUR-006 |
+| Tax | GST from each item's HSN rate on the PO date; CGST + SGST when the vendor's state equals the ship-to warehouse state, otherwise IGST; no GST for an unregistered vendor; rounded to the rupee | PUR-006 |
+| Approval (D06 defaults) | Up to ₹1 lakh: purchase head. ₹1–10 lakh: purchase head → finance head. Above ₹10 lakh: + executive director (BRD p.3). **Emergency**: purchase head only; the finance heads are notified to review it within 3 days. The person who raised the PO cannot approve it. The bands are a published policy (`purchase.order`), changeable in Approval Policies | PUR-006, PUR-011, D06 |
+| Issue and acknowledgement | Issue sets an acknowledgement deadline (setting `purchase.po.acceptanceDays`, 7). Purchase records the vendor's confirmation reference. An hourly job marks unacknowledged POs **Lapsed**; a lapsed PO must be re-issued (with a fresh eligibility check) before it can be acknowledged | PUR-013 |
+| Cancel | Before any goods are received, with a reason; requisition quantities are released | PUR-007 (part) |
+| A4 print | PURCHASE ORDER with buyer GSTIN for the ship-to state, vendor and ship-to, itemised lines with HSN, rate, discount, taxable value and GST, totals in figures and words, payment and delivery terms, the acknowledgement clause and signature blocks for the vendor and the company. Not-yet-approved POs print with a warning banner | QUO-007 (PO print) |
+| Access | Purchase executives and heads run RFQs and POs; finance, accounts, stores and management view POs (stores will receive against them in part 3) | SEC-010 |
+
+### Evidence
+- `apps/api/test/calc.test.ts`: purchase line maths with a 4-decimal rate, discount, CGST/SGST, IGST and an unregistered vendor (6 calc tests in all).
+- `apps/api/test/purchase-orders.test.ts` has 3 tests:
+  - requisition → PO: open lines listed, over-ordering refused, unapproved item refused, tax and rounding checked to the paisa, requisition closes, ₹1–10 lakh routing, initiator cannot approve, issue sets the deadline, acknowledgement, cancel reopens the requisition
+  - value bands and lifecycle: IGST for a Karnataka vendor, purchase-head-only band, lapse and re-issue, the executive director band above ₹10 lakh, emergency routing with the finance notification
+  - RFQ: unapproved vendor refused, uninvited quote refused, landed cost and scores checked by hand (95.69 vs 79.5), override reason required, award drafts the PO at the quoted rate
+- Totals: **55 API + 4 contract tests passing**. Typecheck and production build clean.
+- Browser run passed: the purchase executive opened the approved requisition, chose "Request quotes", invited two vendors, issued the RFQ and keyed in both quotations. The cheaper Gujarat quote (₹59.25/kg) carried ₹9,000 freight and a 21-day lead time, so it landed at ₹62.85 and ranked second; the Maharashtra quote (₹61.50, 7 days) was recommended and awarded. The drafted PO (₹1,81,425) went to the purchase head and finance head, was issued, acknowledged and printed; the requisition closed as fully ordered. No browser errors; no horizontal scroll at phone width.
+
+### Changed during this part
+- Cards without inner padding now pad their title (the "Products"/"Items" cards on quotation, order and requisition pages had the title flush to the edge).
+- Status badges for Issued, Acknowledged, Lapsed, Awarded and receipt statuses.
+
+### Not built yet
+- **PO amendment with re-approval (PUR-007)**: for now cancel and re-raise before receipt.
+- **Goods receipt, quarantine and QC release**: part 3 (lines already carry a received quantity).
+- **Emailing RFQs and POs to vendors**: needs the email integration; print/PDF for now.
+- **Single-source purchase with retrospective approval beyond the emergency flag (PUR-011)** and **budget checks (PUR-003)**: need D06 details.
+- **Client input**: confirm the D06 bands and the D34 RFQ weights; both are settings, no code change needed.

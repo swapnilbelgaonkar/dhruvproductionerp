@@ -167,6 +167,7 @@ export function RequisitionFormPage() {
 export function RequisitionDetailPage() {
   const { id } = useParams();
   const nav = useNavigate();
+  const { can } = useAuth();
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['requisition', id], queryFn: () => api<PrDetail>(`/purchase-requisitions/${id}`) });
@@ -185,6 +186,8 @@ export function RequisitionDetailPage() {
           {a.includes('edit') && <Button variant="secondary" onClick={() => nav(`/purchase/requisitions/${id}/edit`)}>Edit</Button>}
           {a.includes('cancel') && <Button variant="danger" onClick={() => setCancel(true)}>Cancel</Button>}
           {a.includes('submit') && <Button loading={submit.isPending} onClick={() => submit.mutate()}>Submit for approval</Button>}
+          {d.status === 'Approved' && can('purchase.rfq:manage') && <Button variant="secondary" onClick={() => nav(`/purchase/rfqs/new?requisitionId=${id}`)}>Request quotes</Button>}
+          {d.status === 'Approved' && can('purchase.order:create') && <Button onClick={() => nav(`/purchase/orders/new?requisitionId=${id}`)}>Create purchase order</Button>}
         </>} />
       <ErrorBanner error={submit.error} />
       {d.statusReason && ['Cancelled', 'Rejected', 'Draft'].includes(d.status) && <div className="mb-6 rounded-md bg-neutral-bg px-4 py-3 text-neutral-text">{d.statusReason}</div>}

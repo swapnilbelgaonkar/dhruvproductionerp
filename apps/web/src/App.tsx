@@ -14,6 +14,8 @@ import { DealerDetailPage, DealerFormPage, DealersPage } from './pages/sales/Dea
 import { ActivitiesPage, LeadDetailPage, LeadsPage, OpportunityDetailPage, PipelinePage } from './pages/sales/Crm';
 import { QuotationDetailPage, QuotationFormPage, QuotationPrintPage, QuotationsPage } from './pages/sales/Quotations';
 import { VendorDetailPage, VendorFormPage, VendorsPage } from './pages/purchase/Vendors';
+import { PurchaseOrderDetailPage, PurchaseOrderFormPage, PurchaseOrderPrintPage, PurchaseOrdersPage } from './pages/purchase/PurchaseOrders';
+import { RfqDetailPage, RfqFormPage, RfqsPage } from './pages/purchase/Rfqs';
 import { RequisitionDetailPage, RequisitionFormPage, RequisitionsPage } from './pages/purchase/Requisitions';
 import { SalesOrderDetailPage, SalesOrderFormPage, SalesOrderPrintPage, SalesOrdersPage } from './pages/sales/SalesOrders';
 import { CategoriesPage, HsnPage, UomPage } from './pages/masters/ProductMasters';
@@ -49,6 +51,7 @@ export function App() {
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
+      <Route path="purchase/orders/:id/print" element={<Protected perm="purchase.order:view"><PurchaseOrderPrintPage /></Protected>} />
       <Route path="sales/orders/:id/print" element={<Protected perm="sales.order:view"><SalesOrderPrintPage /></Protected>} />
       <Route element={<AppShell />}>
         <Route index element={<OverviewPage />} />
@@ -79,6 +82,14 @@ export function App() {
         <Route path="purchase/requisitions/new" element={<Protected perm="purchase.requisition:create"><RequisitionFormPage /></Protected>} />
         <Route path="purchase/requisitions/:id" element={<Protected perm="purchase.requisition:view"><RequisitionDetailPage /></Protected>} />
         <Route path="purchase/requisitions/:id/edit" element={<Protected perm="purchase.requisition:edit"><RequisitionFormPage /></Protected>} />
+        <Route path="purchase/rfqs" element={<Protected perm="purchase.rfq:view"><RfqsPage /></Protected>} />
+        <Route path="purchase/rfqs/new" element={<Protected perm="purchase.rfq:manage"><RfqFormPage /></Protected>} />
+        <Route path="purchase/rfqs/:id" element={<Protected perm="purchase.rfq:view"><RfqDetailPage /></Protected>} />
+        <Route path="purchase/rfqs/:id/edit" element={<Protected perm="purchase.rfq:manage"><RfqFormPage /></Protected>} />
+        <Route path="purchase/orders" element={<Protected perm="purchase.order:view"><PurchaseOrdersPage /></Protected>} />
+        <Route path="purchase/orders/new" element={<Protected perm="purchase.order:create"><PurchaseOrderFormPage /></Protected>} />
+        <Route path="purchase/orders/:id" element={<Protected perm="purchase.order:view"><PurchaseOrderDetailPage /></Protected>} />
+        <Route path="purchase/orders/:id/edit" element={<Protected perm="purchase.order:edit"><PurchaseOrderFormPage /></Protected>} />
         {master('legalEntities')}
         {master('plants')}
         {master('warehouses')}

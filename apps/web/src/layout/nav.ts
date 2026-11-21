@@ -1,4 +1,4 @@
-import { Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
+import { Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -20,6 +20,8 @@ export const NAV: NavGroup[] = [
   ] },
   { label: 'Purchase', items: [
     { to: '/purchase/requisitions', label: 'Requisitions', icon: ClipboardText, perm: 'purchase.requisition:view' },
+    { to: '/purchase/rfqs', label: 'RFQs & Comparison', icon: ListChecks, perm: 'purchase.rfq:view' },
+    { to: '/purchase/orders', label: 'Purchase Orders', icon: Package, perm: 'purchase.order:view' },
     { to: '/purchase/vendors', label: 'Vendors', icon: Truck, perm: 'mdm.vendor:view' },
   ] },
   { label: 'Masters', items: [
