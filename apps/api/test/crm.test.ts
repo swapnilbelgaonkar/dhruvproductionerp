@@ -102,7 +102,7 @@ describe('Lead → opportunity → won/lost (CRM-003…008)', () => {
     await f.rsm.post(`/api/v1/crm/leads/${lead.body.id}/transfer`, { ownerId: f.se2E, territoryId: f.taluka2, reason: 'Belongs to Niphad beat' }).expect(200);
     await f.se2.get(`/api/v1/crm/leads/${lead.body.id}`).expect(200);
     await f.se.get(`/api/v1/crm/leads/${lead.body.id}`).expect(404);
-    await relayOutbox(db);
+    while ((await relayOutbox(db)) > 0);
     const notes = await f.se2.get('/api/v1/notifications').expect(200);
     expect(notes.body.data.some((n: { title: string }) => n.title.startsWith('New lead assigned'))).toBe(true);
     await f.se2.post(`/api/v1/crm/leads/${lead.body.id}/disqualify`, { reason: 'No requirement this season' }).expect(200);

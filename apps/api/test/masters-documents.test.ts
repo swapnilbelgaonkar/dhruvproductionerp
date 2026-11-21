@@ -99,14 +99,14 @@ describe('Notifications & idempotency (NTF-001/004, PLT-004)', () => {
     const mda = await userAgent([{ code: 'MASTER_DATA_APPROVER' }]);
     const le = await mdo.post('/api/v1/legal-entities', { code: uniq('LE'), name: '[TEST] notify', pan: 'AAAAA0000A' }).expect(201);
     const sub = await mdo.post(`/api/v1/legal-entities/${le.body.id}/submit`).expect(200);
-    await relayOutbox(db);
-    await relayOutbox(db); // second run must not duplicate
+    while ((await relayOutbox(db)) > 0);
+    while ((await relayOutbox(db)) > 0); // second run must not duplicate
     const inbox = await mda.get('/api/v1/notifications').expect(200);
     const mine = inbox.body.data.filter((n: { link: string }) => n.link === `/approvals/${sub.body.approvalRequestId}`);
     expect(mine).toHaveLength(1);
     expect(mine[0].kind).toBe('action');
     await mda.post(`/api/v1/approvals/${sub.body.approvalRequestId}/decisions`, { decision: 'Approve' }).expect(200);
-    await relayOutbox(db);
+    while ((await relayOutbox(db)) > 0);
     const back = await mdo.get('/api/v1/notifications').expect(200);
     expect(back.body.data.some((n: { title: string }) => n.title.startsWith('Approved'))).toBe(true);
     await mdo.post('/api/v1/notifications/read-all').expect(200);
