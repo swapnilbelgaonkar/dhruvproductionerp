@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { FilePick } from '../../components/parties/PartyParts';
 import { useToast } from '../../components/toast';
 import { Button, Card, ErrorBanner, Field, Input, KeyValues, Modal, PageHeader, Select, Skeleton, StatusBadge, Textarea } from '../../components/ui';
+import { SpecResultsCard } from './QcSpecs';
 import { api, uploadFile } from '../../lib/api';
 import { fmtDate, fmtDateTime, fmtNum } from '../../lib/format';
 
@@ -14,7 +15,9 @@ interface InsRow { id: string; docNo: string; status: string; lotId: string; lot
   itemId: string; itemCode: string; itemName: string; itemType: string; uom: string; partyId: string | null; vendorName: string | null; grnId: string | null; grnNo: string | null;
   receiptDate: string | null; poId: string | null; poNo: string | null; warehouseCode: string | null; sampleQty: string | null; sampledBy: string | null; sampledAt: string | null;
   coaReceived: boolean; coaDocumentId: string | null; testedBy: string | null; testedAt: string | null; recommendation: string | null; decision: string | null;
-  decisionRemarks: string | null; decidedBy: string | null; decidedAt: string | null; createdAt: string; receivedQty: string; sourceType: string }
+  decisionRemarks: string | null; decidedBy: string | null; decidedAt: string | null; createdAt: string; receivedQty: string; sourceType: string;
+  spec: { code: string; versionNo: number; parameters: SpecParamView[] } | null; oos: { id: string; docNo: string; status: string; conclusion: string | null }[]; coa: { docNo: string; versionNo: number; issuedAt: string } | null }
+interface SpecParamView { id: string; seq: number; parameter: string; category: string; unit: string | null; limitType: string; minValue: string | null; maxValue: string | null; expectedText: string | null; methodId: string | null; methodCode: string | null; technique?: string | null; limit?: string }
 interface InsDetail extends InsRow {
   results: { seq: number; parameter: string; specification: string; result: string; pass: boolean }[]; stock: { bucket: string; qty: string }[];
   template: { parameter: string; specification: string }[]; allowedActions: string[];
@@ -109,15 +112,18 @@ export function InspectionDetailPage() {
               </div>
             </Card>
           )}
-          {d.status !== 'Pending' && (
-            <Card title={editResults ? '2. Test results' : 'Test results'} padded={false}
+          {d.status !== 'Pending' && d.spec && editResults && !d.oos.length && (
+            <SpecResultsCard inspectionId={d.id} spec={d.spec} editable coaDocumentId={d.coaDocumentId} onSaved={() => { void refresh(); }} />
+          )}
+          {d.status !== 'Pending' && (!d.spec || !editResults || d.oos.length > 0) && (d.results.length > 0 || !d.spec) && (
+            <Card title={editResults && !d.spec ? '2. Test results' : 'Test results'} padded={false}
               actions={editResults && <Button size="sm" variant="secondary" icon={<Plus size={16} />} onClick={() => setRows([...rows, { key: ++k, parameter: '', specification: '', result: '', pass: true }])}>Add test</Button>}>
               {d.template.length > 0 && !d.results.length && editResults && <p className="px-6 pb-3 text-[13px] text-ink-2">Parameters pre-filled from this item's last inspection.</p>}
               <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-[14px]">
                 <thead><tr className="border-b border-line text-left text-[12px] uppercase tracking-wide text-ink-2"><th className="px-6 py-3">Parameter</th><th className="px-2 py-3">Specification</th><th className="px-2 py-3">Result</th><th className="px-2 py-3">Pass</th>{editResults && <th className="px-3 py-3" />}</tr></thead>
-                <tbody>{(editResults ? rows : d.results.map((r) => ({ ...r, key: r.seq }))).map((r, i) => (
+                <tbody>{(editResults && !d.spec && !d.oos.length ? rows : d.results.map((r) => ({ ...r, key: `${r.seq}-${(r as { attempt?: number }).attempt ?? 1}`, parameter: (r as { attempt?: number }).attempt && (r as { attempt?: number }).attempt! > 1 ? `${r.parameter} (retest ${(r as { attempt?: number }).attempt! - 1})` : r.parameter }))).map((r, i) => (
                   <tr key={r.key} className="border-b border-line last:border-0">
-                    {editResults ? <>
+                    {editResults && !d.spec && !d.oos.length ? <>
                       <td className="px-6 py-2"><Input aria-label={`Parameter ${i + 1}`} value={r.parameter} onChange={(e) => setRows(rows.map((x) => (x.key === r.key ? { ...x, parameter: e.target.value } : x)))} placeholder="e.g. Zinc (Zn)" /></td>
                       <td className="px-2 py-2"><Input aria-label={`Specification ${i + 1}`} value={r.specification} onChange={(e) => setRows(rows.map((x) => (x.key === r.key ? { ...x, specification: e.target.value } : x)))} placeholder="e.g. ≥ 33.0%" /></td>
                       <td className="px-2 py-2"><Input aria-label={`Result ${i + 1}`} value={r.result} onChange={(e) => setRows(rows.map((x) => (x.key === r.key ? { ...x, result: e.target.value } : x)))} /></td>
@@ -129,7 +135,7 @@ export function InspectionDetailPage() {
                     </>}
                   </tr>))}</tbody>
               </table></div>
-              {editResults && (
+              {editResults && !d.spec && !d.oos.length && (
                 <div className="grid gap-4 border-t border-line px-6 py-5 md:grid-cols-3">
                   <label className="flex items-center gap-3 text-[14px]"><input type="checkbox" className="h-5 w-5 accent-[#5B38F5]" checked={coaReceived} onChange={(e) => setCoaReceived(e.target.checked)} />Vendor's certificate of analysis received</label>
                   <div className="flex items-center gap-3"><FilePick onFile={setCoaFile} label={d.coaDocumentId ? 'Replace CoA file' : 'Attach CoA (PDF/image)'} />{coaFile && <span className="text-[13px]">{coaFile.name}</span>}</div>
@@ -142,6 +148,16 @@ export function InspectionDetailPage() {
           )}
         </div>
         <aside className="space-y-6">
+          {(d.oos.length > 0 || d.coa || (['Released', 'QcApproved'].includes(d.status) && a.includes('coa'))) && (
+            <Card title="Investigations and certificate">
+              <ul className="space-y-2 text-[14px]">
+                {d.oos.map((o) => <li key={o.id} className="flex items-center justify-between gap-2"><Link className="text-primary" to={`/qc/oos/${o.id}`}>{o.docNo}</Link>
+                  <StatusBadge status={o.status === 'Closed' ? (o.conclusion === 'Confirmed' ? 'Rejected' : 'Closed') : 'Pending'} label={o.status === 'Closed' ? `Closed — ${o.conclusion}` : o.status === 'RetestAuthorised' ? 'Retest authorised' : 'Open'} /></li>)}
+                {d.coa && <li className="flex items-center justify-between gap-2"><span>{d.coa.docNo} v{d.coa.versionNo}</span><a className="text-primary" href={`/qc/inspections/${d.id}/coa`} target="_blank" rel="noreferrer">Print CoA</a></li>}
+              </ul>
+              {a.includes('coa') && ['Released', 'QcApproved'].includes(d.status) && <Button className="mt-3" size="sm" variant="secondary" onClick={async () => { await api(`/qc/inspections/${d.id}/coa`, { body: {} }); toast('success', d.coa ? 'CoA reissued.' : 'CoA issued.'); await refresh(); }}>{d.coa ? 'Reissue CoA' : 'Issue CoA'}</Button>}
+            </Card>
+          )}
           <Card title="Lot">
             <KeyValues items={[['Lot', d.lotNo], ['Vendor batch', d.vendorLotNo], ['Item', `${d.itemCode} — ${d.itemName}`], ['Vendor', d.vendorName],
               ['Mfg / expiry', `${d.mfgDate ? fmtDate(d.mfgDate) : '—'} / ${d.expiryDate ? fmtDate(d.expiryDate) : '—'}`],

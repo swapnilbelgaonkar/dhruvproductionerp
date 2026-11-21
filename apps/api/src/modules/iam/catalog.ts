@@ -53,6 +53,8 @@ export const PERMISSIONS = [
   ...P('Production', 'mfg.batch', ['view', 'execute', 'scrap'], 'batches (execute = start, dose, record readings, ask for IPQC, complete, hold)'),
   ...P('Quality', 'qc.ipqc', ['record'], 'in-process QC results'),
   ...P('Production', 'mfg.packing', ['view', 'post'], 'packing runs, box serials and QR labels'),
+  ...P('Quality', 'qc.spec', ['view', 'manage'], 'test methods and item specifications'),
+  ...P('Quality', 'qc.instrument', ['view', 'manage'], 'laboratory instruments and their calibration'),
   ...P('Quality', 'qa.release', ['view', 'decide'], 'QA batch review and the disposition of finished goods (release, hold, reject, rework)'),
 ];
 
@@ -70,7 +72,7 @@ const BUYING = ['purchase.rfq:view', 'purchase.rfq:manage', 'purchase.order:view
   'purchase.order:issue', 'purchase.order:cancel'];
 const RECEIVE = ['purchase.grn:view', 'purchase.grn:create', 'purchase.grn:post', 'purchase.grn:cancel', 'inv.stock:view', 'qc.inspection:view', 'purchase.return:view', 'purchase.return:create'];
 const INVOICING = ['purchase.invoice:view', 'purchase.invoice:create', 'purchase.invoice:submit', 'purchase.invoice:cancel'];
-const QC_TEST = ['qc.inspection:view', 'qc.inspection:record', 'inv.stock:view', 'purchase.grn:view', 'mdm.vendor:view'];
+const QC_TEST = ['qc.inspection:view', 'qc.inspection:record', 'inv.stock:view', 'purchase.grn:view', 'mdm.vendor:view', 'qc.spec:view', 'qc.instrument:view'];
 const PURCHASE_EXTRA: Record<string, string[]> = {
   PURCHASE_EXEC: [...VENDOR_BUY, ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING, 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view', 'purchase.return:view', 'purchase.return:create', 'purchase.return:post', ...INVOICING],
   PURCHASE_HEAD: [...VENDOR_BUY, 'mdm.vendor:suspend', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING, 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view',
@@ -81,7 +83,7 @@ const PURCHASE_EXTRA: Record<string, string[]> = {
   STORES_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', 'purchase.order:view', ...RECEIVE],
   STOREKEEPER: ['mdm.vendor:view', ...PR_RAISE, 'purchase.order:view', ...RECEIVE],
   PRODUCTION_PLANNER: [...PR_RAISE, 'inv.stock:view'], PRODUCTION_SUPERVISOR: [...PR_RAISE, 'inv.stock:view'], PLANT_HEAD: [...PR_RAISE, 'inv.stock:view', 'qc.inspection:view'],
-  QC_ANALYST: [...PR_RAISE, ...QC_TEST], QC_MANAGER: [...PR_RAISE, ...QC_TEST, 'qc.inspection:decide'], QC_HEAD: [...PR_RAISE, ...QC_TEST, 'qc.inspection:decide'],
+  QC_ANALYST: [...PR_RAISE, ...QC_TEST], QC_MANAGER: [...PR_RAISE, ...QC_TEST, 'qc.inspection:decide', 'qc.spec:manage', 'qc.instrument:manage'], QC_HEAD: [...PR_RAISE, ...QC_TEST, 'qc.inspection:decide', 'qc.spec:manage', 'qc.instrument:manage'],
   QA_EXECUTIVE: [...PR_RAISE, 'qc.inspection:view'], QA_MANAGER: ['mdm.vendor:view', ...PR_RAISE, 'qc.inspection:view', 'inv.stock:view'], QA_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'qc.inspection:view', 'inv.stock:view'],
   LOGISTICS_EXEC: [...PR_RAISE], LOGISTICS_HEAD: [...PR_RAISE],
   MANAGEMENT_VIEWER: ['mdm.vendor:view', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view', 'purchase.return:view', 'purchase.invoice:view'],
@@ -95,8 +97,8 @@ const PRODUCTION_EXTRA: Record<string, string[]> = {
   PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'mfg.override:request', 'inv.stock:view', 'mfg.batch:execute', 'mfg.packing:post'],
   PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure', ...ORDER_PLAN, 'mfg.batch:view', 'mfg.batch:execute', 'mfg.batch:scrap', 'mfg.packing:view', 'mfg.packing:post'],
   QA_EXECUTIVE: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW],
-  QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'inv.stock:view'],
-  QA_HEAD: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'qa.release:decide', 'inv.stock:view'],
+  QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'inv.stock:view', 'qc.spec:view', 'qc.instrument:view'],
+  QA_HEAD: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'qa.release:decide', 'inv.stock:view', 'qc.spec:view', 'qc.instrument:view'],
   QC_ANALYST: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'], QC_MANAGER: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'], QC_HEAD: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'],
   STOREKEEPER: ['mfg.order:view', 'mfg.issue:post', 'mfg.batch:view', 'mfg.packing:view'], STORES_HEAD: ['mfg.bom:view', 'mfg.order:view', 'mfg.issue:post', 'mfg.batch:view', 'mfg.packing:view'],
   PURCHASE_HEAD: ['mfg.bom:view', 'mfg.order:view'], FINANCE_HEAD: ['mfg.bom:view', ...PROD_VIEW],
@@ -237,6 +239,12 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
   { docType: 'mfg.dosing_deviation', name: 'Dosing outside tolerance (TC-11)', description: 'Plant head or another supervisor, then QA, before the batch continues',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
       { kind: 'role', key: 'plant', label: 'Production approval (plant head or supervisor)', roles: ['PLANT_HEAD', 'PRODUCTION_SUPERVISOR'] },
+      { kind: 'role', key: 'qa', label: 'QA approval', roles: ['QA_MANAGER', 'QA_HEAD'] },
+    ] }] } },
+  // QA-013 / doc 07: a specification version is approved by QC (manager or head), then QA
+  { docType: 'qc.spec_version', name: 'Specification version approval', description: 'QC manager or head, then QA, before a specification takes effect',
+    definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
+      { kind: 'role', key: 'qc', label: 'QC approval', roles: ['QC_MANAGER', 'QC_HEAD'] },
       { kind: 'role', key: 'qa', label: 'QA approval', roles: ['QA_MANAGER', 'QA_HEAD'] },
     ] }] } },
   { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',

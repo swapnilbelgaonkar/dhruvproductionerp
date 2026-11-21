@@ -6,6 +6,7 @@ import { DowntimePage, PackingLabelsPage, PackingRunDetailPage, PackingRunsPage,
 import { OverrideLink, ProductionOrderDetailPage, ProductionOrderFormPage, ProductionOrdersPage } from './pages/production/ProductionOrders';
 import { DeviationDetailPage, DeviationsPage } from './pages/quality/Deviations';
 import { ReleaseReviewPage, ReleasesPage } from './pages/quality/Releases';
+import { CoaPrintPage, InstrumentDetailPage, OosDetailPage, OosListPage, QcMasterPage, SpecDetailPage, VerifyCoaPage } from './pages/quality/QcSpecs';
 import { EmptyState, Skeleton } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { useAuth } from './lib/auth';
@@ -43,6 +44,7 @@ export function App() {
   const loc = useLocation();
   // the public label check needs no sign-in (QR-001)
   if (loc.pathname.startsWith('/verify/')) return <Routes><Route path="/verify/:serial" element={<VerifyPage />} /></Routes>;
+  if (loc.pathname.startsWith('/verify-coa/')) return <Routes><Route path="/verify-coa/:docNo" element={<VerifyCoaPage />} /></Routes>;
   if (loading) return <div className="grid min-h-screen place-items-center bg-canvas"><Skeleton className="h-12 w-48" /></div>;
   if (!me) return loc.pathname === '/login' ? <LoginPage /> : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   if (me.gate === 'MFA_VERIFY') return <MfaVerify />;
@@ -64,6 +66,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="qc/inspections/:id/coa" element={<Protected perm="qc.inspection:view"><CoaPrintPage /></Protected>} />
       <Route path="production/packing/:id/labels" element={<Protected perm="mfg.packing:view"><PackingLabelsPage /></Protected>} />
       <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
       <Route path="stores/returns/:id/print" element={<Protected perm="purchase.return:view"><ReturnPrintPage /></Protected>} />
@@ -138,6 +141,11 @@ export function App() {
         <Route path="production/batches" element={<Protected perm="mfg.batch:view"><BatchesPage /></Protected>} />
         <Route path="production/batches/:id" element={<Protected perm="mfg.batch:view"><BatchDetailPage /></Protected>} />
         <Route path="qc/ipqc" element={<Protected perm="qc.ipqc:record"><IpqcWorklistPage /></Protected>} />
+        <Route path="qc/master" element={<Protected perm="qc.spec:view"><QcMasterPage /></Protected>} />
+        <Route path="qc/specs/:id" element={<Protected perm="qc.spec:view"><SpecDetailPage /></Protected>} />
+        <Route path="qc/instruments/:id" element={<Protected perm="qc.instrument:view"><InstrumentDetailPage /></Protected>} />
+        <Route path="qc/oos" element={<Protected perm="qc.inspection:view"><OosListPage /></Protected>} />
+        <Route path="qc/oos/:id" element={<Protected perm="qc.inspection:view"><OosDetailPage /></Protected>} />
         <Route path="qa/releases" element={<Protected perm="qa.release:view"><ReleasesPage /></Protected>} />
         <Route path="qa/releases/:id" element={<Protected perm="qa.release:view"><ReleaseReviewPage /></Protected>} />
         <Route path="qa/deviations" element={<Protected perm="qa.deviation:view"><DeviationsPage /></Protected>} />

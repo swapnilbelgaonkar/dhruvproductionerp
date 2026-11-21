@@ -39,6 +39,8 @@ import { batchRoutes } from './modules/production/batches';
 import { packingRoutes, productionInsightRoutes, publicVerifyRoutes } from './modules/production/packing';
 import { deviationRoutes } from './modules/quality/deviations';
 import { qaReleaseRoutes } from './modules/quality/releases';
+import { qcMasterRoutes } from './modules/quality/qcmaster';
+import { oosRoutes, publicCoaRoutes } from './modules/quality/oos';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
@@ -64,6 +66,7 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use(loadSession(db));
   v1.use('/auth', authRoutes(db, cfg));
   v1.use('/public', publicVerifyRoutes(db, cfg));
+  v1.use('/public', publicCoaRoutes(db, cfg));
   v1.use(requireAuth);
   v1.use(idempotency(db));
   v1.use('/me', meRoutes());
@@ -88,7 +91,7 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/purchase-orders', purchaseOrderRoutes(db));
   v1.use('/goods-receipts', goodsReceiptRoutes(db));
   v1.use('/stock', stockRoutes(db));
-  v1.use('/qc/inspections', inspectionRoutes(db));
+  v1.use('/qc/inspections', inspectionRoutes(db, cfg));
   v1.use('/supplier-returns', supplierReturnRoutes(db));
   v1.use('/supplier-invoices', supplierInvoiceRoutes(db));
   v1.use('/production', productionSettingsRoutes(db));
@@ -99,6 +102,8 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/production', productionInsightRoutes(db));
   v1.use('/qa/deviations', deviationRoutes(db));
   v1.use('/qa/releases', qaReleaseRoutes(db));
+  v1.use('/qc/master', qcMasterRoutes(db));
+  v1.use('/qc/oos', oosRoutes(db));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);

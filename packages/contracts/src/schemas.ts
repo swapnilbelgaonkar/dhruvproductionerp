@@ -429,3 +429,32 @@ export const batchCompleteSchema = z.object({
   wasteQty: z.number().min(0).default(0), remarks: optionalText(1000),
   underDoseReason: optionalText(1000), balanceReason: optionalText(1000),
 });
+
+// ---------- QC: methods, instruments, specifications, OOS, CoA (BRD p.15; MP §13.3–13.7; QC-004…QC-008, QC-013) ----------
+export const QC_TECHNIQUES = ['HPLC', 'AAS', 'TITRATION', 'PH_METER', 'GRAVIMETRIC', 'SPECTROPHOTOMETRY', 'DENSITY', 'VISUAL', 'OTHER'] as const;
+export const testMethodSchema = z.object({ code, name: trimmed(150), technique: z.enum(QC_TECHNIQUES), reference: optionalText(200) });
+export const instrumentSchema = z.object({
+  code, name: trimmed(150), technique: z.enum(QC_TECHNIQUES), makeModel: optionalText(120), serialNo: optionalText(60), location: optionalText(120),
+  intervalDays: z.number().int().min(1).max(1095),
+});
+export const calibrationSchema = z.object({
+  calibratedOn: isoDay, result: z.enum(['Pass', 'Fail']), agency: optionalText(150), certificateNo: optionalText(60), documentId: uuid.optional().nullable(), remarks: optionalText(500),
+});
+export const SPEC_CATEGORIES = ['PHYSICAL', 'CHEMICAL', 'HEAVY_METAL', 'MICROBIAL', 'OTHER'] as const;
+export const specSchema = z.object({ itemId: uuid, code, title: trimmed(150) });
+export const specVersionSchema = z.object({
+  effectiveFrom: isoDay, changeNote: trimmed(500),
+  parameters: z.array(z.object({
+    parameter: trimmed(120), category: z.enum(SPEC_CATEGORIES), unit: optionalText(20), limitType: z.enum(['RANGE', 'MIN', 'MAX', 'TEXT']),
+    minValue: z.number().optional().nullable(), maxValue: z.number().optional().nullable(), expectedText: optionalText(200), methodId: uuid.optional().nullable(),
+  }).refine((p) => (p.limitType === 'RANGE' ? p.minValue != null && p.maxValue != null && p.maxValue >= p.minValue
+    : p.limitType === 'MIN' ? p.minValue != null : p.limitType === 'MAX' ? p.maxValue != null : !!p.expectedText), { message: 'Give the limits that match the limit type', path: ['minValue'] }))
+    .min(1, 'Add at least one parameter').max(40),
+});
+export const qcSpecResultsSchema = z.object({
+  results: z.array(z.object({ specParameterId: uuid, value: trimmed(60), instrumentId: uuid.optional().nullable() })).min(1).max(40),
+  coaReceived: z.boolean(), coaDocumentId: uuid.optional().nullable(), recommendation: z.enum(['Release', 'Reject', 'Hold']),
+});
+export const oosInvestigationSchema = z.object({ phase1Findings: trimmed(2000), authoriseRetest: z.boolean() });
+export const oosRetestSchema = z.object({ results: z.array(z.object({ specParameterId: uuid, value: trimmed(60), instrumentId: uuid.optional().nullable() })).min(1).max(40) });
+export const oosCloseSchema = z.object({ conclusion: z.enum(['Confirmed', 'Invalidated']), rootCause: trimmed(2000) });
