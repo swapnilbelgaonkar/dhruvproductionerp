@@ -22,6 +22,7 @@ const ENTITIES: Record<string, EntityRule> = {
   'org.warehouse': { table: 'org.warehouses', view: 'org.warehouse:view', edit: ['org.warehouse:edit_draft'], scope: 'legal_entity_id' },
   'mdm.item': { table: 'mdm.items', view: 'mdm.item:view', edit: ['mdm.item:edit_draft'], scope: null },
   'qc.inspection': { table: 'qc.inspections', view: 'qc.inspection:view', edit: ['qc.inspection:record'], scope: null },
+  'purchase.supplier_invoice': { table: 'purchase.supplier_invoices', view: 'purchase.invoice:view', edit: ['purchase.invoice:create'], scope: null },
   'purchase.goods_receipt': { table: 'purchase.goods_receipts', view: 'purchase.grn:view', edit: ['purchase.grn:create'], scope: null },
   'mdm.party': { table: 'mdm.parties', view: 'mdm.dealer:view', edit: ['mdm.dealer:edit_draft'], scope: 'territory', sensitivePerm: 'mdm.dealer:view_sensitive' },
 };

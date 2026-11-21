@@ -1,36 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { db, userAgent, type Agent } from './helpers';
-import { PDF, activeVendor, approve, approvedRequisition, inDays, setup, type F } from './purchase-fixtures';
-
-/** An approved, issued PO for the raw material. */
-async function issuedPo(f: F, vendor: string, qty: number, prLineId?: string) {
-  const po = await f.pe.post('/api/v1/purchase-orders', { partyId: vendor, legalEntityId: f.le, warehouseId: f.wh, deliveryDate: inDays(10), paymentTermsDays: 30,
-    deliveryTerms: 'Delivered', lines: [{ itemId: f.rm, qty, rate: 60, requisitionLineId: prLineId ?? null }] }).expect(201);
-  const sub = await f.pe.post(`/api/v1/purchase-orders/${po.body.id}/submit`).expect(200);
-  await approve(f.ph, sub.body.approvalRequestId).expect(200);
-  if (qty * 60 * 1.18 > 100000) await approve(f.fh, sub.body.approvalRequestId).expect(200);
-  await f.pe.post(`/api/v1/purchase-orders/${po.body.id}/issue`).expect(200);
-  const lineId = (await db.query(`select id from purchase.purchase_order_lines where purchase_order_id = $1`, [po.body.id])).rows[0].id as string;
-  return { id: po.body.id as string, lineId };
-}
-const grn = (poId: string, poLineId: string, qty: number, over: Record<string, unknown> = {}) => ({
-  purchaseOrderId: poId, challanNo: `DC-${qty}`, lines: [{ poLineId, challanQty: qty, receivedQty: qty, vendorLotNo: 'ZN-2611-01', mfgDate: inDays(-10), ...over }],
-});
-const receive = async (f: F, poId: string, lineId: string, qty: number) => {
-  const g = await f.keeper.post('/api/v1/goods-receipts', grn(poId, lineId, qty)).expect(201);
-  const posted = await f.keeper.post(`/api/v1/goods-receipts/${g.body.id}/post`).expect(200);
-  const d = (await f.keeper.get(`/api/v1/goods-receipts/${g.body.id}`).expect(200)).body;
-  return { id: g.body.id as string, posted: posted.body, inspectionId: d.lines[0].inspectionId as string, lotId: d.lines[0].lotId as string };
-};
-const lotStock = async (lotId: string) => Object.fromEntries((await db.query(`select bucket, sum(qty)::float as q from inv.stock_ledger where lot_id = $1 group by bucket`, [lotId])).rows.map((r) => [r.bucket, r.q]));
-const pass = [{ parameter: 'Zinc (Zn)', specification: '≥ 33.0%', result: '33.4%', pass: true }, { parameter: 'Moisture', specification: '≤ 1.0%', result: '0.6%', pass: true }];
-
-async function qcUsers() {
-  return { analyst: await userAgent([{ code: 'QC_ANALYST' }]), manager: await userAgent([{ code: 'QC_MANAGER' }]) };
-}
-async function coa(a: Agent, inspectionId: string) {
-  return (await a.upload(`/api/v1/documents?documentType=COA&entityType=qc.inspection&entityId=${inspectionId}&title=CoA&fileName=coa.pdf`, PDF, 'application/pdf').expect(201)).body.id as string;
-}
+import { db } from './helpers';
+import { activeVendor, approvedRequisition, coa, grn, inDays, issuedPo, lotStock, pass, qcUsers, receive, setup } from './purchase-fixtures';
 
 describe('Goods receipt into quarantine (PUR-008, TC-09)', () => {
   it('receives part of a PO into quarantine, enforces tolerance and lot details, then QC releases it', async () => {

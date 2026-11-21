@@ -349,3 +349,18 @@ export const qcResultsSchema = z.object({
 });
 export const qcDecisionSchema = z.object({ decision: z.enum(QC_DECISIONS), remarks: z.string().trim().max(500).optional().default('') })
   .refine((d) => d.decision === 'Release' || d.remarks.length > 0, { message: 'Give the reason for rejecting or holding the lot', path: ['remarks'] });
+
+// ---------- Supplier returns and invoices (MP §10.5–10.6; PUR-009, PUR-010) ----------
+export const RETURN_BUCKETS = ['REJECTED', 'UNRESTRICTED', 'BLOCKED'] as const;
+export const supplierReturnSchema = z.object({
+  goodsReceiptId: uuid, returnDate: isoDay.optional(), reason: trimmed(500), transporter: optionalText(120), vehicleNo: optionalText(20),
+  lines: z.array(z.object({ lotId: uuid, bucket: z.enum(RETURN_BUCKETS), qty: z.number().positive() })).min(1).max(100),
+}).refine((r) => new Set(r.lines.map((l) => l.lotId)).size === r.lines.length, { message: 'Each lot can appear once', path: ['lines'] });
+export const supplierInvoiceSchema = z.object({
+  purchaseOrderId: uuid, invoiceNo: trimmed(60), invoiceDate: isoDay, dueDate: isoDay.optional().nullable(), documentId: uuid.optional().nullable(),
+  lines: z.array(z.object({
+    poLineId: uuid, qty: z.number().positive(), rate: z.number().positive(), gstRate: z.number().min(0).max(100),
+    tax: z.number().min(0).optional().nullable(),          // GST as charged on the invoice; calculated when blank
+  })).min(1).max(100),
+}).refine((i) => new Set(i.lines.map((l) => l.poLineId)).size === i.lines.length, { message: 'Each PO line can appear once', path: ['lines'] });
+export const invoiceExceptionSchema = z.object({ note: trimmed(1000) });

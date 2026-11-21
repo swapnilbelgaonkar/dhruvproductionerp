@@ -41,6 +41,8 @@ export const PERMISSIONS = [
   ...P('Purchase', 'purchase.order', ['view', 'create', 'edit', 'submit', 'issue', 'cancel'], 'purchase orders'),
   ...P('Stores', 'purchase.grn', ['view', 'create', 'post', 'cancel'], 'goods receipts'),
   ...P('Stores', 'inv.stock', ['view'], 'stock balances, lots and the stock ledger'),
+  ...P('Stores', 'purchase.return', ['view', 'create', 'post'], 'supplier returns and their debit notes'),
+  ...P('Purchase', 'purchase.invoice', ['view', 'create', 'submit', 'cancel'], 'supplier invoices and the three-way match'),
   ...P('Quality', 'qc.inspection', ['view', 'record', 'decide'], 'QC inspection of received lots (record = sample and test; decide = release, reject or hold)'),
 ];
 
@@ -56,21 +58,23 @@ const PR_RAISE = ['purchase.requisition:view', 'purchase.requisition:create', 'p
 const VENDOR_BUY = ['mdm.vendor:view', 'mdm.vendor:create', 'mdm.vendor:edit_draft', 'mdm.vendor:submit'];
 const BUYING = ['purchase.rfq:view', 'purchase.rfq:manage', 'purchase.order:view', 'purchase.order:create', 'purchase.order:edit', 'purchase.order:submit',
   'purchase.order:issue', 'purchase.order:cancel'];
-const RECEIVE = ['purchase.grn:view', 'purchase.grn:create', 'purchase.grn:post', 'purchase.grn:cancel', 'inv.stock:view', 'qc.inspection:view'];
+const RECEIVE = ['purchase.grn:view', 'purchase.grn:create', 'purchase.grn:post', 'purchase.grn:cancel', 'inv.stock:view', 'qc.inspection:view', 'purchase.return:view', 'purchase.return:create'];
+const INVOICING = ['purchase.invoice:view', 'purchase.invoice:create', 'purchase.invoice:submit', 'purchase.invoice:cancel'];
 const QC_TEST = ['qc.inspection:view', 'qc.inspection:record', 'inv.stock:view', 'purchase.grn:view', 'mdm.vendor:view'];
 const PURCHASE_EXTRA: Record<string, string[]> = {
-  PURCHASE_EXEC: [...VENDOR_BUY, ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING, 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view'],
-  PURCHASE_HEAD: [...VENDOR_BUY, 'mdm.vendor:suspend', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING, 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view'],
+  PURCHASE_EXEC: [...VENDOR_BUY, ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING, 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view', 'purchase.return:view', 'purchase.return:create', 'purchase.return:post', ...INVOICING],
+  PURCHASE_HEAD: [...VENDOR_BUY, 'mdm.vendor:suspend', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING, 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view',
+    'purchase.return:view', 'purchase.return:create', 'purchase.return:post', ...INVOICING],
   DOC_VERIFIER: ['mdm.vendor:view', 'mdm.vendor:verify_documents', 'mdm.vendor:view_sensitive'],
-  FINANCE_HEAD: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view'],
-  ACCOUNTS_EXEC: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view'],
+  FINANCE_HEAD: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view', 'purchase.return:view', 'purchase.invoice:view'],
+  ACCOUNTS_EXEC: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view', 'purchase.return:view', ...INVOICING],
   STORES_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', 'purchase.order:view', ...RECEIVE],
   STOREKEEPER: ['mdm.vendor:view', ...PR_RAISE, 'purchase.order:view', ...RECEIVE],
   PRODUCTION_PLANNER: [...PR_RAISE, 'inv.stock:view'], PRODUCTION_SUPERVISOR: [...PR_RAISE, 'inv.stock:view'], PLANT_HEAD: [...PR_RAISE, 'inv.stock:view', 'qc.inspection:view'],
   QC_ANALYST: [...PR_RAISE, ...QC_TEST], QC_MANAGER: [...PR_RAISE, ...QC_TEST, 'qc.inspection:decide'], QC_HEAD: [...PR_RAISE, ...QC_TEST, 'qc.inspection:decide'],
   QA_EXECUTIVE: [...PR_RAISE, 'qc.inspection:view'], QA_MANAGER: ['mdm.vendor:view', ...PR_RAISE, 'qc.inspection:view', 'inv.stock:view'], QA_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'qc.inspection:view', 'inv.stock:view'],
   LOGISTICS_EXEC: [...PR_RAISE], LOGISTICS_HEAD: [...PR_RAISE],
-  MANAGEMENT_VIEWER: ['mdm.vendor:view', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view'],
+  MANAGEMENT_VIEWER: ['mdm.vendor:view', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view', 'purchase.return:view', 'purchase.invoice:view'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
@@ -182,6 +186,12 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
         { name: 'Up to ₹1 lakh', steps: [ph] },
       ] };
     })() },
+  // Doc 07 §6: a three-way match exception — purchase justifies, then the purchase head and the finance head decide
+  { docType: 'purchase.supplier_invoice', name: 'Invoice match exception', description: 'Supplier invoice outside the match tolerances: purchase head, then finance head',
+    definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
+      { kind: 'role', key: 'purchase', label: 'Purchase head review', roles: ['PURCHASE_HEAD'] },
+      { kind: 'role', key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] },
+    ] }] } },
   { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
       { kind: 'role', key: 'sales', label: 'Sales head approval', roles: ['SALES_BH', 'SALES_NSM'] },
