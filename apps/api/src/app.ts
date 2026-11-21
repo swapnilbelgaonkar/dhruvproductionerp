@@ -36,6 +36,7 @@ import { productionSettingsRoutes } from './modules/production/settings';
 import { bomRoutes } from './modules/production/boms';
 import { productionOrderRoutes } from './modules/production/orders';
 import { batchRoutes } from './modules/production/batches';
+import { packingRoutes, productionInsightRoutes, publicVerifyRoutes } from './modules/production/packing';
 import { deviationRoutes } from './modules/quality/deviations';
 import { qaReleaseRoutes } from './modules/quality/releases';
 
@@ -62,6 +63,7 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   const v1 = express.Router();
   v1.use(loadSession(db));
   v1.use('/auth', authRoutes(db, cfg));
+  v1.use('/public', publicVerifyRoutes(db, cfg));
   v1.use(requireAuth);
   v1.use(idempotency(db));
   v1.use('/me', meRoutes());
@@ -93,6 +95,8 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/boms', bomRoutes(db));
   v1.use('/production-orders', productionOrderRoutes(db));
   v1.use('/batches', batchRoutes(db));
+  v1.use('/packing-runs', packingRoutes(db, cfg));
+  v1.use('/production', productionInsightRoutes(db));
   v1.use('/qa/deviations', deviationRoutes(db));
   v1.use('/qa/releases', qaReleaseRoutes(db));
   v1.use('/', mdmRoutes(db));

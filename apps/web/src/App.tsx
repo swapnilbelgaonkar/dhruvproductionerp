@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { FormulationDetailPage, FormulationsPage, FormulationVersionFormPage, FormulationVersionLink, FormulationVersionPage } from './pages/production/Formulations';
 import { PlantSettingsPage } from './pages/production/PlantSettings';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
+import { DowntimePage, PackingLabelsPage, PackingRunDetailPage, PackingRunsPage, ProductionDashboardPage, VerifyPage } from './pages/production/Packing';
 import { OverrideLink, ProductionOrderDetailPage, ProductionOrderFormPage, ProductionOrdersPage } from './pages/production/ProductionOrders';
 import { DeviationDetailPage, DeviationsPage } from './pages/quality/Deviations';
 import { ReleaseReviewPage, ReleasesPage } from './pages/quality/Releases';
@@ -40,6 +41,8 @@ function Protected({ perm, children }: { perm?: string; children: JSX.Element })
 export function App() {
   const { me, loading } = useAuth();
   const loc = useLocation();
+  // the public label check needs no sign-in (QR-001)
+  if (loc.pathname.startsWith('/verify/')) return <Routes><Route path="/verify/:serial" element={<VerifyPage />} /></Routes>;
   if (loading) return <div className="grid min-h-screen place-items-center bg-canvas"><Skeleton className="h-12 w-48" /></div>;
   if (!me) return loc.pathname === '/login' ? <LoginPage /> : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   if (me.gate === 'MFA_VERIFY') return <MfaVerify />;
@@ -61,6 +64,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="production/packing/:id/labels" element={<Protected perm="mfg.packing:view"><PackingLabelsPage /></Protected>} />
       <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
       <Route path="stores/returns/:id/print" element={<Protected perm="purchase.return:view"><ReturnPrintPage /></Protected>} />
       <Route path="purchase/orders/:id/print" element={<Protected perm="purchase.order:view"><PurchaseOrderPrintPage /></Protected>} />
@@ -127,6 +131,10 @@ export function App() {
         <Route path="production/orders/:id" element={<Protected perm="mfg.order:view"><ProductionOrderDetailPage /></Protected>} />
         <Route path="production/orders/:id/edit" element={<Protected perm="mfg.order:edit"><ProductionOrderFormPage /></Protected>} />
         <Route path="production/overrides/:oid" element={<Protected perm="mfg.order:view"><OverrideLink /></Protected>} />
+        <Route path="production/dashboard" element={<Protected perm="mfg.order:view"><ProductionDashboardPage /></Protected>} />
+        <Route path="production/packing" element={<Protected perm="mfg.packing:view"><PackingRunsPage /></Protected>} />
+        <Route path="production/packing/:id" element={<Protected perm="mfg.packing:view"><PackingRunDetailPage /></Protected>} />
+        <Route path="production/downtime" element={<Protected perm="mfg.batch:view"><DowntimePage /></Protected>} />
         <Route path="production/batches" element={<Protected perm="mfg.batch:view"><BatchesPage /></Protected>} />
         <Route path="production/batches/:id" element={<Protected perm="mfg.batch:view"><BatchDetailPage /></Protected>} />
         <Route path="qc/ipqc" element={<Protected perm="qc.ipqc:record"><IpqcWorklistPage /></Protected>} />

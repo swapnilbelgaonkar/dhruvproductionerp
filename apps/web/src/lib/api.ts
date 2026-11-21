@@ -32,7 +32,7 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
   const json = text ? JSON.parse(text) : undefined;
   if (!res.ok) {
     const body: ApiErrorBody = json?.error ?? { code: 'HTTP_' + res.status, message: 'Request failed.' };
-    if (res.status === 401 && body.code === 'AUTH_REQUIRED' && !location.pathname.startsWith('/login')) {
+    if (res.status === 401 && body.code === 'AUTH_REQUIRED' && !location.pathname.startsWith('/login') && !location.pathname.startsWith('/verify/')) {
       location.assign('/login?next=' + encodeURIComponent(location.pathname + location.search));
     }
     throw new ApiError(res.status, body);

@@ -6,7 +6,7 @@ Order follows D12 (business flow). Stage 4 parts:
 2. Production orders: release against the formulation in force, reservation of QC-released lots, material issue, quarantine override (D33) — **done**
 3. Batch execution: dosing with tolerance and deviations, IPQC, completion with mass balance, the finished-goods lot into quarantine — **done**
 4. Finished-goods QC approval, QA batch review and release (blocked by open deviations), traceability, order closure — **done**
-5. Packing runs with box serials and QR labels, batch cost sheet, downtime, production dashboard — next
+5. Packing runs with box serials and QR labels, batch cost sheet, downtime, production dashboard — **done**
 
 Pending client decisions use the recommended defaults from doc 12, marked provisional, so the build can continue (client instruction: build the system first, settle the remaining items last).
 
@@ -139,3 +139,37 @@ Pending client decisions use the recommended defaults from doc 12, marked provis
 ### Not built yet
 - **Re-authentication at release** (single signature with password re-entry, doc 07): the release is recorded with the user and the checklist; re-entry of the password comes with the security hardening.
 - **Rework orders** (a new batch from a lot under "Rework authorised", genealogy linked): with part 5.
+
+## Part 5 — Packing, box labels, cost sheet, downtime and the production dashboard (BRD p.17–18 sub-modules 1, 10, 14, 15; MP §12.1, §12.7; MFG-002, MFG-011, MFG-014, MFG-015, QR-001/002; D23, D24, D32)
+
+| Area | What works | RTM |
+|---|---|---|
+| Packing run | A produced lot (not rejected) is filled into one of its pack sizes (`PKR/…`): packs filled and rejected, spillage, filling line. Packed quantity is converted to the lot's unit; a run can never pack more than is left in the lot. Rejected packs and spillage leave the lot as **packing loss** | MFG-011 |
+| Packaging material | Bottles, caps, labels and so on are drawn from the chosen packaging store, released lots only, **earliest expiry first**, never stock reserved for production. A shortage refuses the run. Their cost is the run's packaging cost | MFG-011 |
+| Box serials (D24, box level) | Boxes of the pack's units per box (the last one holds the rest), serial `BX-2026-27-00000001`, each signed with an HMAC derived from the application key (QR-002) | D24, QR-002 |
+| Labels | Printable sheet: product, box contents, batch / lot, manufacturing and expiry dates, serial and a QR code. The QR opens the public check | QR-001 |
+| Public label check | `/verify/<serial>?s=<signature>` needs no sign-in. A correct signature shows **Genuine product** with product, box, lot and dates (and a warning if the batch is not released yet); a forged or unknown label shows **Not recognised** and nothing else | QR-001/002 |
+| Cost sheet (D32, provisional) | On a completed batch: raw material dosed (actual lot costs), packaging used on its lot, and energy, labour and overhead as batch hours × the rates in setting `mfg.conversionCost`; total, per unit and per MT (when the product converts to kg). Until finance sets the rates, the sheet says it covers material and packaging only | MFG-015, D32 |
+| Downtime | Per line: from, to, reason (breakdown, cleaning/CIP, changeover, no material, power, planned maintenance, quality hold, other), remarks. Overlapping entries for a line are refused; downtime is recorded once it has ended | MFG-014 |
+| Production dashboard (D23, provisional) | For a month: **right first time** (completed batches with no deviation), **quality rate** (QA-released output ÷ completed output), **line availability** (1 − downtime ÷ scheduled shift hours), running batches, lots awaiting QA, open deviations, active orders; plan vs actual for orders due in the month; output and yield against standard per product; downtime by reason. OEE is not shown until D23 defines performance | MFG-002, MFG-003 |
+
+### Evidence
+- `apps/api/test/packing.test.ts` has 2 tests:
+  - Packing: the planner cannot pack; packing more than the lot holds refused; a packaging shortage refused. 100 packs with 2 rejected and 0.5 L spillage, giving 100 L packed and 2.5 L loss. The lot balance after the loss; packaging drawn FEFO with its cost; 9 boxes (8 × 12 + 4); labels with QR codes. The public check is genuine for the signed link, and "not genuine" for a forged signature or an unknown serial, without signing in.
+  - Cost sheet with rates over a 4-hour batch: material, packaging, energy, labour and overhead lines, total and per unit. Downtime: the planner cannot record it, and an overlap is refused. The dashboard has output, downtime by reason, the KPIs and the provisional note.
+- Totals: **69 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local):
+  1. The supervisor packed 600 × 1 L bottles (3 rejected, 1.2 L spillage) of the released lot B/2026-27/000001 on filling line CHK-FL-01, drawing bottles, caps and labels from WH-03; 50 boxes were labelled and printed.
+  2. A signed-out phone-sized browser opened the first label's link: **Genuine product**. A forged signature showed **Not recognised**.
+  3. The supervisor recorded 1.5 h of CIP on Reactor 1.
+  4. The planner saw the dashboard (right first time 100%, quality rate 100%, availability 99.85%, plan vs actual 975 / 2,000 L) and the batch cost sheet.
+
+## Stage 4 status
+Stage 4 (production) is built: plant settings, formulations, production orders with reservation and issue, the quarantine override, batch execution, QA release, traceability, packing with signed labels, cost sheet, downtime and the dashboard.
+
+Client decisions it uses provisionally: **D03** (make to stock and to order both allowed), **D04** (QA head releases finished goods; QC manager decides raw-material lots), **D23** (KPI formulas), **D24** (box-level serials), **D32** (conversion cost rates per batch hour, to be set by finance), **D33** (quarantine override with safeguards).
+
+### Not built in Stage 4
+- **MRP** (planned orders and purchase proposals from sales orders, forecast and stock, MFG-004), **capacity scheduling and the plant operations calendar** (MFG-016/017): planned with the reporting stage, as they need demand history.
+- **Rework orders** linked to their source lot, **unit-level serials** and **re-authentication at QA release**.
+- **Dispatch of boxes** (forward traceability to dealers): Stage 6, logistics.

@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -35,8 +35,11 @@ export const NAV: NavGroup[] = [
     { to: '/stores/stock', label: 'Stock & Lots', icon: Stack, perm: 'inv.stock:view' },
   ] },
   { label: 'Production', items: [
+    { to: '/production/dashboard', label: 'Production Dashboard', icon: ChartBar, perm: 'mfg.order:view' },
     { to: '/production/orders', label: 'Production Orders', icon: Factory, perm: 'mfg.order:view' },
     { to: '/production/batches', label: 'Batches', icon: TestTube, perm: 'mfg.batch:view' },
+    { to: '/production/packing', label: 'Packing', icon: Cube, perm: 'mfg.packing:view' },
+    { to: '/production/downtime', label: 'Downtime', icon: Timer, perm: 'mfg.batch:view' },
     { to: '/production/formulations', label: 'Formulations (BOM)', icon: Flask, perm: 'mfg.bom:view' },
     { to: '/production/settings', label: 'Plant & Line Settings', icon: SlidersHorizontal, perm: 'mfg.settings:view' },
   ] },

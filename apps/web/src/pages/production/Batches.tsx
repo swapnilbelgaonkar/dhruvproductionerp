@@ -6,7 +6,9 @@ import { ReasonDialog } from '../../components/ReasonDialog';
 import { useToast } from '../../components/toast';
 import { Button, Card, EmptyState, ErrorBanner, Field, Input, KeyValues, Modal, PageHeader, Select, Skeleton, StatusBadge, Textarea } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtINR, fmtNum } from '../../lib/format';
+import { CostSheetCard } from './Packing';
 
 interface BatchRow { id: string; batchNo: string; productionOrderId: string; orderNo: string; itemCode: string; itemName: string; seq: number; batchCount: number; plannedQty: string; uom: string;
   lineCode: string; shiftCode: string | null; operators: string[]; status: string; startedAt: string; outputQty: string | null; yieldPct: string | null; fgLotNo: string | null }
@@ -79,6 +81,8 @@ export function StartBatchDialog({ orderId, shifts, defaultShiftId, onClose }: {
 
 export function BatchDetailPage() {
   const { id } = useParams();
+  const { can } = useAuth();
+  const nav = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['batch', id], queryFn: () => api<BatchDetail>(`/batches/${id}`) });
@@ -101,6 +105,7 @@ export function BatchDetailPage() {
           {a.includes('reading') && <Button variant="secondary" onClick={() => setDialog('reading')}>Record reading</Button>}
           {a.includes('ipqc') && <Button variant="secondary" onClick={() => setDialog('ipqc')}>Ask QC to test</Button>}
           {a.includes('complete') && <Button onClick={() => setDialog('complete')}>Complete batch</Button>}
+          {b.status === 'Completed' && b.fgLotId && b.fgLotStatus !== 'Rejected' && can('mfg.packing:post') && <Button onClick={() => nav(`/production/packing?lotId=${b.fgLotId}`)}>Pack this lot</Button>}
         </>} />
       {b.statusReason && ['OnHold', 'Scrapped'].includes(b.status) && <div className="mb-6 rounded-md bg-warning-bg px-4 py-3 text-warning-text">{b.statusReason}</div>}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -161,6 +166,7 @@ export function BatchDetailPage() {
             : b.status !== 'Completed' && <p className="text-ink-2">None.</p>}
         </Card>
       </div>
+      {b.status === 'Completed' && <CostSheetCard batchId={b.id} />}
       {dose && <DoseDialog b={b} m={dose} onClose={() => setDose(null)} />}
       {dialog === 'reading' && <ReadingDialog id={b.id} onClose={() => setDialog(null)} />}
       {dialog === 'ipqc' && <IpqcRequestDialog id={b.id} onClose={() => setDialog(null)} />}
