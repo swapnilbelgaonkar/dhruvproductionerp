@@ -6,7 +6,8 @@ Enterprise ERP for Dhruv Agro Technologies Pvt. Ltd. It covers chemical, fertili
 
 - **Stage 0** pre-development package: [`docs/pre-development/`](docs/pre-development/README.md). The BRD v2.4 and the UI reference image have been reconciled into it.
 - **Stage 1 Foundation, increments 1–2:** built and tested (platform, approvals, organisation and product masters, document vault, notifications). See [`docs/development/stage-1-foundation.md`](docs/development/stage-1-foundation.md).
-- **Stage 2 Sales, part 1 (dealer onboarding):** built and tested. See [`docs/development/stage-2-sales.md`](docs/development/stage-2-sales.md).
+- **Stage 2 Sales (dealers, CRM, price lists, quotations, sales orders):** built and tested. See [`docs/development/stage-2-sales.md`](docs/development/stage-2-sales.md).
+- **Stage 3 Purchase, Stores and Quality (vendors, requisitions, RFQs, purchase orders, goods receipts, QC, returns, three-way match):** built and tested. See [`docs/development/stage-3-purchase.md`](docs/development/stage-3-purchase.md).
 - **Client decisions and pending items:** [`docs/pre-development/12-open-decision-register.md`](docs/pre-development/12-open-decision-register.md).
 
 ## Repository layout
@@ -56,6 +57,26 @@ Prerequisites: Node 22, pnpm 10, and PostgreSQL 16 with the `ltree`, `pgcrypto`,
    ```
 
 On first sign-in the administrator must enrol an authenticator app and choose a new password.
+
+## Try the demo users (development only)
+
+To walk through the sales, purchase, stores and quality flows with one login per role, seed the demo users and sample data on a development database. Choose your own password in `DEMO_PASSWORD`; it is never stored in the repository.
+
+```bash
+DEMO_PASSWORD='choose-a-dev-password' pnpm db:seed -- --org-from-brd --products-from-brd --sample --demo-users
+```
+
+Every demo user signs in as `<role>@demo.local` with that password:
+
+| Area | Users |
+|---|---|
+| Sales | `se`, `tsm`, `rsm`, `nsm`, `ops`, `verifier`, `credit`, `finance` |
+| Purchase | `purchase`, `purchase-head`, `accounts` |
+| Stores | `storekeeper`, `stores-head` |
+| Quality | `qc`, `qc-manager` |
+| Audit (read only) | `auditor` |
+
+Everything the seed creates is marked `[SAMPLE]`. Its tax rates and limits are illustrative, not client-confirmed.
 
 ## Tests
 
