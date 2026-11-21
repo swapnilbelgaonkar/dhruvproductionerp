@@ -13,10 +13,11 @@ export async function migrate(databaseUrl: string, log = console.log): Promise<v
   try {
     await client.query(`create table if not exists public.schema_migrations (name text primary key, applied_at timestamptz not null default now())`);
     const done = new Set((await client.query<{ name: string }>(`select name from public.schema_migrations`)).rows.map((r) => r.name));
-    const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort();
+    const dir = process.env.MIGRATIONS_DIR ?? MIGRATIONS_DIR;
+    const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
     for (const f of files) {
       if (done.has(f)) continue;
-      const sql = await readFile(join(MIGRATIONS_DIR, f), 'utf8');
+      const sql = await readFile(join(dir, f), 'utf8');
       await client.query('begin');
       try {
         await client.query(sql);

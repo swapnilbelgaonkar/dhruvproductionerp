@@ -73,9 +73,14 @@ export async function relayOutbox(db: Db, batch = 100): Promise<number> {
   }
 }
 
+/** The hourly checks: licence expiry alerts, quotation expiry and unacknowledged purchase orders. */
+export function runScheduledScans(db: Db) {
+  return Promise.all([scanLicenceExpiry(db), expireQuotations(db), lapseUnacknowledged(db)]);
+}
+
 export function startRelay(db: Db, intervalMs = 2000, onError: (e: unknown) => void = console.error) {
   let running = false;
-  const scan = () => Promise.all([scanLicenceExpiry(db), expireQuotations(db), lapseUnacknowledged(db)]).catch(onError);
+  const scan = () => runScheduledScans(db).catch(onError);
   const daily = setInterval(scan, 3_600_000); // hourly check; each alert is sent once
   void scan();
   const timer = setInterval(async () => {

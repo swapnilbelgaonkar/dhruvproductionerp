@@ -78,6 +78,17 @@ Every demo user signs in as `<role>@demo.local` with that password:
 
 Everything the seed creates is marked `[SAMPLE]`. Its tax rates and limits are illustrative, not client-confirmed.
 
+## Hosted demo (Vercel)
+
+`node scripts/vercel-build.mjs` builds the portal and the API into Vercel's prebuilt format (`.vercel/output`); deploy it with `vercel deploy --prebuilt --prod`. The API runs as one Node function (`apps/api/src/vercel.ts`):
+
+- The project needs a Postgres database (Neon through the Vercel marketplace sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`), plus `APP_ENCRYPTION_KEY`, `NODE_ENV=production` and `CRON_SECRET`.
+- On a cold start, pending migrations are applied. If the database is empty and `deploy/demo-snapshot.sql` was present at build time, that [SAMPLE] snapshot is loaded first. The snapshot is not committed.
+- Uploaded files are kept in Postgres (`sys.file_objects`), because functions have no persistent disk.
+- Notifications are relayed when the bell or dashboard is read, and the hourly checks run from a daily Vercel cron job.
+
+This shape is for demonstration only. Production keeps the long-running API and worker processes and an object store (doc 03).
+
 ## Tests
 
 The API tests run against a real database. They expect a database named `dhruv_erp_test`; set `DATABASE_URL_TEST` to use a different one.

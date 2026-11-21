@@ -5,3 +5,5 @@ dist/
 coverage/
 .vite/
 apps/api/storage/
+.vercel/
+deploy/
