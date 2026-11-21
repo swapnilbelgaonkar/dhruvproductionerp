@@ -1,5 +1,5 @@
 import { Router, type Request } from 'express';
-import { addressSchema, dealerSchema, licenceSchema, licenceVerifySchema, reasonSchema, signatorySchema } from '@dhruv/contracts';
+import { DEALER_LICENCE_TYPES, dealerSchema, reasonSchema } from '@dhruv/contracts';
 import { allowTransition, withTx, type Actor, type Db, type Tx } from '../../db/pool';
 import { audit, diff, emit } from '../../lib/audit';
 import { Errors } from '../../lib/errors';
@@ -8,6 +8,7 @@ import { nextMasterCode } from '../../lib/numbering';
 import { getSetting } from '../../lib/settings';
 import { requirePermission } from '../../middleware/auth';
 import { actorOf, can, territoryScope } from '../../middleware/context';
+import { checklist, duplicates, identityChecks, kycChecks, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
 import { registerSubjectHandler, submitForApproval, type ApprovalRequestRow } from '../workflow/engine';
 
 const P = (a: string) => `mdm.dealer:${a}`;
@@ -42,66 +43,17 @@ async function setStatus(tx: Tx, partyId: string, status: string, actor: Actor, 
   await emit(tx, 'mdm.dealer', partyId, `dealer.${status.toLowerCase()}`);
 }
 
-async function duplicates(dbx: Db | Tx, d: { gstin?: string | null; pan?: string; mobile?: string }, excludeId: string | null) {
-  const r = await dbx.query(
-    `select p.id, p.code, p.legal_name as "legalName", p.gstin, p.pan, p.mobile, dp.status
-       from mdm.parties p left join mdm.dealer_profiles dp on dp.party_id = p.id
-      where p.id <> coalesce($4::uuid, '00000000-0000-0000-0000-000000000000') and (($1::text is not null and p.gstin = $1) or p.pan = $2 or p.mobile = $3)
-        and coalesce(dp.status, 'Active') <> 'Rejected'`, [d.gstin ?? null, d.pan ?? null, d.mobile ?? null, excludeId]);
-  return r.rows.map((x) => ({ ...x, matches: [x.gstin && x.gstin === d.gstin && 'GSTIN', x.pan === d.pan && 'PAN', x.mobile === d.mobile && 'mobile'].filter(Boolean) }));
-}
-
 /** Readiness checklist shown to the user and enforced on submission (DLR-001…008, D07 rules). */
 export async function readiness(dbx: Db | Tx, partyId: string) {
   const p = (await dbx.query(`select p.*, dp.* from mdm.parties p join mdm.dealer_profiles dp on dp.party_id = p.id where p.id = $1`, [partyId])).rows[0];
-  const checks: { key: string; label: string; ok: boolean; detail?: string }[] = [];
-  const add = (key: string, label: string, ok: boolean, detail?: string) => checks.push({ key, label, ok, detail });
-
-  const addr = (await dbx.query(`select kind, state_code from mdm.party_addresses where party_id = $1 and status = 'Active'`, [partyId])).rows;
-  const reg = addr.find((a) => a.kind === 'REGISTERED');
-  add('addr.registered', 'Registered address', !!reg);
-  add('addr.billing', 'Billing address', addr.some((a) => a.kind === 'BILLING'));
-  add('addr.shipping', 'At least one shipping address', addr.some((a) => a.kind === 'SHIPPING'));
-  if (p.gst_registered) {
-    add('gst.state', 'GSTIN state matches the registered address', !!reg && !!p.gstin && p.gstin.slice(0, 2) === reg.state_code,
-      reg && p.gstin && p.gstin.slice(0, 2) !== reg.state_code ? `GSTIN state ${p.gstin.slice(0, 2)}, address state ${reg.state_code}` : undefined);
-  }
-
-  const dups = await duplicates(dbx, p, partyId);
-  add('dup', 'No other dealer with the same GSTIN or PAN', !dups.some((d) => d.matches.includes('GSTIN') || d.matches.includes('PAN')),
-    dups.length ? dups.map((d) => `${d.code} (${d.matches.join(', ')})`).join('; ') : undefined);
-
+  const { checks, add } = checklist();
+  await identityChecks(dbx, { ...p, id: partyId }, add, { billing: true, shipping: true, noun: 'dealer' });
   const refs = (await dbx.query(
     `select (select status from org.territories where id = $1) as territory, (select status from org.employees where id = $2) as owner`, [p.territory_id, p.sales_owner_id])).rows[0];
   add('refs', 'Territory and sales owner are active', refs.territory === 'Active' && refs.owner === 'Active');
-
-  const lic = (await dbx.query(`select licence_type, valid_to, verification from mdm.party_licences where party_id = $1 and status = 'Active'`, [partyId])).rows;
-  const today = new Date().toISOString().slice(0, 10);
-  for (const t of p.licence_types as string[]) {
-    const l = lic.find((x) => x.licence_type === t);
-    const validTo = l ? new Date(l.valid_to).toISOString().slice(0, 10) : null;
-    add(`licence.${t}`, `${t[0]}${t.slice(1).toLowerCase()} licence with certificate, not expired`, !!l && validTo! >= today && l.verification !== 'Rejected',
-      !l ? 'Missing' : validTo! < today ? `Expired on ${validTo}` : l.verification === 'Rejected' ? 'Rejected by verifier — replace it' : undefined);
-  }
-
+  await licenceChecks(dbx, partyId, p.licence_types, add);
   const policy = await getSetting<string>(dbx, 'dealer.kyc.policy', 'CONDITIONAL');
-  const reqs = (await dbx.query(
-    `select requirement, min_count, condition, threshold, note from mdm.kyc_requirements
-      where policy in ('BOTH', $1) and constitution in ('*', $2) order by requirement`, [policy, p.constitution])).rows;
-  const docCounts = new Map((await dbx.query(
-    `select document_type, count(*)::int as n from sys.documents where entity_type = 'mdm.party' and entity_id = $1 and status = 'Active' group by document_type`, [partyId])).rows
-    .map((r) => [r.document_type, r.n]));
-  const signatories = Number((await dbx.query(`select count(*) from mdm.party_signatories where party_id = $1 and status = 'Active'`, [partyId])).rows[0].count);
-  // the strictest applicable rule per requirement wins
-  const need = new Map<string, { n: number; note: string }>();
-  for (const r of reqs) {
-    const applies = r.condition === 'ALWAYS' || (r.condition === 'GST_REGISTERED' && p.gst_registered) || (r.condition === 'CREDIT_ABOVE' && Number(p.credit_limit) > Number(r.threshold ?? 0));
-    if (applies && (need.get(r.requirement)?.n ?? 0) < r.min_count) need.set(r.requirement, { n: r.min_count, note: r.note });
-  }
-  for (const [reqt, { n, note }] of need) {
-    const have = reqt === 'SIGNATORY' ? signatories : docCounts.get(reqt) ?? 0;
-    add(`kyc.${reqt}`, note, have >= n, have < n ? `${have} of ${n} uploaded` : undefined);
-  }
+  await kycChecks(dbx, 'DEALER', policy, { ...p, id: partyId }, add);
   return { ready: checks.every((c) => c.ok), policy, checks };
 }
 
@@ -149,18 +101,8 @@ export function dealerRoutes(db: Db) {
 
   r.get('/:id', requirePermission(P('view')), asyncHandler(async (req, res) => {
     const d = await loadDealer(db, req, req.params.id!);
-    const [addresses, licences, signatories, approvals, refs] = await Promise.all([
-      db.query(`select id, kind, label, line1, line2, city, district, state_code as "stateCode", pincode, is_default as "isDefault", status
-                  from mdm.party_addresses where party_id = $1 and status = 'Active' order by kind, created_at`, [d.party_id]),
-      db.query(`select l.id, l.licence_type as "licenceType", l.number, l.issuer, l.valid_from as "validFrom", l.valid_to as "validTo", l.verification,
-                       l.remarks, l.verified_at as "verifiedAt", v.full_name as "verifiedBy", l.document_id as "documentId", l.status
-                  from mdm.party_licences l left join iam.users v on v.id = l.verified_by where l.party_id = $1 order by l.status, l.licence_type, l.created_at desc`, [d.party_id]),
-      db.query(`select id, full_name as "fullName", designation, id_type as "idType", id_last4 as "idLast4", document_id as "documentId"
-                  from mdm.party_signatories where party_id = $1 and status = 'Active' order by created_at`, [d.party_id]),
-      db.query(`select a.id, a.doc_no, a.status, a.submitted_at, u.full_name as initiator from wf.approval_requests a join iam.users u on u.id = a.initiated_by
-                 where a.subject_type = 'mdm.dealer' and a.subject_id = $1 order by a.submitted_at desc`, [d.party_id]),
-      db.query(`select t.name as territory, e.full_name as owner from org.territories t, org.employees e where t.id = $1 and e.id = $2`, [d.territory_id, d.sales_owner_id]),
-    ]);
+    const parts = await partyDetailParts(db, d.party_id, 'mdm.dealer');
+    const refs = await db.query(`select t.name as territory, e.full_name as owner from org.territories t, org.employees e where t.id = $1 and e.id = $2`, [d.territory_id, d.sales_owner_id]);
     const status = d.dealer_status as string;
     const actions: string[] = [];
     if (EDITABLE.includes(status) && can(req, P('edit_draft'))) actions.push('edit');
@@ -173,7 +115,7 @@ export function dealerRoutes(db: Db) {
       dealerCategory: d.dealer_category, territoryId: d.territory_id, territory: refs.rows[0]?.territory, salesOwnerId: d.sales_owner_id, salesOwner: refs.rows[0]?.owner,
       licenceTypes: d.licence_types, priceGroup: d.price_group, creditDays: d.credit_days, creditLimit: d.credit_limit, annualTarget: d.annual_target, targetFy: d.target_fy,
       status, statusReason: d.status_reason, activatedAt: d.activated_at, version: d.version, updatedAt: d.updated_at,
-      addresses: addresses.rows, licences: licences.rows, signatories: signatories.rows, approvals: approvals.rows,
+      ...parts,
       readiness: EDITABLE.includes(status) ? await readiness(db, d.party_id) : null,
       allowedActions: actions,
       canEditDetails: EDITABLE.includes(status) && can(req, P('edit_draft')),
@@ -240,101 +182,12 @@ export function dealerRoutes(db: Db) {
     res.json({ ok: true });
   }));
 
-  // ---- addresses, licences, signatories (child records)
-  const childGuard = async (tx: Tx, req: Request, perm: string, allowActive = false) => {
-    const d = await loadDealer(tx, req, req.params.id!, perm, true);
-    const ok = EDITABLE.includes(d.dealer_status) || (allowActive && ['Active', 'Suspended', 'Submitted'].includes(d.dealer_status));
-    if (!ok) throw Errors.state(`Details of a ${d.dealer_status} dealer cannot be changed here.`);
-    return d;
-  };
-
-  r.post('/:id/addresses', requirePermission(P('edit_draft')), asyncHandler(async (req, res) => {
-    const a = parse(addressSchema, req.body);
-    const id = await withTx(db, async (tx) => {
-      const d = await childGuard(tx, req, P('edit_draft'));
-      if (a.kind !== 'SHIPPING') {
-        await tx.query(`update mdm.party_addresses set status = 'Inactive' where party_id = $1 and kind = $2 and status = 'Active'`, [d.party_id, a.kind]);
-      }
-      const ins = await tx.query(
-        `insert into mdm.party_addresses (party_id, kind, label, line1, line2, city, district, state_code, pincode, is_default, created_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,
-        [d.party_id, a.kind, a.label, a.line1, a.line2, a.city, a.district, a.stateCode, a.pincode, a.isDefault, req.auth!.user.id]);
-      await audit(tx, actorOf(req), { action: 'mdm.dealer.address_added', entityType: 'mdm.party', entityId: d.party_id, after: ins.rows[0] });
-      return ins.rows[0].id;
-    });
-    res.status(201).json({ id });
-  }));
-  r.post('/:id/addresses/:aid/remove', requirePermission(P('edit_draft')), asyncHandler(async (req, res) => {
-    await withTx(db, async (tx) => {
-      const d = await childGuard(tx, req, P('edit_draft'));
-      const x = await tx.query(`update mdm.party_addresses set status = 'Inactive' where id = $1 and party_id = $2 and status = 'Active' returning kind`, [req.params.aid, d.party_id]);
-      if (!x.rowCount) throw Errors.notFound('Address');
-      await audit(tx, actorOf(req), { action: 'mdm.dealer.address_removed', entityType: 'mdm.party', entityId: d.party_id, after: { addressId: req.params.aid } });
-    });
-    res.json({ ok: true });
-  }));
-
-  async function assertDoc(tx: Tx, partyId: string, documentId: string, types: string[]) {
-    const doc = (await tx.query(`select document_type, entity_type, entity_id, status from sys.documents where id = $1`, [documentId])).rows[0];
-    if (!doc || doc.entity_type !== 'mdm.party' || doc.entity_id !== partyId || doc.status !== 'Active') throw Errors.rule('DOCUMENT_INVALID', 'Upload the supporting document to this dealer first.');
-    if (!types.includes(doc.document_type)) throw Errors.rule('DOCUMENT_INVALID', `The supporting document must be of type ${types.join(' or ')}.`);
-  }
-  const LICENCE_DOC: Record<string, string> = { FERTILIZER: 'FERTILIZER_LICENCE', PESTICIDE: 'PESTICIDE_LICENCE', BIOSTIMULANT: 'BIOSTIMULANT_REGISTRATION' };
-
-  // A new licence of the same type supersedes the old one (renewal). It needs verification again before it counts for orders.
-  r.post('/:id/licences', requirePermission(P('edit_draft')), asyncHandler(async (req, res) => {
-    const l = parse(licenceSchema, req.body);
-    const id = await withTx(db, async (tx) => {
-      const d = await childGuard(tx, req, P('edit_draft'), true);
-      await assertDoc(tx, d.party_id, l.documentId, [LICENCE_DOC[l.licenceType]!]);
-      await tx.query(`update mdm.party_licences set status = 'Superseded' where party_id = $1 and licence_type = $2 and status = 'Active'`, [d.party_id, l.licenceType]);
-      const ins = await tx.query(
-        `insert into mdm.party_licences (party_id, licence_type, number, issuer, valid_from, valid_to, document_id, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
-        [d.party_id, l.licenceType, l.number, l.issuer, l.validFrom, l.validTo, l.documentId, req.auth!.user.id]);
-      await audit(tx, actorOf(req), { action: 'mdm.dealer.licence_added', entityType: 'mdm.party', entityId: d.party_id, after: ins.rows[0] });
-      return ins.rows[0].id;
-    });
-    res.status(201).json({ id });
-  }));
-
-  r.post('/:id/licences/:lid/verify', requirePermission(P('verify_documents')), asyncHandler(async (req, res) => {
-    const v = parse(licenceVerifySchema, req.body);
-    await withTx(db, async (tx) => {
-      const d = await loadDealer(tx, req, req.params.id!, P('verify_documents'), true);
-      if (!['Submitted', 'Active', 'Suspended'].includes(d.dealer_status)) throw Errors.state('Licences are verified after the dealer is submitted.');
-      const l = (await tx.query(`select * from mdm.party_licences where id = $1 and party_id = $2 and status = 'Active' for update`, [req.params.lid, d.party_id])).rows[0];
-      if (!l) throw Errors.notFound('Licence');
-      if (l.created_by === req.auth!.user.id) throw Errors.sod('You entered this licence; another person must verify it.');
-      await tx.query(`update mdm.party_licences set verification = $2, remarks = $3, verified_by = $4, verified_at = now() where id = $1`,
-        [l.id, v.verification, v.remarks || null, req.auth!.user.id]);
-      await audit(tx, actorOf(req), { action: `mdm.dealer.licence_${v.verification.toLowerCase()}`, entityType: 'mdm.party', entityId: d.party_id,
-        after: { licenceId: l.id, type: l.licence_type, number: l.number }, reason: v.remarks || null });
-    });
-    res.json({ ok: true });
-  }));
-
-  r.post('/:id/signatories', requirePermission(P('edit_draft')), asyncHandler(async (req, res) => {
-    const s = parse(signatorySchema, req.body);
-    const id = await withTx(db, async (tx) => {
-      const d = await childGuard(tx, req, P('edit_draft'));
-      await assertDoc(tx, d.party_id, s.documentId, ['SIGNATORY_ID', 'PAN_CARD']);
-      const ins = await tx.query(
-        `insert into mdm.party_signatories (party_id, full_name, designation, id_type, id_last4, document_id, created_by) values ($1,$2,$3,$4,$5,$6,$7) returning id`,
-        [d.party_id, s.fullName, s.designation, s.idType, s.idLast4, s.documentId, req.auth!.user.id]);
-      await audit(tx, actorOf(req), { action: 'mdm.dealer.signatory_added', entityType: 'mdm.party', entityId: d.party_id, after: { fullName: s.fullName, designation: s.designation, idType: s.idType } });
-      return ins.rows[0].id;
-    });
-    res.status(201).json({ id });
-  }));
-  r.post('/:id/signatories/:sid/remove', requirePermission(P('edit_draft')), asyncHandler(async (req, res) => {
-    await withTx(db, async (tx) => {
-      const d = await childGuard(tx, req, P('edit_draft'));
-      const x = await tx.query(`update mdm.party_signatories set status = 'Inactive' where id = $1 and party_id = $2 and status = 'Active'`, [req.params.sid, d.party_id]);
-      if (!x.rowCount) throw Errors.notFound('Signatory');
-      await audit(tx, actorOf(req), { action: 'mdm.dealer.signatory_removed', entityType: 'mdm.party', entityId: d.party_id, after: { signatoryId: req.params.sid } });
-    });
-    res.json({ ok: true });
-  }));
+  // ---- addresses, licences, signatories (shared with other party roles)
+  partyChildRoutes(r, db, {
+    noun: 'dealer', perm: P, editable: EDITABLE, licenceTypes: DEALER_LICENCE_TYPES,
+    licenceStatuses: [...EDITABLE, 'Submitted', 'Active', 'Suspended'], verifyStatuses: ['Submitted', 'Active', 'Suspended'],
+    load: async (tx, req, id, perm) => { const d = await loadDealer(tx, req, id, perm, true); return { party_id: d.party_id, status: d.dealer_status }; },
+  });
 
   // ---- lifecycle
   r.post('/:id/submit', requirePermission(P('submit')), asyncHandler(async (req, res) => {

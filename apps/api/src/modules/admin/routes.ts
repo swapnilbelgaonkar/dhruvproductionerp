@@ -208,6 +208,13 @@ export function searchRoutes(db: Db) {
       parts.push(`(select 'Sales order', o.id, o.doc_no, p.legal_name, '/sales/orders/' || o.id from sales.sales_orders o join mdm.parties p on p.id = o.party_id
                     where (o.doc_no ilike $1 or p.legal_name ilike $1 or o.dealer_po_no ilike $1) and ${scope} limit 5)`);
     }
+    if (can(req, 'mdm.vendor:view')) parts.push(`(select 'Vendor', p.id, p.code, p.legal_name, '/purchase/vendors/' || p.id from mdm.parties p join mdm.vendor_profiles vp on vp.party_id = p.id
+                    where p.code ilike $1 or p.legal_name ilike $1 or p.gstin ilike $1 or p.mobile like $1 limit 5)`);
+    if (can(req, 'purchase.requisition:view')) {
+      const own = can(req, 'purchase.requisition:view_all') ? 'true' : `r.requested_by = '${req.auth!.user.id}'`;
+      parts.push(`(select 'Requisition', r.id, r.doc_no, left(r.purpose, 80), '/purchase/requisitions/' || r.id from purchase.requisitions r
+                    where (r.doc_no ilike $1 or r.purpose ilike $1) and ${own} limit 5)`);
+    }
     if (can(req, 'sales.price_list:view')) parts.push(`(select 'Price list', id, code, name, '/sales/price-lists/' || id from sales.price_lists where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'mdm.item:view')) parts.push(`(select 'Item', id, code, name, '/products/items/' || id from mdm.items where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'iam.user:view')) parts.push(`(select 'User', id, full_name, email::text, '/admin/users/' || id from iam.users where email ilike $1 or full_name ilike $1 limit 5)`);

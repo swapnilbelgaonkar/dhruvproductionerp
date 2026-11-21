@@ -23,9 +23,15 @@ const ENTITIES: Record<string, EntityRule> = {
   'mdm.item': { table: 'mdm.items', view: 'mdm.item:view', edit: ['mdm.item:edit_draft'], scope: null },
   'mdm.party': { table: 'mdm.parties', view: 'mdm.dealer:view', edit: ['mdm.dealer:edit_draft'], scope: 'territory', sensitivePerm: 'mdm.dealer:view_sensitive' },
 };
+/** A party's documents follow the role it is onboarded in: dealers are sales-owned and territory-scoped; vendors are purchase-owned. */
+const VENDOR_PARTY: EntityRule = { table: 'mdm.parties', view: 'mdm.vendor:view', edit: ['mdm.vendor:edit_draft'], scope: null, sensitivePerm: 'mdm.vendor:view_sensitive' };
+async function ruleFor(dbx: Db | Tx, entityType: string, entityId: string): Promise<EntityRule | undefined> {
+  if (entityType === 'mdm.party' && (await dbx.query(`select 1 from mdm.vendor_profiles where party_id = $1`, [entityId])).rowCount) return VENDOR_PARTY;
+  return ENTITIES[entityType];
+}
 
 async function loadEntity(dbx: Db | Tx, req: Request, entityType: string, entityId: string, mode: 'view' | 'edit') {
-  const e = ENTITIES[entityType];
+  const e = await ruleFor(dbx, entityType, entityId);
   if (!e) throw Errors.rule('ENTITY_NOT_SUPPORTED', `Documents cannot be attached to ${entityType}.`);
   const perm = mode === 'view' ? e.view : e.edit.find((p) => can(req, p));
   if (!perm || !can(req, perm)) throw Errors.forbidden(mode === 'view' ? e.view : e.edit[0]);
@@ -44,8 +50,8 @@ async function loadEntity(dbx: Db | Tx, req: Request, entityType: string, entity
   return row;
 }
 
-function assertSensitiveAccess(req: Request, entityType: string, sensitive: boolean) {
-  const perm = ENTITIES[entityType]?.sensitivePerm;
+async function assertSensitiveAccess(dbx: Db, req: Request, entityType: string, entityId: string, sensitive: boolean) {
+  const perm = (await ruleFor(dbx, entityType, entityId))?.sensitivePerm;
   if (sensitive && perm && !can(req, perm)) throw Errors.forbidden(perm);
 }
 
@@ -75,7 +81,7 @@ export function documentRoutes(db: Db, cfg: Config, storage: FileStorage) {
                  from sys.document_versions v join sys.files f on f.id = v.file_id left join iam.users u on u.id = v.created_by where v.document_id = d.id), '[]') as versions
          from sys.documents d join sys.document_types t on t.code = d.document_type
         where d.entity_type = $1 and d.entity_id = $2 order by d.status, t.name, d.title`, [entityType, entityId]);
-    const editable = ENTITIES[entityType]!.edit.some((p) => can(req, p));
+    const editable = (await ruleFor(db, entityType, entityId))!.edit.some((p) => can(req, p));
     res.json({ data: docs.rows, canUpload: editable });
   }));
 
@@ -149,7 +155,7 @@ export function documentRoutes(db: Db, cfg: Config, storage: FileStorage) {
          join sys.document_types t on t.code = d.document_type where v.id = $1`, [req.params.versionId])).rows[0];
     if (!v) throw Errors.notFound('Document');
     await loadEntity(db, req, v.entity_type, v.entity_id, 'view');
-    assertSensitiveAccess(req, v.entity_type, v.sensitive);
+    await assertSensitiveAccess(db, req, v.entity_type, v.entity_id, v.sensitive);
     const exp = Math.floor(Date.now() / 1000) + 300;
     await withTx(db, (tx) => audit(tx, actorOf(req), { action: 'document.link_issued', entityType: v.entity_type, entityId: v.entity_id, after: { versionId: v.id, title: v.title, sensitive: v.sensitive } }));
     res.json({ url: `/api/v1/documents/files/${v.id}?exp=${exp}&sig=${sign(v.id, req.auth!.user.id, exp)}`, expiresAt: new Date(exp * 1000).toISOString() });
@@ -165,7 +171,7 @@ export function documentRoutes(db: Db, cfg: Config, storage: FileStorage) {
          join sys.documents d on d.id = v.document_id join sys.document_types t on t.code = d.document_type where v.id = $1`, [req.params.versionId])).rows[0];
     if (!v) throw Errors.notFound('Document');
     await loadEntity(db, req, v.entity_type, v.entity_id, 'view');
-    assertSensitiveAccess(req, v.entity_type, v.sensitive);
+    await assertSensitiveAccess(db, req, v.entity_type, v.entity_id, v.sensitive);
     await withTx(db, (tx) => audit(tx, actorOf(req), { action: 'document.downloaded', entityType: v.entity_type, entityId: v.entity_id, after: { versionId: req.params.versionId } }));
     res.setHeader('Content-Type', v.mime);
     res.setHeader('X-Content-Type-Options', 'nosniff');

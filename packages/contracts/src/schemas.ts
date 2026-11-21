@@ -152,6 +152,10 @@ export const documentMetaSchema = z.object({
 export const CONSTITUTIONS = ['PROPRIETORSHIP', 'PARTNERSHIP', 'LLP', 'PVT_LTD', 'PUBLIC_LTD', 'FPO'] as const;
 export const DEALER_CATEGORIES = ['DISTRIBUTOR', 'DEALER', 'RETAILER', 'INSTITUTION'] as const;
 export const DEALER_LICENCE_TYPES = ['FERTILIZER', 'PESTICIDE', 'BIOSTIMULANT'] as const;
+/** Vendors may also hold a CIB&RC registration (pesticide technicals) and a factory manufacturing licence (BRD p.8). */
+export const VENDOR_LICENCE_TYPES = ['FERTILIZER', 'PESTICIDE', 'BIOSTIMULANT', 'CIB_REGISTRATION', 'MANUFACTURING'] as const;
+export const PARTY_LICENCE_TYPES = VENDOR_LICENCE_TYPES;
+export const VENDOR_CATEGORIES = ['RAW_MATERIAL', 'PACKAGING', 'LAB_CONSUMABLE', 'SERVICES', 'CAPITAL', 'OTHER'] as const;
 export const ID_TYPES = ['PAN', 'AADHAAR', 'PASSPORT', 'VOTER_ID', 'DRIVING_LICENCE'] as const;
 
 const mobile = z.string().trim().regex(/^[6-9][0-9]{9}$/, '10-digit Indian mobile number');
@@ -177,7 +181,7 @@ export const addressSchema = z.object({
   isDefault: z.boolean().default(false),
 });
 export const licenceSchema = z.object({
-  licenceType: z.enum(DEALER_LICENCE_TYPES), number: trimmed(60), issuer: trimmed(150),
+  licenceType: z.enum(PARTY_LICENCE_TYPES), number: trimmed(60), issuer: trimmed(150),
   validFrom: isoDate, validTo: isoDate, documentId: uuid,
 }).refine((l) => l.validTo >= l.validFrom, { message: 'Valid-to must be after valid-from', path: ['validTo'] });
 export const signatorySchema = z.object({
@@ -259,3 +263,38 @@ export const salesOrderHeaderSchema = z.object({
   contactPerson: optionalText(100), paymentTerms: trimmed(300), deliveryTerms: trimmed(300), notes: optionalText(1000), ...orderExtras,
 });
 export const convertQuotationSchema = z.object({ ...orderExtras });
+
+// ---------- Vendors (BRD §3.2 p.8; MDM-011, MDM-016) ----------
+export const vendorSchema = z.object({
+  legalName: trimmed(150), tradeName: optionalText(150), constitution: z.enum(CONSTITUTIONS),
+  pan: panSchema, gstRegistered: z.boolean(), gstin: gstinSchema.optional().nullable(),
+  contactPerson: trimmed(100), mobile, email: z.string().trim().toLowerCase().email().optional().nullable(),
+  vendorCategory: z.enum(VENDOR_CATEGORIES), licenceTypes: z.array(z.enum(VENDOR_LICENCE_TYPES)).default([]),
+  msmeRegistered: z.boolean().default(false),
+  udyamNumber: z.string().trim().toUpperCase().regex(/^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/, 'Format UDYAM-MH-00-0000000').optional().nullable(),
+  paymentTermsDays: z.number().int().min(0).max(180),
+}).superRefine((d, ctx) => {
+  if (d.gstRegistered && !d.gstin) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN is required for a GST-registered vendor' });
+  if (d.gstin && d.gstin.slice(2, 12) !== d.pan) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN characters 3–12 must equal the PAN' });
+  if (d.msmeRegistered && !d.udyamNumber) ctx.addIssue({ code: 'custom', path: ['udyamNumber'], message: 'Udyam number is required for an MSME vendor' });
+});
+export const bankAccountSchema = z.object({
+  accountHolder: trimmed(120), bankName: trimmed(120), branch: optionalText(120),
+  ifsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, '11-character IFSC, e.g. SBIN0001234'),
+  accountNumber: z.string().trim().regex(/^[0-9]{9,18}$/, '9 to 18 digits'), documentId: uuid,
+});
+export const vendorItemSchema = z.object({
+  itemId: uuid, vendorItemCode: optionalText(60), leadTimeDays: z.number().int().min(0).max(365), minOrderQty: z.number().positive().optional().nullable(),
+});
+
+// ---------- Purchase requisitions (MP §10.1; PUR-001/002) ----------
+export const PR_PRIORITIES = ['NORMAL', 'URGENT', 'EMERGENCY'] as const;
+export const requisitionLineInput = z.object({
+  itemId: uuid, qty: z.number().positive('Quantity must be above zero'), estimatedRate: z.number().min(0).optional().nullable(),
+  requiredBy: isoDay.optional().nullable(), suggestedVendorId: uuid.optional().nullable(), remarks: optionalText(300),
+});
+export const requisitionSchema = z.object({
+  legalEntityId: uuid, warehouseId: uuid, departmentId: uuid.optional().nullable(), requiredBy: isoDay,
+  priority: z.enum(PR_PRIORITIES), purpose: trimmed(500),
+  lines: z.array(requisitionLineInput).min(1, 'Add at least one item').max(100),
+}).refine((r) => new Set(r.lines.map((l) => l.itemId)).size === r.lines.length, { message: 'Each item can appear only once', path: ['lines'] });

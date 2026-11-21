@@ -92,24 +92,32 @@ export function startRelay(db: Db, intervalMs = 2000, onError: (e: unknown) => v
 export async function scanLicenceExpiry(db: Db): Promise<number> {
   const thresholds = ((await db.query(`select value from sys.settings where key = 'licence.alertDays'`)).rows[0]?.value as number[] | undefined) ?? [60, 30];
   const rows = (await db.query(
-    `select l.id, l.licence_type, l.number, l.valid_to, (l.valid_to - current_date) as days_left, p.id as party_id, p.code, p.legal_name, ou.id as owner_user
-       from mdm.party_licences l join mdm.parties p on p.id = l.party_id join mdm.dealer_profiles dp on dp.party_id = p.id
+    `select l.id, l.licence_type, l.number, l.valid_to, (l.valid_to - current_date) as days_left, p.id as party_id, p.code, p.legal_name, ou.id as owner_user,
+            case when dp.party_id is not null then 'dealer' else 'vendor' end as role
+       from mdm.party_licences l join mdm.parties p on p.id = l.party_id
+       left join mdm.dealer_profiles dp on dp.party_id = p.id and dp.status in ('Active','Suspended','Submitted')
+       left join mdm.vendor_profiles vp on vp.party_id = p.id and vp.status in ('Active','Suspended','Submitted')
        left join iam.users ou on ou.employee_id = dp.sales_owner_id and ou.status = 'Active'
-      where l.status = 'Active' and dp.status in ('Active','Suspended','Submitted') and l.valid_to - current_date <= $1`, [Math.max(...thresholds)])).rows;
+      where l.status = 'Active' and (dp.party_id is not null or vp.party_id is not null) and l.valid_to - current_date <= $1`, [Math.max(...thresholds)])).rows;
   if (!rows.length) return 0;
   const verifiers = (await db.query(
     `select distinct u.id from iam.user_roles ur join iam.roles r on r.id = ur.role_id join iam.users u on u.id = ur.user_id
       where r.code = 'DOC_VERIFIER' and ur.status = 'Active' and u.status = 'Active'`)).rows.map((x) => x.id as string);
+  // vendor licences go to the purchase heads instead of a sales owner
+  const purchaseHeads = (await db.query(
+    `select distinct u.id from iam.user_roles ur join iam.roles r on r.id = ur.role_id join iam.users u on u.id = ur.user_id
+      where r.code = 'PURCHASE_HEAD' and ur.status = 'Active' and u.status = 'Active'`)).rows.map((x) => x.id as string);
   let n = 0;
   for (const l of rows) {
     const days = Number(l.days_left);
     const bucket = days < 0 ? 'expired' : String([...thresholds].sort((a, b) => a - b).find((t) => days <= t));
     const title = days < 0 ? `Licence expired — ${l.code}` : `Licence expires in ${days} days — ${l.code}`;
-    const body = `${l.legal_name}: ${String(l.licence_type).toLowerCase()} licence ${l.number}${days < 0 ? ' — billing for these products is blocked' : ''}`;
-    for (const userId of new Set([l.owner_user, ...verifiers].filter(Boolean) as string[])) {
+    const vendor = l.role === 'vendor';
+    const body = `${l.legal_name}: ${String(l.licence_type).toLowerCase().replace('_', ' ')} ${l.number}${days < 0 ? (vendor ? ' — purchases needing it are blocked' : ' — billing for these products is blocked') : ''}`;
+    for (const userId of new Set([...(vendor ? purchaseHeads : [l.owner_user]), ...verifiers].filter(Boolean) as string[])) {
       const ins = await db.query(
         `insert into sys.notifications (user_id, kind, title, body, link, dedupe_key) values ($1,'warning',$2,$3,$4,$5) on conflict (user_id, dedupe_key) do nothing`,
-        [userId, title, body, `/sales/dealers/${l.party_id}`, `licence:${l.id}:${bucket}`]);
+        [userId, title, body, vendor ? `/purchase/vendors/${l.party_id}` : `/sales/dealers/${l.party_id}`, `licence:${l.id}:${bucket}`]);
       n += ins.rowCount ?? 0;
     }
   }
