@@ -11,6 +11,7 @@ import { actorOf, can } from '../../middleware/context';
 import { todayIST } from '../sales/quotations';
 import { registerSubjectHandler, submitForApproval } from '../workflow/engine';
 import { raiseDeviation } from './orders';
+import { takeLineClearance } from '../quality/qasystem';
 
 /**
  * Batch execution (BRD p.18 sub-modules 6–8 and 13; MP §12.5–12.6; MFG-007, MFG-008, MFG-010; TC-11).
@@ -191,10 +192,12 @@ export function batchRoutes(db: Db) {
       const ver = (await tx.query(`select batch_size from mfg.bom_versions where id = $1`, [o.bom_version_id])).rows[0];
       const planned = r3(Math.min(Number(ver.batch_size), Number(o.planned_qty) - Number(used.done)));
       if (planned <= 0) throw Errors.state('The order quantity is already produced.');
+      const clearanceId = await takeLineClearance(tx, o.line_id, 'BATCH');      // QA-017
       const batchNo = await nextDocNo(tx, 'BATCH');
-      const row = (await tx.query(`insert into mfg.batches (batch_no, production_order_id, seq, planned_qty, uom, line_id, shift_id, operators, started_by, updated_by)
-                                   values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) returning id`,
-        [batchNo, o.id, Number(used.seq) + 1, planned, o.uom, o.line_id, d.shiftId ?? o.shift_id, d.operators, req.auth!.user.id])).rows[0];
+      const row = (await tx.query(`insert into mfg.batches (batch_no, production_order_id, seq, planned_qty, uom, line_id, shift_id, operators, started_by, updated_by, line_clearance_id)
+                                   values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$10) returning id`,
+        [batchNo, o.id, Number(used.seq) + 1, planned, o.uom, o.line_id, d.shiftId ?? o.shift_id, d.operators, req.auth!.user.id, clearanceId])).rows[0];
+      if (clearanceId) await tx.query(`update mfg.line_clearances set used_by_batch = $2 where id = $1`, [clearanceId, row.id]);
       if (o.status === 'Released') await setOrderStatus(tx, actorOf(req), o.id, 'InProgress');
       await audit(tx, actorOf(req), { action: `${SUBJECT}.started`, entityType: SUBJECT, entityId: row.id, after: { batchNo, order: o.doc_no, planned, operators: d.operators } });
       return { id: row.id as string, batchNo };

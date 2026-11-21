@@ -12,6 +12,7 @@ import { requirePermission } from '../../middleware/auth';
 import { actorOf } from '../../middleware/context';
 import { todayIST } from '../sales/quotations';
 import { convertQty } from './batches';
+import { takeLineClearance } from '../quality/qasystem';
 
 /**
  * Packing runs (BRD p.17–18 sub-module 10; MP §12.7; MFG-011): a finished-goods lot is filled into packs; packaging material is drawn
@@ -86,11 +87,13 @@ export function packingRoutes(db: Db, cfg: Config) {
       const onHand = stock.reduce((a, s) => a + Number(s.qty), 0);
       const packed = Number((await tx.query(`select coalesce(sum(packed_qty), 0) as q from mfg.packing_runs where lot_id = $1`, [lot.id])).rows[0].q);
       if (packed + packedQty + loss > onHand + 1e-6) throw Errors.rule('NOT_ENOUGH_BULK', `Lot ${lot.lot_no}: ${r3(onHand - packed)} ${lot.uom} is left to pack; this run needs ${r3(packedQty + loss)}.`);
+      const clearanceId = d.lineId ? await takeLineClearance(tx, d.lineId, 'PACKING') : null;      // QA-017
       const docNo = await nextDocNo(tx, 'PACKING_RUN');
       const run = (await tx.query(
         `insert into mfg.packing_runs (doc_no, lot_id, item_pack_id, line_id, packs_filled, packs_rejected, spillage_qty, packed_qty, box_count, remarks, posted_by)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id`,
         [docNo, lot.id, pack.id, d.lineId ?? null, d.packsFilled, d.packsRejected, d.spillageQty, packedQty, Math.ceil(d.packsFilled / pack.units_per_box), d.remarks ?? null, req.auth!.user.id])).rows[0];
+      if (clearanceId) await tx.query(`update mfg.line_clearances set used_by_packing = $2 where id = $1`, [clearanceId, run.id]);
       // packing loss leaves the lot from its largest holding
       if (loss > 0) {
         const s = stock[0];

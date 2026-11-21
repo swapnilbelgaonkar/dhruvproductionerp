@@ -4,7 +4,7 @@ Order follows D12 (business flow). Stage 5 parts:
 
 1. QC core: specification & method master, instruments & calibration, results against the specification, OOS investigation, controlled CoA — **done**
 2. QA core: CAPA, non-conformance, change control, complaints, recall with drill mode — **done**
-3. QA system: controlled documents & SOPs, training, audits, risk register, line clearance, QC and QA dashboards — next
+3. QA system: controlled documents & SOPs, training, audits, risk register, line clearance, QC and QA dashboards — **done**
 
 ## Part 1 — QC core (BRD p.15 sub-modules 1, 3, 4, 5, 6; MP §13.3–13.7; QC-004…QC-008, QC-011, QC-013; TC-12)
 
@@ -59,3 +59,36 @@ Order follows D12 (business flow). Stage 5 parts:
 
 ### New demo user
 `qa-exec` (@demo.local), reporting to the QA manager.
+
+## Part 3 — QA system (BRD p.4, p.16; MP §14.3; QA-006, QA-010, QA-011, QA-012, QA-017, QA-018, QC-002, QA-002)
+
+| Area | What works | RTM |
+|---|---|---|
+| Controlled documents | Code, title, type (SOP, STP, policy, work instruction, form, manual), department, owner, review cycle. Versions with the file in the vault, effective date and change summary. Approved by a QA reviewer (QA executive or manager), then the **QA head** (policy `qa.document_version`; the author cannot approve). The approved version becomes **Effective** and the previous one **Superseded** | QA-006 |
+| Review cycle | Each version's review date = effective date + the cycle (default **24 months**, QA-018); the register flags reviews due within a month and overdue | QA-018 |
+| Training compliance | A document lists the roles that must be trained. The **training matrix** shows, for each effective version, every active user in those roles and whether they passed training. QA records training (date, trainer, pass/fail, score) for several people at once. Training gaps appear on the dashboard | QA-011 |
+| Audits | Internal, supplier (the supplier is required), customer and regulatory: scope, auditor, date; findings classified observation / minor / major / critical with the clause. **A major or critical finding needs a CAPA before the audit closes** | QA-010 |
+| Quality risk register | FMEA: process area, failure mode, effect, severity × occurrence × detection = **RPN**, controls, owner, review date, status. Sorted by RPN; 100 and above is high | QA-012 |
+| Line clearance | A QA executive records the checklist for a line before a batch or packing run: previous material removed, line cleaned, labels reconciled, documents in place, equipment ready. Anything unticked is "not cleared" with the reason. **A batch, or a packing run on a line, cannot start without a clearance recorded after the line was last used** (`LINE_NOT_CLEARED`); each clearance is used once. Setting `mfg.lineClearance.required` | QA-017 |
+| Quality dashboard | QC: lots waiting (and older than 2 days), in-process tests waiting, open OOS, instruments overdue or due within 15 days, right first time and turnaround over 90 days. QA: batches awaiting release, open deviations, CAPA (and overdue), complaints, NCs, changes in progress, document reviews due, training gaps, high risks, recalls this year; each tile opens its register | QC-002, QA-002 |
+
+### Evidence
+- `apps/api/test/qa-system.test.ts` has 2 tests:
+  - Documents, training, audits and risk. Submission without a file is refused; the author cannot approve; QA review and the QA head approve; the version becomes Effective with its two-year review date. The supervisor appears untrained, a supervisor cannot record training, and QA records it. A supplier audit without the supplier is refused; a major finding blocks closing until a CAPA is linked. A risk of 5 × 4 × 6 gives RPN 120, counted on the dashboard.
+  - Line clearance: a batch is refused without one; a supervisor cannot record it; an unticked checklist needs a reason and counts as not cleared; after a clearance the batch starts and the clearance shows as used by that batch.
+- Totals: **75 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local): batch 2 of PRD/2026-27/000001 was refused because Reactor 1 had not been cleared since batch 1. The QA executive ticked the five checks and cleared the line, and the supervisor started batch 2. The QA head opened the quality dashboard.
+
+## Stage 5 status
+Stage 5 (QC and QA) is built.
+
+Provisional choices it uses:
+- The review cycle is 24 months (QA-018).
+- Line clearance is required by default.
+- Releasing finished goods stays with the QA head only (D04).
+
+### Not built in Stage 5
+- **QA rights governance (QA-014)**: delegation and recertification of QA authorities. Role grants are already audited and privileged ones approved; recertification campaigns come with the security hardening.
+- **Training enforcement**: blocking an untrained user from SOP-bound tasks (QA-011, P2) is not switched on; the matrix shows the gaps.
+- **Sample chain of custody, retention samples, reagent expiry, OOT trending (QC-003, QC-010)**.
+- **Alerts** for calibration due, document reviews due and overdue CAPA: with the notification scheduler in Stage 7.

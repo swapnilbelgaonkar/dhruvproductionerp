@@ -9,4 +9,9 @@ export default async function setup() {
   await c.query(`drop schema if exists sys, iam, org, wf, mdm, sales, purchase, inv, qc, mfg, qa cascade; drop table if exists public.schema_migrations;`);
   await c.end();
   await migrate(TEST_DB, () => undefined);
+  // line clearance (QA-017) is exercised in qa-system.test.ts; other suites start batches without it
+  const c2 = new pg.Client({ connectionString: TEST_DB });
+  await c2.connect();
+  await c2.query(`update sys.settings set value = 'false' where key = 'mfg.lineClearance.required'`);
+  await c2.end();
 }

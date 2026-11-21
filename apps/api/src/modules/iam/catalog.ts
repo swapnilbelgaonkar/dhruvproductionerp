@@ -60,6 +60,11 @@ export const PERMISSIONS = [
   ...P('Quality', 'qa.change', ['view', 'create', 'manage'], 'change control'),
   ...P('Quality', 'qa.complaint', ['view', 'create', 'manage'], 'customer complaints'),
   ...P('Quality', 'qa.recall', ['view', 'drill', 'actual'], 'recalls (drill = mock recall; actual = trace and lock stock)'),
+  ...P('Quality', 'qa.document', ['view', 'manage'], 'controlled documents (SOPs, STPs, policies) and their versions'),
+  ...P('Quality', 'qa.training', ['record'], 'training records'),
+  ...P('Quality', 'qa.audit', ['view', 'manage'], 'internal, supplier and customer audits'),
+  ...P('Quality', 'qa.risk', ['view', 'manage'], 'the quality risk register'),
+  ...P('Quality', 'qa.clearance', ['view', 'record'], 'line clearance before a batch or packing run'),
   ...P('Quality', 'qa.release', ['view', 'decide'], 'QA batch review and the disposition of finished goods (release, hold, reject, rework)'),
 ];
 
@@ -98,10 +103,10 @@ const BOM_AUTHOR = ['mfg.settings:view', 'mfg.bom:view', 'mfg.bom:create', 'mfg.
 const ORDER_PLAN = ['mfg.order:view', 'mfg.order:create', 'mfg.order:edit', 'mfg.order:submit', 'mfg.order:release', 'mfg.order:cancel', 'mfg.override:request', 'qa.deviation:view', 'inv.stock:view'];
 const PROD_VIEW = ['mfg.order:view', 'qa.deviation:view', 'mfg.batch:view', 'qa.release:view', 'mfg.packing:view'];
 /** QA core (Stage 5 part 2): QA runs the registers; plant, QC, stores and purchase can raise non-conformances and change requests. */
-const QA_SEE = ['qa.capa:view', 'qa.nc:view', 'qa.change:view', 'qa.complaint:view', 'qa.recall:view'];
+const QA_SEE = ['qa.capa:view', 'qa.nc:view', 'qa.change:view', 'qa.complaint:view', 'qa.recall:view', 'qa.document:view', 'qa.audit:view', 'qa.risk:view', 'qa.clearance:view'];
 const QA_RAISE = [...QA_SEE, 'qa.nc:create', 'qa.change:create'];
-const QA_EXEC = [...QA_RAISE, 'qa.capa:manage', 'qa.nc:manage', 'qa.complaint:create', 'qa.complaint:manage'];
-const QA_MGR = [...QA_EXEC, 'qa.capa:verify', 'qa.change:manage', 'qa.recall:drill'];
+const QA_EXEC = [...QA_RAISE, 'qa.capa:manage', 'qa.nc:manage', 'qa.complaint:create', 'qa.complaint:manage', 'qa.training:record', 'qa.clearance:record'];
+const QA_MGR = [...QA_EXEC, 'qa.capa:verify', 'qa.change:manage', 'qa.recall:drill', 'qa.document:manage', 'qa.audit:manage', 'qa.risk:manage'];
 const PRODUCTION_EXTRA: Record<string, string[]> = {
   PRODUCTION_PLANNER: [...BOM_AUTHOR, ...ORDER_PLAN, 'mfg.batch:view', 'mfg.packing:view', ...QA_RAISE],
   PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'mfg.override:request', 'inv.stock:view', 'mfg.batch:execute', 'mfg.packing:post', ...QA_RAISE],
@@ -264,6 +269,12 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
         { kind: 'role', key: 'qa', label: 'QA head approval', roles: ['QA_HEAD'] }, { kind: 'role', key: 'exec', label: 'Executive director approval (high risk)', roles: ['EXEC_ADMIN'] }] },
       { name: 'Default', steps: [{ kind: 'role', key: 'qa', label: 'QA head approval', roles: ['QA_HEAD'] }] },
     ] } },
+  // QA-006: a controlled document version is approved by a QA manager, then the QA head
+  { docType: 'qa.document_version', name: 'Controlled document approval', description: 'QA manager, then QA head, before a document version becomes effective',
+    definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
+      { kind: 'role', key: 'review', label: 'QA review', roles: ['QA_EXECUTIVE', 'QA_MANAGER'] },
+      { kind: 'role', key: 'approve', label: 'QA head approval', roles: ['QA_HEAD'] },
+    ] }] } },
   { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
       { kind: 'role', key: 'sales', label: 'Sales head approval', roles: ['SALES_BH', 'SALES_NSM'] },

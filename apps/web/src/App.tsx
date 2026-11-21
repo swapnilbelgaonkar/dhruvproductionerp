@@ -7,6 +7,7 @@ import { OverrideLink, ProductionOrderDetailPage, ProductionOrderFormPage, Produ
 import { DeviationDetailPage, DeviationsPage } from './pages/quality/Deviations';
 import { ReleaseReviewPage, ReleasesPage } from './pages/quality/Releases';
 import { CapaDetailPage, CapasPage, ChangeDetailPage, ChangesPage, ComplaintDetailPage, ComplaintsPage, NcDetailPage, NcsPage, RecallDetailPage, RecallsPage } from './pages/quality/QaCore';
+import { AuditDetailPage, AuditsPage, DocumentDetailPage, DocumentsPage, LineClearancePage, QualityDashboardPage, RisksPage } from './pages/quality/QaSystem';
 import { CoaPrintPage, InstrumentDetailPage, OosDetailPage, OosListPage, QcMasterPage, SpecDetailPage, VerifyCoaPage } from './pages/quality/QcSpecs';
 import { EmptyState, Skeleton } from './components/ui';
 import { AppShell } from './layout/AppShell';
@@ -147,6 +148,13 @@ export function App() {
         <Route path="qc/instruments/:id" element={<Protected perm="qc.instrument:view"><InstrumentDetailPage /></Protected>} />
         <Route path="qc/oos" element={<Protected perm="qc.inspection:view"><OosListPage /></Protected>} />
         <Route path="qc/oos/:id" element={<Protected perm="qc.inspection:view"><OosDetailPage /></Protected>} />
+        <Route path="qa/dashboard" element={<Protected perm="qa.capa:view"><QualityDashboardPage /></Protected>} />
+        <Route path="qa/documents" element={<Protected perm="qa.document:view"><DocumentsPage /></Protected>} />
+        <Route path="qa/documents/:id" element={<Protected perm="qa.document:view"><DocumentDetailPage /></Protected>} />
+        <Route path="qa/audits" element={<Protected perm="qa.audit:view"><AuditsPage /></Protected>} />
+        <Route path="qa/audits/:id" element={<Protected perm="qa.audit:view"><AuditDetailPage /></Protected>} />
+        <Route path="qa/risks" element={<Protected perm="qa.risk:view"><RisksPage /></Protected>} />
+        <Route path="qa/line-clearance" element={<Protected perm="qa.clearance:view"><LineClearancePage /></Protected>} />
         <Route path="qa/capas" element={<Protected perm="qa.capa:view"><CapasPage /></Protected>} />
         <Route path="qa/capas/:id" element={<Protected perm="qa.capa:view"><CapaDetailPage /></Protected>} />
         <Route path="qa/ncs" element={<Protected perm="qa.nc:view"><NcsPage /></Protected>} />
