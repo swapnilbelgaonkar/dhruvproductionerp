@@ -389,3 +389,22 @@ export const bomVersionSchema = z.object({
   })).min(1, 'Add at least one ingredient').max(60),
 }).refine((v) => new Set(v.lines.map((l) => l.itemId)).size === v.lines.length, { message: 'Each ingredient can appear only once', path: ['lines'] })
   .refine((v) => v.lines.every((l) => !l.alternates.some((a) => a.itemId === l.itemId)), { message: 'An ingredient cannot be its own substitute', path: ['lines'] });
+
+// ---------- Production orders, material issue and the quarantine override (MP §12.3, §12.5; MFG-005, MFG-007, MFG-013; D33) ----------
+export const productionOrderSchema = z.object({
+  plantId: uuid, lineId: uuid, itemId: uuid, plannedQty: z.number().positive('Quantity must be above zero'),
+  orderType: z.enum(['MTS', 'MTO']), salesOrderId: uuid.optional().nullable(), priority: z.enum(['NORMAL', 'URGENT']).default('NORMAL'),
+  plannedStart: isoDay, dueDate: isoDay, shiftId: uuid.optional().nullable(), issueWarehouseId: uuid, fgWarehouseId: uuid, remarks: optionalText(1000),
+}).refine((o) => o.dueDate >= o.plannedStart, { message: 'The due date cannot be before the start', path: ['dueDate'] })
+  .refine((o) => (o.orderType === 'MTO') === !!o.salesOrderId, { message: 'A make-to-order production order needs its sales order (and only then)', path: ['salesOrderId'] });
+export const releaseOrderSchema = z.object({ acceptShortage: z.boolean().default(false), reason: optionalText(500) })
+  .refine((r) => !r.acceptShortage || !!r.reason, { message: 'Say why the order is released short of material', path: ['reason'] });
+export const materialIssueSchema = z.object({
+  remarks: optionalText(500),
+  lines: z.array(z.object({ reservationId: uuid, qty: z.number().positive() })).min(1, 'Issue at least one lot').max(100),
+}).refine((m) => new Set(m.lines.map((l) => l.reservationId)).size === m.lines.length, { message: 'Each reservation can appear once', path: ['lines'] });
+export const materialReturnSchema = z.object({
+  remarks: optionalText(500),
+  lines: z.array(z.object({ orderMaterialId: uuid, lotId: uuid, qty: z.number().positive() })).min(1, 'Return at least one lot').max(100),
+});
+export const quarantineOverrideSchema = z.object({ orderMaterialId: uuid, lotId: uuid, qty: z.number().positive(), reason: trimmed(1000) });

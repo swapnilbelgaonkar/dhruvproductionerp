@@ -3,8 +3,8 @@
 Order follows D12 (business flow). Stage 4 parts:
 
 1. Plant & line settings and the formulation (BOM) master — **done**
-2. Production orders: release against the formulation in force, reservation of QC-released lots, material issue, quarantine override (D33) — next
-3. Batch execution: dosing with tolerance and deviations, IPQC, completion with mass balance, the finished-goods lot into quarantine
+2. Production orders: release against the formulation in force, reservation of QC-released lots, material issue, quarantine override (D33) — **done**
+3. Batch execution: dosing with tolerance and deviations, IPQC, completion with mass balance, the finished-goods lot into quarantine — next
 4. Packaging, finished-goods QC and QA release (blocked by open deviations), transfer to WH-01, traceability, costing and the production dashboard
 
 Pending client decisions use the recommended defaults from doc 12, marked provisional, so the build can continue (client instruction: build the system first, settle the remaining items last).
@@ -44,3 +44,39 @@ Pending client decisions use the recommended defaults from doc 12, marked provis
 - **Plant operations calendar (Gantt), CIP cleaning and maintenance windows (MFG-016/017)**: with production orders and downtime (parts 2 and 4).
 - **Alternate packing BOM per pack size**: with packaging (part 4).
 - **Client input**: D03 (production model) — make-to-stock and make-to-order are both supported by the order screens in part 2.
+
+## Part 2 — Production orders, reservation, material issue and the quarantine override (BRD p.15, p.18; MP §11.6, §12.3, §12.5; MFG-005, MFG-007, MFG-009, MFG-013, INV-007, INV-009; D33)
+
+| Area | What works | RTM |
+|---|---|---|
+| Production order | Number `PRD/2026-27/000001`. Product (with a formulation version in force on the planned start), quantity in its unit, the number of batches from the batch size, plant, line and shift, planned start and due date, priority, the raw-material store to draw from and the finished-goods warehouse to deliver to, remarks | MFG-005 |
+| Make to stock or to order | An order is for stock or for an approved sales order that includes the product (D03 hybrid, provisional) | MFG-005, D03 |
+| Material check | While planning: the formulation in force scaled to the quantity, against free released stock (QC-released, unexpired, not reserved) and quarantine stock, line by line | MFG-007 |
+| Approval | The plant head approves (policy `mfg.production_order`) | doc 07 |
+| Release | Fixes the formulation version **in force on the day of release** (MFG-006), scales every ingredient to the order, and reserves lots. A shortage is refused unless the planner accepts it with a reason; then the order is released with what is available and the rest is reserved later (**Reserve again**) | MFG-006, MFG-007 |
+| Reservation (INV-007) | FEFO — earliest expiry first, then the oldest lot — from released, unexpired lots in the chosen store. Candidate lots are locked while reserving, so the same stock is never reserved twice; a second order sees only free stock | INV-007, INV-009 |
+| Approved substitutes | When the formulation item runs short, its approved substitutes are reserved for the rest, converted by their factor (MFG-009) | MFG-009 |
+| Material issue | Stores issues reserved lots (`MIS/…`), less than reserved if less is handed over. Stock leaves the store bucket (`ISSUE_TO_PROD`). A lot put on hold, rejected or expired after reservation cannot be issued | MFG-007, INV-012 |
+| Return to stores | Unused material goes back (`MRT/…`, `RETURN_FROM_PROD`), into the bucket matching the lot's current QC status; never more than is with production | MFG-007 |
+| Hold, resume, cancel | Hold and resume with a reason. Cancel releases the reservations and withdraws pending override requests with their approvals; it is refused while material is still issued — return it first (MFG-013) | MFG-013 |
+| Quarantine-lock override (D33, provisional "allow with safeguards") | For an uncovered requirement, the supervisor or planner asks to use a lot still in quarantine, with the quantity and the reason (`QOV/…`). The **QC head and then the plant head** approve (policy `mfg.quarantine_override`). On approval the lot is reserved from quarantine, and a **deviation** is raised automatically and sent to the QA head and QA managers. Stores issues it from quarantine | BRD p.15, D33, X15 |
+| Deviation register | Number `DEV/…`, category, what happened, order and lot. QA closes it with a conclusion; an override deviation cannot be closed while the lot is still in quarantine. Part 4 blocks the batch release while it is open | QA-005 |
+| Opening stock | A ledger movement type `OPENING` for stock loaded at cutover (D10) | D10 |
+
+### Evidence
+- `apps/api/test/production-orders.test.ts` has 2 tests:
+  - Order: past start, make-to-order without a sales order and a finished-goods store as the material source refused; the supervisor cannot plan. The material check shows required against free stock. Release before approval refused; release with a shortage refused with the shortages listed and nothing reserved; accepted with a reason. FEFO order of lots; the substitute reserved at its factor; quarantined and expired lots never reserved. Issue by stores only; over-issue refused; a lot put on hold after reservation cannot be issued; ledger balances after issue; return limited to what was issued; cancel refused while material is issued. A second order reserves only free stock. Hold, resume and cancel release the reservations.
+  - Override: the quarantined lots offered; a quantity above the shortfall refused; stores cannot request; the plant head cannot approve before the QC head; on approval the reservation from quarantine, the deviation, and the QA head's notification; issue from quarantine; QA cannot close the deviation until QC decides on the lot; the supervisor cannot close it; QA closes it. Cancelling an order withdraws its pending override and that approval.
+- Totals: **63 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local, [SAMPLE] opening stock in WH-02):
+  1. The planner planned 2,000 L of Chelated Zinc 12% on Reactor 1, shift A, from WH-02 to WH-01. The material check showed EDTA 100 kg short with 500 kg in quarantine. The plant head approved.
+  2. The planner released it, accepting the shortage with a reason. DM water, zinc sulphate and two EDTA lots were reserved, the EDTA lot expiring first ahead of the other.
+  3. The supervisor asked to use 100 kg of the quarantined EDTA lot. The QC head and the plant head approved; deviation DEV/2026-27/000001 was raised, and the QA head saw it in the notifications, marked as waiting for QC.
+  4. The storekeeper issued everything (including 100 kg from quarantine) and returned 20 L of DM water.
+
+### New demo user
+`qc-head` (@demo.local); the QC manager now reports to the QC head.
+
+### Not built yet
+- **Batches, dosing, consumption and output**: part 3. Returns will then exclude what batches have consumed (already prepared).
+- **Plant operations calendar (Gantt) and line capacity scheduling (MFG-016/017)** and **MRP proposals from sales orders and forecasts (MFG-004)**: part 4.

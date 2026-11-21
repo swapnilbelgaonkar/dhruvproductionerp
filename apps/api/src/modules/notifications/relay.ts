@@ -36,6 +36,16 @@ async function leadNotes(tx: Tx, e: OutboxRow): Promise<Note[]> {
   return l ? [{ userId: l.user_id, kind: 'action', title: `New lead assigned — ${l.code}`, body: l.company, link: `/sales/leads/${l.id}` }] : [];
 }
 
+/** A raised deviation goes to the QA heads and managers (QA-005; D33 asks that the QA head is told of every quarantine override). */
+async function deviationNotes(tx: Tx, e: OutboxRow): Promise<Note[]> {
+  if (e.event_type !== 'qa.deviation.raised') return [];
+  const d = (await tx.query(`select id, doc_no, title from qa.deviations where id = $1`, [e.aggregate_id])).rows[0];
+  if (!d) return [];
+  const qa = (await tx.query(`select distinct u.id from iam.user_roles ur join iam.roles r on r.id = ur.role_id join iam.users u on u.id = ur.user_id
+                               where r.code in ('QA_HEAD','QA_MANAGER') and ur.status = 'Active' and u.status = 'Active'`)).rows;
+  return qa.map((u) => ({ userId: u.id as string, kind: 'warning' as const, title: `Deviation raised — ${d.doc_no}`, body: d.title, link: `/qa/deviations/${d.id}` }));
+}
+
 /**
  * Transactional-outbox relay (PLT-004): reads committed events and turns them into in-app notifications.
  * Safe to run on several instances (SKIP LOCKED) and to retry (unique dedupe key per user and event).
@@ -50,7 +60,7 @@ export async function relayOutbox(db: Db, batch = 100): Promise<number> {
     for (const e of rows) {
       try {
         await client.query('savepoint ev');
-        const notes = e.aggregate_type === 'wf.approval' ? await approvalNotes(client, e) : e.aggregate_type === 'crm.lead' ? await leadNotes(client, e) : [];
+        const notes = e.aggregate_type === 'wf.approval' ? await approvalNotes(client, e) : e.aggregate_type === 'crm.lead' ? await leadNotes(client, e) : e.aggregate_type === 'qa.deviation' ? await deviationNotes(client, e) : [];
         for (const n of notes) {
           await client.query(
             `insert into sys.notifications (user_id, kind, title, body, link, dedupe_key) values ($1,$2,$3,$4,$5,$6)

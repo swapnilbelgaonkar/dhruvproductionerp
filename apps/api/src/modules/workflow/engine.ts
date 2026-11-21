@@ -201,6 +201,17 @@ export function allowedDecisions(req: { status: string; initiated_by: string }, 
   return out;
 }
 
+/** Closes open approval requests of subjects that no longer exist in a usable form (e.g. the parent document was cancelled). */
+export async function withdrawOpenRequests(tx: Tx, subjectType: string, subjectIds: string[]) {
+  if (!subjectIds.length) return;
+  await allowTransition(tx);
+  const ids = (await tx.query<{ id: string }>(`select id from wf.approval_requests where subject_type = $1 and subject_id = any($2::uuid[]) and status in ('Pending','OnHold') for update`,
+    [subjectType, subjectIds])).rows.map((r) => r.id);
+  if (!ids.length) return;
+  await tx.query(`update wf.approval_steps set status = 'Cancelled' where request_id = any($1::uuid[]) and status in ('Waiting','Pending','OnHold')`, [ids]);
+  await tx.query(`update wf.approval_requests set status = 'Cancelled', completed_at = now() where id = any($1::uuid[])`, [ids]);
+}
+
 export async function decide(tx: Tx, actor: Actor, requestId: string, decision: ApprovalDecision, remarks: string): Promise<ApprovalRequestRow> {
   if (!actor.userId) throw Errors.authRequired();
   const req = (await tx.query<ApprovalRequestRow>(`select * from wf.approval_requests where id = $1 for update`, [requestId])).rows[0];

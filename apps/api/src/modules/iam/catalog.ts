@@ -46,6 +46,10 @@ export const PERMISSIONS = [
   ...P('Quality', 'qc.inspection', ['view', 'record', 'decide'], 'QC inspection of received lots (record = sample and test; decide = release, reject or hold)'),
   ...P('Production', 'mfg.settings', ['view', 'configure'], 'plant lines, machine parameters and shifts'),
   ...P('Production', 'mfg.bom', ['view', 'create', 'edit', 'submit'], 'formulations (BOM) and their versions'),
+  ...P('Production', 'mfg.order', ['view', 'create', 'edit', 'submit', 'release', 'cancel'], 'production orders (release = fix the formulation and reserve material; also hold and resume)'),
+  ...P('Stores', 'mfg.issue', ['post'], 'issue of reserved material to production and its return'),
+  ...P('Production', 'mfg.override', ['request'], 'requests to use a quarantined lot (approved by the QC head and the plant head)'),
+  ...P('Quality', 'qa.deviation', ['view', 'close'], 'deviations'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -80,14 +84,19 @@ const PURCHASE_EXTRA: Record<string, string[]> = {
 };
 /** Production (Stage 4). Formulations are drafted by planning; the plant head and QA approve them through the approval policy. */
 const BOM_AUTHOR = ['mfg.settings:view', 'mfg.bom:view', 'mfg.bom:create', 'mfg.bom:edit', 'mfg.bom:submit'];
+const ORDER_PLAN = ['mfg.order:view', 'mfg.order:create', 'mfg.order:edit', 'mfg.order:submit', 'mfg.order:release', 'mfg.order:cancel', 'mfg.override:request', 'qa.deviation:view', 'inv.stock:view'];
+const PROD_VIEW = ['mfg.order:view', 'qa.deviation:view'];
 const PRODUCTION_EXTRA: Record<string, string[]> = {
-  PRODUCTION_PLANNER: BOM_AUTHOR,
-  PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view'],
-  PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure'],
-  QA_EXECUTIVE: ['mfg.settings:view', 'mfg.bom:view'], QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view'], QA_HEAD: ['mfg.settings:view', 'mfg.bom:view'],
-  QC_ANALYST: ['mfg.bom:view'], QC_MANAGER: ['mfg.bom:view'], QC_HEAD: ['mfg.bom:view'],
-  STORES_HEAD: ['mfg.bom:view'], PURCHASE_HEAD: ['mfg.bom:view'], FINANCE_HEAD: ['mfg.bom:view'],
-  MANAGEMENT_VIEWER: ['mfg.settings:view', 'mfg.bom:view'],
+  PRODUCTION_PLANNER: [...BOM_AUTHOR, ...ORDER_PLAN],
+  PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'mfg.override:request', 'inv.stock:view'],
+  PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure', ...ORDER_PLAN],
+  QA_EXECUTIVE: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW],
+  QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close'],
+  QA_HEAD: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close'],
+  QC_ANALYST: ['mfg.bom:view', ...PROD_VIEW], QC_MANAGER: ['mfg.bom:view', ...PROD_VIEW], QC_HEAD: ['mfg.bom:view', ...PROD_VIEW],
+  STOREKEEPER: ['mfg.order:view', 'mfg.issue:post'], STORES_HEAD: ['mfg.bom:view', 'mfg.order:view', 'mfg.issue:post'],
+  PURCHASE_HEAD: ['mfg.bom:view', 'mfg.order:view'], FINANCE_HEAD: ['mfg.bom:view', ...PROD_VIEW],
+  MANAGEMENT_VIEWER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
@@ -210,6 +219,15 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
       { kind: 'role', key: 'plant', label: 'Plant head approval', roles: ['PLANT_HEAD'] },
       { kind: 'role', key: 'qa', label: 'QA approval', roles: ['QA_MANAGER', 'QA_HEAD'] },
+    ] }] } },
+  // Doc 07 §6: the plant head approves a production order before it can be released
+  { docType: 'mfg.production_order', name: 'Production order approval', description: 'The plant head approves a production order before release',
+    definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [{ kind: 'role', key: 'plant', label: 'Plant head approval', roles: ['PLANT_HEAD'] }] }] } },
+  // BRD p.15 / D33 (provisional "allow with safeguards"): QC head and plant manager both approve; a deviation is raised and QA notified on approval
+  { docType: 'mfg.quarantine_override', name: 'Quarantine-lock override (D33)', description: 'Use of a lot before QC release: QC head and plant head, with an automatic deviation',
+    definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [
+      { kind: 'role', key: 'qc', label: 'QC head approval', roles: ['QC_HEAD'] },
+      { kind: 'role', key: 'plant', label: 'Plant head approval', roles: ['PLANT_HEAD'] },
     ] }] } },
   { docType: 'sales.price_list', name: 'Price list approval', description: 'A price list takes effect only after the sales head and the finance head approve it',
     definition: { distinctApprovers: true, rules: [{ name: 'Default', steps: [

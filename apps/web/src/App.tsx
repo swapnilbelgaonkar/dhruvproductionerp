@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { FormulationDetailPage, FormulationsPage, FormulationVersionFormPage, FormulationVersionLink, FormulationVersionPage } from './pages/production/Formulations';
 import { PlantSettingsPage } from './pages/production/PlantSettings';
+import { OverrideLink, ProductionOrderDetailPage, ProductionOrderFormPage, ProductionOrdersPage } from './pages/production/ProductionOrders';
+import { DeviationDetailPage, DeviationsPage } from './pages/quality/Deviations';
 import { EmptyState, Skeleton } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { useAuth } from './lib/auth';
@@ -118,6 +120,13 @@ export function App() {
         <Route path="production/formulations/:id/versions/:vid" element={<Protected perm="mfg.bom:view"><FormulationVersionPage /></Protected>} />
         <Route path="production/formulations/:id/versions/:vid/edit" element={<Protected perm="mfg.bom:edit"><FormulationVersionFormPage /></Protected>} />
         <Route path="production/formulation-versions/:vid" element={<Protected perm="mfg.bom:view"><FormulationVersionLink /></Protected>} />
+        <Route path="production/orders" element={<Protected perm="mfg.order:view"><ProductionOrdersPage /></Protected>} />
+        <Route path="production/orders/new" element={<Protected perm="mfg.order:create"><ProductionOrderFormPage /></Protected>} />
+        <Route path="production/orders/:id" element={<Protected perm="mfg.order:view"><ProductionOrderDetailPage /></Protected>} />
+        <Route path="production/orders/:id/edit" element={<Protected perm="mfg.order:edit"><ProductionOrderFormPage /></Protected>} />
+        <Route path="production/overrides/:oid" element={<Protected perm="mfg.order:view"><OverrideLink /></Protected>} />
+        <Route path="qa/deviations" element={<Protected perm="qa.deviation:view"><DeviationsPage /></Protected>} />
+        <Route path="qa/deviations/:id" element={<Protected perm="qa.deviation:view"><DeviationDetailPage /></Protected>} />
         <Route path="production/settings" element={<Protected perm="mfg.settings:view"><PlantSettingsPage /></Protected>} />
         {master('legalEntities')}
         {master('plants')}
