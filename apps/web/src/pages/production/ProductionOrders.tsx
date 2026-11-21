@@ -180,7 +180,7 @@ export function ProductionOrderDetailPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['production-order', id], queryFn: () => api<OrderDetail>(`/production-orders/${id}`) });
-  const [dialog, setDialog] = useState<null | 'cancel' | 'hold' | 'resume' | 'issue' | 'return' | 'release-short' | 'batch'>(null);
+  const [dialog, setDialog] = useState<null | 'cancel' | 'hold' | 'resume' | 'issue' | 'return' | 'release-short' | 'batch' | 'close'>(null);
   const plants = useQuery({ queryKey: ['production-plants'], queryFn: () => api<{ data: PlantOpt[] }>('/production/plants') });
   const [shortages, setShortages] = useState<Shortage[]>([]);
   const [override, setOverride] = useState<Material | null>(null);
@@ -213,6 +213,7 @@ export function ProductionOrderDetailPage() {
           {a.includes('issue') && o.reservations.some((r) => r.status === 'Active') && <Button onClick={() => setDialog('issue')}>Issue material</Button>}
           {a.includes('submit') && <Button loading={submit.isPending} onClick={() => submit.mutate()}>Submit for approval</Button>}
           {a.includes('release') && <Button loading={release.isPending} onClick={() => release.mutate()}>Release to production</Button>}
+          {a.includes('close') && <Button variant="secondary" onClick={() => setDialog('close')}>Close order</Button>}
           {a.includes('start_batch') && <Button onClick={() => setDialog('batch')}>Start batch {o.batches.filter((x) => x.status === 'Completed').length + 1} of {o.batchCount}</Button>}
         </>} />
       <ErrorBanner error={submit.error ?? (release.error instanceof ApiError && release.error.code === 'MATERIAL_SHORTAGE' ? null : release.error) ?? reserve.error} />
@@ -320,6 +321,8 @@ export function ProductionOrderDetailPage() {
       </ReasonDialog>
       {dialog === 'issue' && <IssueDialog o={o} onClose={() => setDialog(null)} />}
       {dialog === 'return' && <ReturnDialog o={o} onClose={() => setDialog(null)} />}
+      <ReasonDialog open={dialog === 'close'} title={`Close ${o.docNo}`} confirmLabel="Close order" description="All batches are complete. Unused material must be back in stores first."
+        onClose={() => setDialog(null)} onConfirm={async (reason) => { await api(`/production-orders/${id}/close`, { body: { reason } }); toast('success', 'Order closed.'); await refresh(); }} />
       {dialog === 'batch' && <StartBatchDialog orderId={o.id} defaultShiftId={o.shiftId} onClose={() => setDialog(null)}
         shifts={(plants.data?.data.find((p) => p.id === o.plantId)?.shifts ?? []).filter((x) => x.status === 'Active')} />}
       {override && <OverrideDialog o={o} m={override} short={shortOf(override)} onClose={() => setOverride(null)} />}

@@ -17,7 +17,8 @@ async function running(qty = 2000) {
   return { f, id, analyst: await userAgent([{ code: 'QC_ANALYST' }]), qa: await userAgent([{ code: 'QA_MANAGER' }]) };
 }
 const batch = (f: PF, id: string) => f.supervisor.get(`/api/v1/batches/${id}`).expect(200).then((r) => r.body);
-const mat = (b: { materials: { itemId: string; id: string }[] }, itemId: string) => b.materials.find((m) => m.itemId === itemId)!;
+interface M { itemId: string; id: string; planned: number; low: number; high: number }
+const mat = (b: { materials: M[] }, itemId: string) => b.materials.find((m) => m.itemId === itemId)!;
 const lotOf = (b: { lots: Record<string, { lotId: string }[]> }, mId: string) => b.lots[mId]![0]!.lotId;
 
 describe('Batch execution (MFG-007, MFG-008, MFG-010, TC-11)', () => {

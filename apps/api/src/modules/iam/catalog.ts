@@ -52,6 +52,7 @@ export const PERMISSIONS = [
   ...P('Quality', 'qa.deviation', ['view', 'close'], 'deviations'),
   ...P('Production', 'mfg.batch', ['view', 'execute', 'scrap'], 'batches (execute = start, dose, record readings, ask for IPQC, complete, hold)'),
   ...P('Quality', 'qc.ipqc', ['record'], 'in-process QC results'),
+  ...P('Quality', 'qa.release', ['view', 'decide'], 'QA batch review and the disposition of finished goods (release, hold, reject, rework)'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -87,14 +88,14 @@ const PURCHASE_EXTRA: Record<string, string[]> = {
 /** Production (Stage 4). Formulations are drafted by planning; the plant head and QA approve them through the approval policy. */
 const BOM_AUTHOR = ['mfg.settings:view', 'mfg.bom:view', 'mfg.bom:create', 'mfg.bom:edit', 'mfg.bom:submit'];
 const ORDER_PLAN = ['mfg.order:view', 'mfg.order:create', 'mfg.order:edit', 'mfg.order:submit', 'mfg.order:release', 'mfg.order:cancel', 'mfg.override:request', 'qa.deviation:view', 'inv.stock:view'];
-const PROD_VIEW = ['mfg.order:view', 'qa.deviation:view', 'mfg.batch:view'];
+const PROD_VIEW = ['mfg.order:view', 'qa.deviation:view', 'mfg.batch:view', 'qa.release:view'];
 const PRODUCTION_EXTRA: Record<string, string[]> = {
   PRODUCTION_PLANNER: [...BOM_AUTHOR, ...ORDER_PLAN, 'mfg.batch:view'],
   PRODUCTION_SUPERVISOR: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'mfg.override:request', 'inv.stock:view', 'mfg.batch:execute'],
   PLANT_HEAD: [...BOM_AUTHOR, 'mfg.settings:configure', ...ORDER_PLAN, 'mfg.batch:view', 'mfg.batch:execute', 'mfg.batch:scrap'],
   QA_EXECUTIVE: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW],
-  QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close'],
-  QA_HEAD: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close'],
+  QA_MANAGER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'inv.stock:view'],
+  QA_HEAD: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, 'qa.deviation:close', 'qa.release:decide', 'inv.stock:view'],
   QC_ANALYST: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'], QC_MANAGER: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'], QC_HEAD: ['mfg.bom:view', ...PROD_VIEW, 'qc.ipqc:record'],
   STOREKEEPER: ['mfg.order:view', 'mfg.issue:post', 'mfg.batch:view'], STORES_HEAD: ['mfg.bom:view', 'mfg.order:view', 'mfg.issue:post', 'mfg.batch:view'],
   PURCHASE_HEAD: ['mfg.bom:view', 'mfg.order:view'], FINANCE_HEAD: ['mfg.bom:view', ...PROD_VIEW],

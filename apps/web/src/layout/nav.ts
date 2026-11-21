@@ -29,6 +29,7 @@ export const NAV: NavGroup[] = [
     { to: '/stores/receipts', label: 'Goods Receipts', icon: TrayArrowDown, perm: 'purchase.grn:view' },
     { to: '/qc/inspections', label: 'QC — Incoming Lots', icon: Microscope, perm: 'qc.inspection:view' },
     { to: '/qc/ipqc', label: 'QC — In-process', icon: Microscope, perm: 'qc.ipqc:record' },
+    { to: '/qa/releases', label: 'QA — Batch Release', icon: ShieldCheck, perm: 'qa.release:view' },
     { to: '/qa/deviations', label: 'Deviations', icon: Warning, perm: 'qa.deviation:view' },
     { to: '/stores/returns', label: 'Supplier Returns', icon: ArrowUUpLeft, perm: 'purchase.return:view' },
     { to: '/stores/stock', label: 'Stock & Lots', icon: Stack, perm: 'inv.stock:view' },

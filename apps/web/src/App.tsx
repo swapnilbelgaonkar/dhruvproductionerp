@@ -4,6 +4,7 @@ import { PlantSettingsPage } from './pages/production/PlantSettings';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
 import { OverrideLink, ProductionOrderDetailPage, ProductionOrderFormPage, ProductionOrdersPage } from './pages/production/ProductionOrders';
 import { DeviationDetailPage, DeviationsPage } from './pages/quality/Deviations';
+import { ReleaseReviewPage, ReleasesPage } from './pages/quality/Releases';
 import { EmptyState, Skeleton } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { useAuth } from './lib/auth';
@@ -129,6 +130,8 @@ export function App() {
         <Route path="production/batches" element={<Protected perm="mfg.batch:view"><BatchesPage /></Protected>} />
         <Route path="production/batches/:id" element={<Protected perm="mfg.batch:view"><BatchDetailPage /></Protected>} />
         <Route path="qc/ipqc" element={<Protected perm="qc.ipqc:record"><IpqcWorklistPage /></Protected>} />
+        <Route path="qa/releases" element={<Protected perm="qa.release:view"><ReleasesPage /></Protected>} />
+        <Route path="qa/releases/:id" element={<Protected perm="qa.release:view"><ReleaseReviewPage /></Protected>} />
         <Route path="qa/deviations" element={<Protected perm="qa.deviation:view"><DeviationsPage /></Protected>} />
         <Route path="qa/deviations/:id" element={<Protected perm="qa.deviation:view"><DeviationDetailPage /></Protected>} />
         <Route path="production/settings" element={<Protected perm="mfg.settings:view"><PlantSettingsPage /></Protected>} />

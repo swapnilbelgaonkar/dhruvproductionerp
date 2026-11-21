@@ -48,6 +48,54 @@ export function stockRoutes(db: Db) {
     res.json({ data: rows.rows.map(({ total: _t, ...x }) => x), total: Number(rows.rows[0]?.total ?? 0) });
   }));
 
+  /**
+   * Traceability (MFG-012, QA recall UAT-15): backward to every lot that went into this one, with its supplier and receipt;
+   * forward to every batch that used it and the lots those batches made. Dispatches join the forward side with logistics.
+   */
+  r.get('/lots/:id/trace', requirePermission(P), asyncHandler(async (req, res) => {
+    interface Node { lotId: string; lotNo: string; itemCode: string; itemName: string; uom: string; qcStatus: string; sourceType: string; qty?: number;
+      origin?: string; batchId?: string; batchNo?: string; orderNo?: string; children: Node[] }
+    const lotInfo = async (id: string) => (await db.query(
+      `select l.id as "lotId", l.lot_no as "lotNo", i.code as "itemCode", i.name as "itemName", i.base_uom as uom, l.qc_status as "qcStatus", l.source_type as "sourceType",
+              case l.source_type when 'GRN' then concat(p.legal_name, ' · ', g.doc_no, ' · ', o.doc_no, coalesce(' · vendor lot ' || l.vendor_lot_no, ''))
+                                 when 'OPENING' then 'Opening stock' else null end as origin,
+              b.id as "batchId", b.batch_no as "batchNo", po.doc_no as "orderNo"
+         from inv.lots l join mdm.items i on i.id = l.item_id left join mdm.parties p on p.id = l.party_id
+         left join purchase.goods_receipts g on g.id = l.source_id and l.source_type = 'GRN' left join purchase.purchase_orders o on o.id = g.purchase_order_id
+         left join mfg.batches b on b.id = l.source_id and l.source_type = 'PRODUCTION' left join mfg.production_orders po on po.id = b.production_order_id
+        where l.id = $1`, [id])).rows[0] as Omit<Node, 'children'> | undefined;
+    const seen = new Set<string>();
+    const back = async (id: string, depth: number, qty?: number): Promise<Node | null> => {
+      const n = await lotInfo(id);
+      if (!n) return null;
+      const node: Node = { ...n, qty, children: [] };
+      if (depth >= 5 || seen.has(`b${id}`) || !n.batchId) return node;
+      seen.add(`b${id}`);
+      const ins = (await db.query(`select lot_id, sum(qty) as qty from mfg.batch_consumptions where batch_id = $1 group by lot_id order by min(dosed_at)`, [n.batchId])).rows;
+      for (const x of ins) { const c = await back(x.lot_id, depth + 1, Number(x.qty)); if (c) node.children.push(c); }
+      return node;
+    };
+    const fwd = async (id: string, depth: number): Promise<Node | null> => {
+      const n = await lotInfo(id);
+      if (!n) return null;
+      const node: Node = { ...n, children: [] };
+      if (depth >= 5 || seen.has(`f${id}`)) return node;
+      seen.add(`f${id}`);
+      const used = (await db.query(
+        `select b.id, b.batch_no, po.doc_no as order_no, b.status, b.fg_lot_id, sum(c.qty) as qty from mfg.batch_consumptions c join mfg.batches b on b.id = c.batch_id
+           join mfg.production_orders po on po.id = b.production_order_id where c.lot_id = $1 group by b.id, po.doc_no order by b.started_at`, [id])).rows;
+      for (const u of used) {
+        const child = u.fg_lot_id ? await fwd(u.fg_lot_id, depth + 1) : null;
+        node.children.push(child ? { ...child, qty: Number(u.qty), batchNo: u.batch_no, orderNo: u.order_no }
+          : { lotId: '', lotNo: `${u.batch_no} (${u.status === 'Scrapped' ? 'scrapped' : 'in progress'})`, itemCode: '', itemName: '', uom: n.uom, qcStatus: u.status, sourceType: 'BATCH', qty: Number(u.qty), batchId: u.id, batchNo: u.batch_no, orderNo: u.order_no, children: [] });
+      }
+      return node;
+    };
+    const backward = await back(req.params.id!, 0);
+    if (!backward) throw Errors.notFound('Lot');
+    res.json({ backward, forward: await fwd(req.params.id!, 0) });
+  }));
+
   // lot genealogy: where it came from, what QC decided, every stock movement
   r.get('/lots/:id', requirePermission(P), asyncHandler(async (req, res) => {
     const lot = (await db.query(

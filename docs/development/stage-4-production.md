@@ -5,7 +5,8 @@ Order follows D12 (business flow). Stage 4 parts:
 1. Plant & line settings and the formulation (BOM) master — **done**
 2. Production orders: release against the formulation in force, reservation of QC-released lots, material issue, quarantine override (D33) — **done**
 3. Batch execution: dosing with tolerance and deviations, IPQC, completion with mass balance, the finished-goods lot into quarantine — **done**
-4. Packaging, finished-goods QC and QA release (blocked by open deviations), transfer to WH-01, traceability, costing and the production dashboard — next
+4. Finished-goods QC approval, QA batch review and release (blocked by open deviations), traceability, order closure — **done**
+5. Packing runs with box serials and QR labels, batch cost sheet, downtime, production dashboard — next
 
 Pending client decisions use the recommended defaults from doc 12, marked provisional, so the build can continue (client instruction: build the system first, settle the remaining items last).
 
@@ -107,3 +108,34 @@ Pending client decisions use the recommended defaults from doc 12, marked provis
 
 ### Not built yet
 - **Packaging run, QA release, transfer and traceability**: part 4.
+
+## Part 4 — QA batch review and release, traceability (BRD p.4, p.16, p.18; MP §14.2; QA-003, QA-004, MFG-012, MFG-018; TC-13, UAT-08, UAT-09; D04)
+
+| Area | What works | RTM |
+|---|---|---|
+| QC on finished goods | QC samples and tests the finished-goods lot like a received one. **Approving the results does not release it**: the inspection becomes "QC approved · awaiting QA" and the lot stays in quarantine. The vendor-CoA rule applies only to purchased lots | QA-003, D04 |
+| QA release queue | Finished-goods lots awaiting QA, with output, yield, QC state and open deviations; and the decided ones | QA-003 |
+| Batch review | Batch record (formulation version, who ran it, operators, times, output and yield against standard, mass balance, IPQC), input lots with their QC status, QC results, deviations, and the disposition history | QA-003 |
+| Release checklist | QC results approved · batch completed with a passed IPQC · every deviation of the batch closed (its dosing, IPQC, scrap and the override deviation of any quarantined lot it used) · every input lot released by QC · the releaser did not run the batch (SOD-07) | QA-003, SOD-07 |
+| TC-13 | Release with anything outstanding returns `QA_RELEASE_BLOCKED` with every blocker; the screen does not offer Release and lists the blockers | TC-13, UAT-09 |
+| Who decides (D04, provisional) | The **QA head** only (`qa.release:decide`). QA managers review but cannot decide until the client approves delegation | QA-004, D04 |
+| Dispositions | **Released** (needs "batch record reviewed") → usable stock (`QA_RELEASE`); **On hold** and **Rework authorised** → blocked stock (`QA_HOLD`); **Rejected** → rejected stock (`QA_REJECT`). Each is recorded with the checklist as it stood; a released or rejected lot is final | QA-004 |
+| Saleable stock | Only QA-released lots are in usable stock, so sales and dispatch (Stage 6) can only pick released lots | QA-003, LOG-003 |
+| Finished-goods warehouse | The batch output is posted straight into the order's finished-goods warehouse (for example WH-01) in quarantine; the QA release makes it usable there (MFG-018) | MFG-018 |
+| Traceability | On every lot: **backward** — the lots that went into it, with quantities, recursively to the supplier, receipt and purchase order; **forward** — the batches that used it and the lots they made. Five levels deep | MFG-012, UAT-08 |
+| Order closure | A completed order is closed once nothing issued to it is left unused with production; open reservations are released | MFG-013 |
+
+### Evidence
+- `apps/api/test/qa-release.test.ts` has 2 tests:
+  - Release flow: an order using 100 kg of a quarantined lot under an override; the batch completes; QC approval leaves the lot in quarantine. The review shows the checklist; release refused with `QA_RELEASE_BLOCKED` listing the open deviation and the untested lot. A QA manager cannot decide. After QC releases the input lot and QA closes the deviation: release refused until the batch record is confirmed, then released, with the stock moved to usable. A second disposition is refused. Trace backward (three input lots with quantities) and forward (zinc lot → FG lot). The order closes.
+  - SOD-07: a user who is both supervisor and QA head ran the batch and cannot decide it. Hold needs a reason; hold → rework → reject, with the stock in blocked then rejected.
+- Totals: **67 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local):
+  1. The QA head opened B/2026-27/000001: blocked, QC had not approved the results.
+  2. QC tested and released the quarantined EDTA lot used under the override; the QA head closed deviation DEV/2026-27/000001.
+  3. QC tested the finished-goods lot (zinc, pH, specific gravity, appearance) and the QC manager approved the results.
+  4. The QA head confirmed the batch record review and released it; the lot page traces it back to its three input lots.
+
+### Not built yet
+- **Re-authentication at release** (single signature with password re-entry, doc 07): the release is recorded with the user and the checklist; re-entry of the password comes with the security hardening.
+- **Rework orders** (a new batch from a lot under "Rework authorised", genealogy linked): with part 5.

@@ -14,12 +14,13 @@ interface InsRow { id: string; docNo: string; status: string; lotId: string; lot
   itemId: string; itemCode: string; itemName: string; itemType: string; uom: string; partyId: string | null; vendorName: string | null; grnId: string | null; grnNo: string | null;
   receiptDate: string | null; poId: string | null; poNo: string | null; warehouseCode: string | null; sampleQty: string | null; sampledBy: string | null; sampledAt: string | null;
   coaReceived: boolean; coaDocumentId: string | null; testedBy: string | null; testedAt: string | null; recommendation: string | null; decision: string | null;
-  decisionRemarks: string | null; decidedBy: string | null; decidedAt: string | null; createdAt: string; receivedQty: string }
+  decisionRemarks: string | null; decidedBy: string | null; decidedAt: string | null; createdAt: string; receivedQty: string; sourceType: string }
 interface InsDetail extends InsRow {
   results: { seq: number; parameter: string; specification: string; result: string; pass: boolean }[]; stock: { bucket: string; qty: string }[];
   template: { parameter: string; specification: string }[]; allowedActions: string[];
 }
-const badge = (s: string) => <StatusBadge status={s === 'Released' ? 'Approved' : s === 'Rejected' ? 'Rejected' : s === 'Hold' ? 'OnHold' : s === 'Tested' ? 'Submitted' : 'Pending'} label={s} />;
+const badge = (s: string) => <StatusBadge status={s === 'Released' ? 'Approved' : s === 'Rejected' ? 'Rejected' : s === 'Hold' ? 'OnHold' : s === 'Tested' ? 'Submitted' : s === 'QcApproved' ? 'Issued' : 'Pending'}
+  label={s === 'QcApproved' ? 'QC approved · awaiting QA' : s} />;
 
 const columns: Column<InsRow>[] = [
   { key: 'doc', header: 'Inspection', render: (r) => <span className="font-semibold num">{r.docNo}</span> },
@@ -78,8 +79,8 @@ export function InspectionDetailPage() {
     onSuccess: async () => { toast('success', 'Results saved. A QC manager decides the lot.'); setCoaFile(null); await refresh(); },
   });
   const doDecide = useMutation({
-    mutationFn: () => api<{ lotStatus: string; vendorRating: number | null }>(`/qc/inspections/${id}/decide`, { body: { decision: decide, remarks } }),
-    onSuccess: async (r) => { toast('success', `Lot ${r.lotStatus.toLowerCase()}.${r.vendorRating !== null ? ` Vendor rating now ${r.vendorRating} / 5.` : ''}`); setDecide(null); setRemarks(''); await refresh(); },
+    mutationFn: () => api<{ lotStatus: string; vendorRating: number | null; qcApproved?: boolean }>(`/qc/inspections/${id}/decide`, { body: { decision: decide, remarks } }),
+    onSuccess: async (r) => { toast('success', r.qcApproved ? 'Results approved. The lot waits for the QA release.' : `Lot ${r.lotStatus.toLowerCase()}.${r.vendorRating !== null ? ` Vendor rating now ${r.vendorRating} / 5.` : ''}`); setDecide(null); setRemarks(''); await refresh(); },
   });
   if (q.isLoading) return <Skeleton className="h-96" />;
   if (!d) return <ErrorBanner error={q.error} />;
@@ -94,7 +95,7 @@ export function InspectionDetailPage() {
         actions={d.status === 'Rejected' && d.grnId && can('purchase.return:create') ? <Button onClick={() => nav(`/stores/returns/new?goodsReceiptId=${d.grnId}`)}>Return to vendor</Button> : a.includes('decide') ? <>
           <Button variant="danger" onClick={() => setDecide('Reject')}>Reject lot</Button>
           {d.status !== 'Hold' && <Button variant="secondary" onClick={() => setDecide('Hold')}>Hold</Button>}
-          <Button icon={<CheckCircle size={18} />} onClick={() => setDecide('Release')}>Release lot</Button>
+          <Button icon={<CheckCircle size={18} />} onClick={() => setDecide('Release')}>{d.sourceType === 'PRODUCTION' ? 'Approve results' : 'Release lot'}</Button>
         </> : undefined} />
       <ErrorBanner error={doSample.error ?? doResults.error} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -163,9 +164,10 @@ export function InspectionDetailPage() {
           </Card>
         </aside>
       </div>
-      <Modal open={!!decide} onClose={() => setDecide(null)} title={`${decide} lot ${d.lotNo}`} width={520}
-        description={decide === 'Release' ? 'The lot moves to usable stock. Every test must have passed and the vendor CoA must be received.' : decide === 'Reject' ? 'The lot moves to rejected stock for return to the vendor.' : 'The lot is blocked until a further decision.'}
-        footer={<><Button variant="secondary" onClick={() => setDecide(null)}>Cancel</Button><Button variant={decide === 'Reject' ? 'danger' : 'primary'} loading={doDecide.isPending} disabled={decide !== 'Release' && !remarks.trim()} onClick={() => doDecide.mutate()}>{decide}</Button></>}>
+      <Modal open={!!decide} onClose={() => setDecide(null)} title={decide === 'Release' && d.sourceType === 'PRODUCTION' ? `Approve the results for ${d.lotNo}` : `${decide} lot ${d.lotNo}`} width={520}
+        description={decide === 'Release' && d.sourceType === 'PRODUCTION' ? 'QC approves the results. The finished-goods lot stays in quarantine until the QA head reviews the batch and releases it.'
+          : decide === 'Release' ? 'The lot moves to usable stock. Every test must have passed and the vendor CoA must be received.' : decide === 'Reject' ? 'The lot moves to rejected stock for return to the vendor.' : 'The lot is blocked until a further decision.'}
+        footer={<><Button variant="secondary" onClick={() => setDecide(null)}>Cancel</Button><Button variant={decide === 'Reject' ? 'danger' : 'primary'} loading={doDecide.isPending} disabled={decide !== 'Release' && !remarks.trim()} onClick={() => doDecide.mutate()}>{decide === 'Release' && d.sourceType === 'PRODUCTION' ? 'Approve results' : decide}</Button></>}>
         <ErrorBanner error={doDecide.error} />
         <p className="mb-3 text-[14px]">Analyst's recommendation: <span className="font-semibold">{d.recommendation ?? '—'}</span>{!d.coaReceived && decide === 'Release' ? ' · CoA not received' : ''}</p>
         <Field label={decide === 'Release' ? 'Remarks (optional)' : 'Reason (recorded in the audit trail)'} htmlFor="qc-rem" required={decide !== 'Release'}><Textarea id="qc-rem" rows={3} maxLength={500} value={remarks} onChange={(e) => setRemarks(e.target.value)} /></Field>

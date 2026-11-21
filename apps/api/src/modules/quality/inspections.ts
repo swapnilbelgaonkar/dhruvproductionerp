@@ -155,8 +155,15 @@ export function inspectionRoutes(db: Db) {
       if (!['Tested', 'Hold'].includes(ins.status)) throw Errors.state(ins.status === 'Released' || ins.status === 'Rejected' ? 'This lot has already been decided.' : 'Record the test results first.');
       if (ins.testedById === req.auth!.user.id) throw Errors.sod('You recorded the results of this lot; another QC manager must decide it.');
       if (ins.status === 'Hold' && d.decision === 'Hold') throw Errors.state('The lot is already on hold.');
-      // finished goods (D04, BRD p.4/p.16): QC tests them, the QA head releases them — never QC alone
-      if (d.decision === 'Release' && ins.sourceType === 'PRODUCTION') throw Errors.rule('QA_RELEASE_REQUIRED', 'Finished goods are released by QA after the batch review, not by QC.');
+      // finished goods (D04, BRD p.4/p.16): QC approves the results; the lot stays in quarantine until the QA head releases it
+      if (d.decision === 'Release' && ins.sourceType === 'PRODUCTION') {
+        const failed = Number((await tx.query(`select count(*) from qc.inspection_results where inspection_id = $1 and not pass`, [ins.id])).rows[0].count);
+        if (failed) throw Errors.rule('RESULTS_FAILED', `${failed} test(s) failed — the results cannot be approved.`);
+        await allowTransition(tx);
+        await tx.query(`update qc.inspections set decision = 'Release', decision_remarks = $2, decided_by = $3, decided_at = now() where id = $1`, [ins.id, d.remarks || null, req.auth!.user.id]);
+        await setStatus(tx, actorOf(req), ins.id, 'QcApproved', { decision: 'QC approved', remarks: d.remarks });
+        return { lotStatus: 'Quarantine', qcApproved: true, vendorRating: null };
+      }
       if (d.decision === 'Release') {
         const failed = Number((await tx.query(`select count(*) from qc.inspection_results where inspection_id = $1 and not pass`, [ins.id])).rows[0].count);
         if (failed) throw Errors.rule('RESULTS_FAILED', `${failed} test(s) failed — the lot cannot be released.`);

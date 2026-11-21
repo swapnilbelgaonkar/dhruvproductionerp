@@ -208,6 +208,7 @@ export function productionOrderRoutes(db: Db) {
     if ([...RUNNING, 'OnHold', 'Completed'].includes(o.status) && can(req, 'mfg.issue:post') && netIssued > 0) out.push('return');
     if (RUNNING.includes(o.status) && can(req, 'mfg.override:request')) out.push('override');
     if (['Draft', 'Rejected', 'Approved', 'Released', 'OnHold'].includes(o.status) && can(req, P('cancel')) && netIssued === 0) out.push('cancel');
+    if (o.status === 'Completed' && can(req, P('release'))) out.push('close');
     return out;
   }
 
@@ -400,6 +401,24 @@ export function productionOrderRoutes(db: Db) {
       res.json({ ok: true });
     }));
   }
+
+  // a completed order is closed once nothing issued to it is left unused with production
+  r.post('/:id/close', requirePermission(P('release')), asyncHandler(async (req, res) => {
+    const reason = typeof req.body?.reason === 'string' && req.body.reason.trim() ? String(req.body.reason).trim().slice(0, 500) : null;
+    await withTx(db, async (tx) => {
+      const o = await load(tx, req, req.params.id!, true);
+      if (o.status !== 'Completed') throw Errors.state(`Only a completed order can be closed (this one is ${o.status}).`);
+      const left = (await tx.query(
+        `select i.code, l.lot_no, sum(case mm.direction when 'ISSUE' then ml.qty else -ml.qty end)
+                 - coalesce((select sum(c.qty) from mfg.batch_consumptions c join mfg.batches b on b.id = c.batch_id where b.production_order_id = $1 and c.lot_id = ml.lot_id), 0) as q
+           from mfg.material_movement_lines ml join mfg.material_movements mm on mm.id = ml.movement_id join inv.lots l on l.id = ml.lot_id join mdm.items i on i.id = ml.item_id
+          where mm.production_order_id = $1 group by i.code, l.lot_no, ml.lot_id`, [o.id])).rows.filter((x) => Number(x.q) > 0.00005);
+      if (left.length) throw Errors.rule('MATERIAL_WITH_PRODUCTION', `Return the unused material to stores first: ${left.map((x) => `${x.code} ${x.lot_no} ${r4(Number(x.q))}`).join(', ')}.`);
+      await tx.query(`update inv.reservations set status = 'Cancelled', updated_by = $2 where source_type = $3 and source_id = $1 and status = 'Active'`, [o.id, req.auth!.user.id, SUBJECT]);
+      await setStatus(tx, actorOf(req), o.id, 'Closed', reason);
+    });
+    res.json({ ok: true });
+  }));
 
   r.post('/:id/cancel', requirePermission(P('cancel')), asyncHandler(async (req, res) => {
     const { reason } = parse(reasonSchema, req.body);
