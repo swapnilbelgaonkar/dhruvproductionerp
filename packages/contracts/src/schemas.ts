@@ -329,3 +329,23 @@ export const purchaseOrderSchema = z.object({
   lines: z.array(purchaseOrderLineInput).min(1, 'Add at least one item').max(100),
 }).refine((p) => new Set(p.lines.map((l) => l.itemId)).size === p.lines.length, { message: 'Each item can appear only once', path: ['lines'] });
 export const poAcknowledgeSchema = z.object({ vendorAckRef: trimmed(100) });
+
+// ---------- Goods receipt (MP §10.5; PUR-008) ----------
+export const goodsReceiptSchema = z.object({
+  purchaseOrderId: uuid, receiptDate: isoDay.optional(), challanNo: trimmed(60), challanDate: isoDay.optional().nullable(),
+  vendorInvoiceNo: optionalText(60), vehicleNo: optionalText(20), remarks: optionalText(500),
+  lines: z.array(z.object({
+    poLineId: uuid, challanQty: z.number().min(0), receivedQty: z.number().positive('Received quantity must be above zero'),
+    vendorLotNo: optionalText(60), mfgDate: isoDay.optional().nullable(), expiryDate: isoDay.optional().nullable(),
+  })).min(1, 'Receive at least one line').max(100),
+}).refine((g) => new Set(g.lines.map((l) => l.poLineId)).size === g.lines.length, { message: 'Each PO line can appear once', path: ['lines'] });
+
+// ---------- QC lot inspection and release (BRD p.15; QC-001…) ----------
+export const QC_DECISIONS = ['Release', 'Reject', 'Hold'] as const;
+export const qcSampleSchema = z.object({ sampleQty: z.number().min(0) });
+export const qcResultsSchema = z.object({
+  results: z.array(z.object({ parameter: trimmed(120), specification: trimmed(200), result: trimmed(200), pass: z.boolean() })).min(1, 'Record at least one test').max(50),
+  coaReceived: z.boolean(), coaDocumentId: uuid.optional().nullable(), recommendation: z.enum(QC_DECISIONS),
+});
+export const qcDecisionSchema = z.object({ decision: z.enum(QC_DECISIONS), remarks: z.string().trim().max(500).optional().default('') })
+  .refine((d) => d.decision === 'Release' || d.remarks.length > 0, { message: 'Give the reason for rejecting or holding the lot', path: ['remarks'] });

@@ -218,6 +218,8 @@ export function searchRoutes(db: Db) {
     if (can(req, 'purchase.order:view')) parts.push(`(select 'Purchase order', o.id, o.doc_no, p.legal_name, '/purchase/orders/' || o.id from purchase.purchase_orders o
                     join mdm.parties p on p.id = o.party_id where o.doc_no ilike $1 or p.legal_name ilike $1 limit 5)`);
     if (can(req, 'purchase.rfq:view')) parts.push(`(select 'RFQ', r.id, r.doc_no, coalesce(left(r.notes, 80), ''), '/purchase/rfqs/' || r.id from purchase.rfqs r where r.doc_no ilike $1 limit 5)`);
+    if (can(req, 'purchase.grn:view')) parts.push(`(select 'Goods receipt', g.id, g.doc_no, g.challan_no, '/stores/receipts/' || g.id from purchase.goods_receipts g where g.doc_no ilike $1 or g.challan_no ilike $1 limit 5)`);
+    if (can(req, 'inv.stock:view')) parts.push(`(select 'Lot', l.id, l.lot_no, coalesce(l.vendor_lot_no, ''), '/stores/lots/' || l.id from inv.lots l where l.lot_no ilike $1 or l.vendor_lot_no ilike $1 limit 5)`);
     if (can(req, 'sales.price_list:view')) parts.push(`(select 'Price list', id, code, name, '/sales/price-lists/' || id from sales.price_lists where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'mdm.item:view')) parts.push(`(select 'Item', id, code, name, '/products/items/' || id from mdm.items where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'iam.user:view')) parts.push(`(select 'User', id, full_name, email::text, '/admin/users/' || id from iam.users where email ilike $1 or full_name ilike $1 limit 5)`);

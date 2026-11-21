@@ -39,6 +39,9 @@ export const PERMISSIONS = [
   ...P('Purchase', 'purchase.requisition', ['view', 'view_all', 'create', 'edit', 'submit', 'cancel'], 'purchase requisitions'),
   ...P('Purchase', 'purchase.rfq', ['view', 'manage'], 'requests for quotation, vendor quotes and awards'),
   ...P('Purchase', 'purchase.order', ['view', 'create', 'edit', 'submit', 'issue', 'cancel'], 'purchase orders'),
+  ...P('Stores', 'purchase.grn', ['view', 'create', 'post', 'cancel'], 'goods receipts'),
+  ...P('Stores', 'inv.stock', ['view'], 'stock balances, lots and the stock ledger'),
+  ...P('Quality', 'qc.inspection', ['view', 'record', 'decide'], 'QC inspection of received lots (record = sample and test; decide = release, reject or hold)'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -53,19 +56,21 @@ const PR_RAISE = ['purchase.requisition:view', 'purchase.requisition:create', 'p
 const VENDOR_BUY = ['mdm.vendor:view', 'mdm.vendor:create', 'mdm.vendor:edit_draft', 'mdm.vendor:submit'];
 const BUYING = ['purchase.rfq:view', 'purchase.rfq:manage', 'purchase.order:view', 'purchase.order:create', 'purchase.order:edit', 'purchase.order:submit',
   'purchase.order:issue', 'purchase.order:cancel'];
+const RECEIVE = ['purchase.grn:view', 'purchase.grn:create', 'purchase.grn:post', 'purchase.grn:cancel', 'inv.stock:view', 'qc.inspection:view'];
+const QC_TEST = ['qc.inspection:view', 'qc.inspection:record', 'inv.stock:view', 'purchase.grn:view', 'mdm.vendor:view'];
 const PURCHASE_EXTRA: Record<string, string[]> = {
-  PURCHASE_EXEC: [...VENDOR_BUY, ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING],
-  PURCHASE_HEAD: [...VENDOR_BUY, 'mdm.vendor:suspend', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING],
+  PURCHASE_EXEC: [...VENDOR_BUY, ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING, 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view'],
+  PURCHASE_HEAD: [...VENDOR_BUY, 'mdm.vendor:suspend', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', ...BUYING, 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view'],
   DOC_VERIFIER: ['mdm.vendor:view', 'mdm.vendor:verify_documents', 'mdm.vendor:view_sensitive'],
-  FINANCE_HEAD: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view'],
-  ACCOUNTS_EXEC: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.order:view'],
-  STORES_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', 'purchase.order:view'],
-  STOREKEEPER: ['mdm.vendor:view', ...PR_RAISE, 'purchase.order:view'],
-  PRODUCTION_PLANNER: [...PR_RAISE], PRODUCTION_SUPERVISOR: [...PR_RAISE], PLANT_HEAD: [...PR_RAISE],
-  QC_ANALYST: ['mdm.vendor:view', ...PR_RAISE], QC_MANAGER: ['mdm.vendor:view', ...PR_RAISE], QC_HEAD: ['mdm.vendor:view', ...PR_RAISE],
-  QA_EXECUTIVE: [...PR_RAISE], QA_MANAGER: ['mdm.vendor:view', ...PR_RAISE], QA_HEAD: ['mdm.vendor:view', ...PR_RAISE],
+  FINANCE_HEAD: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view'],
+  ACCOUNTS_EXEC: ['mdm.vendor:view', 'mdm.vendor:verify_bank', 'mdm.vendor:view_sensitive', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view'],
+  STORES_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'purchase.requisition:view_all', 'purchase.requisition:cancel', 'purchase.order:view', ...RECEIVE],
+  STOREKEEPER: ['mdm.vendor:view', ...PR_RAISE, 'purchase.order:view', ...RECEIVE],
+  PRODUCTION_PLANNER: [...PR_RAISE, 'inv.stock:view'], PRODUCTION_SUPERVISOR: [...PR_RAISE, 'inv.stock:view'], PLANT_HEAD: [...PR_RAISE, 'inv.stock:view', 'qc.inspection:view'],
+  QC_ANALYST: [...PR_RAISE, ...QC_TEST], QC_MANAGER: [...PR_RAISE, ...QC_TEST, 'qc.inspection:decide'], QC_HEAD: [...PR_RAISE, ...QC_TEST, 'qc.inspection:decide'],
+  QA_EXECUTIVE: [...PR_RAISE, 'qc.inspection:view'], QA_MANAGER: ['mdm.vendor:view', ...PR_RAISE, 'qc.inspection:view', 'inv.stock:view'], QA_HEAD: ['mdm.vendor:view', ...PR_RAISE, 'qc.inspection:view', 'inv.stock:view'],
   LOGISTICS_EXEC: [...PR_RAISE], LOGISTICS_HEAD: [...PR_RAISE],
-  MANAGEMENT_VIEWER: ['mdm.vendor:view', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view'],
+  MANAGEMENT_VIEWER: ['mdm.vendor:view', 'purchase.requisition:view', 'purchase.requisition:view_all', 'purchase.rfq:view', 'purchase.order:view', 'purchase.grn:view', 'inv.stock:view', 'qc.inspection:view'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',

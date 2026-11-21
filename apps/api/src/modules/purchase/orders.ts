@@ -169,6 +169,8 @@ function allowedActions(req: Request, status: string, received: boolean) {
   if (status === 'Lapsed' && can(req, P('issue'))) out.push('reissue');
   if (status === 'Issued' && can(req, P('issue'))) out.push('acknowledge');
   if (['Draft', 'Rejected', 'Approved', 'Issued', 'Lapsed', 'Acknowledged'].includes(status) && !received && can(req, P('cancel'))) out.push('cancel');
+  // PUR-007: the balance of a partly received PO can be closed (no more deliveries expected)
+  if (status === 'PartiallyReceived' && can(req, P('cancel'))) out.push('close');
   return out;
 }
 
@@ -366,6 +368,19 @@ export function purchaseOrderRoutes(db: Db) {
       if (!allowedActions(req, o.status, lines.some((l) => Number(l.received_qty) > 0)).includes('cancel')) throw Errors.state(`A ${o.status} purchase order cannot be cancelled.`);
       await setStatus(tx, actorOf(req), o.id, 'Cancelled', reason);
       await refreshRequisitions(tx, actorOf(req), lines.map((l) => l.requisition_line_id));
+    });
+    res.json({ ok: true });
+  }));
+
+  r.post('/:id/close', requirePermission(P('cancel')), asyncHandler(async (req, res) => {
+    const { reason } = parse(reasonSchema, req.body);
+    await withTx(db, async (tx) => {
+      const o = await load(tx, req, req.params.id!, true);
+      if (o.status !== 'PartiallyReceived') throw Errors.state('Only a partly received PO can be closed short.');
+      if ((await tx.query(`select 1 from purchase.goods_receipts where purchase_order_id = $1 and status = 'Draft'`, [o.id])).rowCount) {
+        throw Errors.state('A draft goods receipt is open against this PO. Post or cancel it first.');
+      }
+      await setStatus(tx, actorOf(req), o.id, 'Closed', reason);
     });
     res.json({ ok: true });
   }));
