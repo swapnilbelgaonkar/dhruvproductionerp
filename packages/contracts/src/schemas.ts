@@ -83,6 +83,8 @@ export const stepDefSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('authority_ladder'), key: z.string().optional(), label: trimmed(120), amountFact: z.string().default('amount'),
     discountFact: z.string().default('maxDiscountPct'), notifySkipped: z.boolean().default(true), slaHours: z.number().positive().optional(),
+    /** While authority limits are inactive (D15): block live submissions, or route them to the initiator's reporting manager. */
+    whenLimitsInactive: z.enum(['block', 'reporting_manager']).default('block'),
   }),
 ]);
 export const policyDefinitionSchema = z.object({
@@ -236,9 +238,24 @@ export const priceListItemSchema = z.object({
 export const quotationLineInput = z.object({
   itemPackId: uuid, qty: z.number().positive('Quantity must be above zero'), extraDiscountPct: z.number().min(0).max(100).default(0),
 });
-export const quotationSchema = z.object({
-  partyId: uuid, legalEntityId: uuid, billToId: uuid, shipToId: uuid, quoteDate: isoDay.optional(),
+const salesDocBase = z.object({
+  partyId: uuid, legalEntityId: uuid, billToId: uuid, shipToId: uuid,
   contactPerson: optionalText(100), paymentTerms: trimmed(300), deliveryTerms: trimmed(300), notes: optionalText(1000),
   opportunityId: uuid.optional().nullable(),
   lines: z.array(quotationLineInput).min(1, 'Add at least one item').max(100),
-}).refine((q) => new Set(q.lines.map((l) => l.itemPackId)).size === q.lines.length, { message: 'Each product pack can appear only once', path: ['lines'] });
+});
+const uniquePacks = (q: { lines: { itemPackId: string }[] }) => new Set(q.lines.map((l) => l.itemPackId)).size === q.lines.length;
+export const quotationSchema = salesDocBase.extend({ quoteDate: isoDay.optional() })
+  .refine(uniquePacks, { message: 'Each product pack can appear only once', path: ['lines'] });
+
+// ---------- Sales orders (BRD §5.2, MP Part 9) ----------
+const orderExtras = {
+  requiredBy: isoDay.optional().nullable(), dealerPoNo: optionalText(60), dealerPoDate: isoDay.optional().nullable(),
+};
+export const salesOrderSchema = salesDocBase.extend({ orderDate: isoDay.optional(), ...orderExtras })
+  .refine(uniquePacks, { message: 'Each product pack can appear only once', path: ['lines'] });
+/** Header changes allowed on any editable order, including one converted from a quotation (whose lines are locked). */
+export const salesOrderHeaderSchema = z.object({
+  contactPerson: optionalText(100), paymentTerms: trimmed(300), deliveryTerms: trimmed(300), notes: optionalText(1000), ...orderExtras,
+});
+export const convertQuotationSchema = z.object({ ...orderExtras });

@@ -202,6 +202,12 @@ export function searchRoutes(db: Db) {
       parts.push(`(select 'Quotation', q.id, q.doc_no || ' R' || q.revision, p.legal_name, '/sales/quotations/' || q.id from sales.quotations q join mdm.parties p on p.id = q.party_id
                     where q.status <> 'Superseded' and (q.doc_no ilike $1 or p.legal_name ilike $1) and ${scope} limit 5)`);
     }
+    if (can(req, 'sales.order:view')) {
+      const ids = await territoryScope(db, req, 'sales.order:view');
+      const scope = ids === null ? 'true' : `exists (select 1 from org.territories rt join org.territories ut on rt.path <@ ut.path where rt.id = o.territory_id and ut.id = any('{${ids.join(',')}}'::uuid[]))`;
+      parts.push(`(select 'Sales order', o.id, o.doc_no, p.legal_name, '/sales/orders/' || o.id from sales.sales_orders o join mdm.parties p on p.id = o.party_id
+                    where (o.doc_no ilike $1 or p.legal_name ilike $1 or o.dealer_po_no ilike $1) and ${scope} limit 5)`);
+    }
     if (can(req, 'sales.price_list:view')) parts.push(`(select 'Price list', id, code, name, '/sales/price-lists/' || id from sales.price_lists where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'mdm.item:view')) parts.push(`(select 'Item', id, code, name, '/products/items/' || id from mdm.items where code ilike $1 or name ilike $1 limit 5)`);
     if (can(req, 'iam.user:view')) parts.push(`(select 'User', id, full_name, email::text, '/admin/users/' || id from iam.users where email ilike $1 or full_name ilike $1 limit 5)`);

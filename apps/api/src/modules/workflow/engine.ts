@@ -111,8 +111,18 @@ export async function resolveRoute(db: Db | Tx, docType: string, initiatorUserId
       if (!Number.isFinite(amount) || !Number.isFinite(discount)) throw Errors.validation([{ field: 'facts', message: 'amount and discount must be numbers' }]);
       const { limits, allActive } = await tierLimits(db);
       if (!allActive) {
+        const fallback = s.whenLimitsInactive === 'reporting_manager';
+        if (mode === 'live' && fallback) {
+          const { managerUserId } = await reportingChain(db, initiatorUserId);
+          if (!managerUserId?.userId) throw new AppError(422, 'NO_ELIGIBLE_APPROVER', 'You have no active reporting manager with a system account.');
+          steps.push({ label: `${s.label} (reporting manager — tier limits pending D15)`, kind: 'approve', rule: s, slaHours: sla,
+            approvers: [{ userId: managerUserId.userId, name: managerUserId.name, tier: managerUserId.tier }] });
+          continue;
+        }
         if (mode === 'live') throw new AppError(422, 'AUTHORITY_LIMITS_INACTIVE', 'Sales authority limits have not been activated yet (D15).');
-        warnings.push('Authority limits are seeded from the BRD but not yet activated (D15). Live submissions are blocked until activation.');
+        warnings.push(fallback
+          ? 'Authority limits are not yet activated (D15). Until then live submissions go to the initiator’s reporting manager; the route below applies after activation.'
+          : 'Authority limits are seeded from the BRD but not yet activated (D15). Live submissions are blocked until activation.');
       }
       const { chain, hasEmployee } = await reportingChain(db, initiatorUserId);
       if (!hasEmployee) {

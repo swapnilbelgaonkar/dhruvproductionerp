@@ -23,7 +23,7 @@ export const todayIST = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia
 const addDays = (d: string, n: number) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const day = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 
-async function scopeSql(dbx: Db | Tx, req: Request, perm: string, column: string, args: unknown[]) {
+export async function scopeSql(dbx: Db | Tx, req: Request, perm: string, column: string, args: unknown[]) {
   const ids = await territoryScope(dbx, req, perm);
   if (ids === null) return 'true';
   args.push(ids);
@@ -34,14 +34,16 @@ async function scopeSql(dbx: Db | Tx, req: Request, perm: string, column: string
  * Prices, taxes and checks a quotation (QUO-002…004) from master data only — the client sends packs, quantities and extra discount;
  * every rate, scheme, GST rate and state comes from the server. `strict` turns eligibility problems into errors (save/submit).
  */
-export async function buildQuote(dbx: Db | Tx, req: Request, d: QuoteInput, quoteDate: string, strict: boolean) {
+export async function buildQuote(dbx: Db | Tx, req: Request, d: Omit<QuoteInput, 'quoteDate'>, quoteDate: string, strict: boolean, perm = 'sales.quotation:create',
+  /** prices fixed by an approved quotation (pack → list rate and scheme %); GST is still taken on `quoteDate` */
+  locked?: { priceListId: string | null; rates: Map<string, { listRate: number; schemePct: number }> }) {
   const dealer = (await dbx.query(
     `select p.id, p.code, p.legal_name, p.gstin, dp.status, dp.price_group, dp.territory_id, dp.sales_owner_id, dp.credit_days
        from mdm.parties p join mdm.dealer_profiles dp on dp.party_id = p.id where p.id = $1`, [d.partyId])).rows[0];
-  if (!dealer) throw Errors.rule('NOT_A_DEALER', 'Quotations are issued to registered dealers. Register the party as a dealer first.');
+  if (!dealer) throw Errors.rule('NOT_A_DEALER', 'Quotations and orders are issued to registered dealers. Register the party as a dealer first.');
   const args: unknown[] = [dealer.territory_id];
-  const inScope = (await dbx.query(`select 1 where ${await scopeSql(dbx, req, 'sales.quotation:create', '$1::uuid', args)}`, args)).rowCount;
-  if (!inScope) throw Errors.forbidden('sales.quotation:create in this dealer’s territory');
+  const inScope = (await dbx.query(`select 1 where ${await scopeSql(dbx, req, perm, '$1::uuid', args)}`, args)).rowCount;
+  if (!inScope) throw Errors.forbidden(`${perm} in this dealer’s territory`);
 
   const le = (await dbx.query(`select id, name, state_code, status from org.legal_entities where id = $1`, [d.legalEntityId])).rows[0];
   if (!le || le.status !== 'Active') throw Errors.rule('REFERENCE_NOT_ACTIVE', 'Choose an active legal entity.');
@@ -69,14 +71,16 @@ export async function buildQuote(dbx: Db | Tx, req: Request, d: QuoteInput, quot
          left join mdm.product_categories c on c.id = i.category_id where p.id = $1`, [l.itemPackId])).rows[0];
     if (!p || p.status !== 'Active' || p.item_status !== 'Active' || p.item_type !== 'FG') throw Errors.rule('ITEM_NOT_SALEABLE', `Line ${lineNo}: choose an active finished-good pack.`);
     const label = `${Number(p.pack_size)} ${p.pack_uom} ${p.container}`;
-    const price = await priceFor(dbx, dealer.price_group, p.id, quoteDate);
+    const fixed = locked?.rates.get(p.id);
+    if (locked && !fixed) throw Errors.rule('LINES_LOCKED', `Line ${lineNo}: ${p.code} is not on the quotation.`);
+    const price = fixed ? { price_list_id: locked!.priceListId, rate: fixed.listRate, slabs: [] } : await priceFor(dbx, dealer.price_group, p.id, quoteDate);
     if (!price) throw Errors.rule('NO_PRICE', `Line ${lineNo}: ${p.code} ${label} has no active price for price group ${dealer.price_group} on ${quoteDate}.`, { line: lineNo });
-    priceListId ??= price.price_list_id;
+    priceListId ??= price.price_list_id ?? null;
     if (!p.hsn_id) throw Errors.rule('NO_TAX_RATE', `Line ${lineNo}: ${p.code} has no HSN code. Update the item master.`, { line: lineNo });
     const tax = await effectiveTaxRate(dbx, p.hsn_id, quoteDate);
     if (!tax) throw Errors.rule('NO_TAX_RATE', `Line ${lineNo}: no GST rate is configured for HSN ${p.hsn_code} on ${quoteDate}. Finance must add it.`, { line: lineNo });
     if (p.licence_required && p.licence_required !== 'NONE') licenceTypes.add(p.licence_required);
-    const schemePct = schemeFor(price.slabs, l.qty);
+    const schemePct = fixed ? fixed.schemePct : schemeFor(price.slabs, l.qty);
     const gstRate = Number(tax.gstRate);
     const c = calcLine({ qty: l.qty, listRate: price.rate, schemePct, extraPct: l.extraDiscountPct, gstRate }, interState);
     lines.push({ lineNo, itemPackId: p.id, itemCode: p.code, description: `${p.name} — ${label}`, hsnCode: p.hsn_code, packLabel: label, qty: l.qty,
@@ -84,7 +88,7 @@ export async function buildQuote(dbx: Db | Tx, req: Request, d: QuoteInput, quot
   }
   const eligibility = await dealerEligibility(dbx, d.partyId, [...licenceTypes], quoteDate);
   if (!eligibility.eligible) {
-    if (strict) throw Errors.rule('DEALER_NOT_ELIGIBLE', `${dealer.legal_name} cannot be quoted these products: ${eligibility.reasons.join('; ')}.`, eligibility);
+    if (strict) throw Errors.rule('DEALER_NOT_ELIGIBLE', `${dealer.legal_name} cannot be sold these products: ${eligibility.reasons.join('; ')}.`, eligibility);
     warnings.push(...eligibility.reasons);
   }
   const totals = calcTotals(lines.map((l) => l.calc));
@@ -95,13 +99,25 @@ export async function buildQuote(dbx: Db | Tx, req: Request, d: QuoteInput, quot
   };
 }
 
-type Built = Awaited<ReturnType<typeof buildQuote>>;
-const rupees = (b: Built) => ({
+/** Packs priced for a dealer's price group on a date — the product picker of quotations and orders. */
+export async function pricedPacks(db: Db, partyId: string, date: string) {
+  return (await db.query(
+      `select p.id, i.code as "itemCode", i.name as "itemName", p.pack_code as "packCode", p.pack_size as "packSize", p.pack_uom as "packUom", p.container,
+              x.rate, pl.code as "priceListCode",
+              coalesce((select json_agg(json_build_object('minQty', s.min_qty, 'discountPct', s.discount_pct) order by s.min_qty) from sales.price_slabs s where s.price_list_item_id = x.id), '[]') as slabs
+         from mdm.dealer_profiles dp
+         join sales.price_lists pl on pl.price_group = dp.price_group and pl.status = 'Active' and pl.valid_from <= $2::date and (pl.valid_to is null or pl.valid_to >= $2::date)
+         join sales.price_list_items x on x.price_list_id = pl.id join mdm.item_packs p on p.id = x.item_pack_id join mdm.items i on i.id = p.item_id
+        where dp.party_id = $1 and p.status = 'Active' and i.status = 'Active' order by i.code, p.pack_size`, [partyId, date])).rows;
+}
+
+export type Built = Awaited<ReturnType<typeof buildQuote>>;
+export const rupees = (b: Built) => ({
   subTotal: toRupees(b.totals.subTotal), discountTotal: toRupees(b.totals.discountTotal), taxableTotal: toRupees(b.totals.taxableTotal),
   cgstTotal: toRupees(b.totals.cgstTotal), sgstTotal: toRupees(b.totals.sgstTotal), igstTotal: toRupees(b.totals.igstTotal),
   roundOff: toRupees(b.totals.roundOff), grandTotal: toRupees(b.totals.grandTotal),
 });
-const lineOut = (l: Built['lines'][number]) => ({
+export const lineOut = (l: Built['lines'][number]) => ({
   lineNo: l.lineNo, itemPackId: l.itemPackId, itemCode: l.itemCode, description: l.description, hsnCode: l.hsnCode, packLabel: l.packLabel, qty: l.qty,
   listRate: l.listRate, schemeDiscountPct: l.schemeDiscountPct, extraDiscountPct: l.extraDiscountPct, rate: toRupees(l.calc.rate), taxable: toRupees(l.calc.taxable),
   gstRate: l.gstRate, cgst: toRupees(l.calc.cgst), sgst: toRupees(l.calc.sgst), igst: toRupees(l.calc.igst), lineTotal: toRupees(l.calc.lineTotal),
@@ -126,7 +142,7 @@ const headerValues = (b: Built) => {
 const HEADER_COLS = ['seller_state', 'place_of_supply', 'inter_state', 'quote_date', 'valid_until', 'price_list_id', 'max_extra_discount',
   'sub_total', 'discount_total', 'taxable_total', 'cgst_total', 'sgst_total', 'igst_total', 'round_off', 'grand_total'];
 
-async function setStatus(tx: Tx, actor: Actor, id: string, status: string, reason: string | null = null, extra: Record<string, unknown> = {}) {
+export async function setQuotationStatus(tx: Tx, actor: Actor, id: string, status: string, reason: string | null = null, extra: Record<string, unknown> = {}) {
   await allowTransition(tx);
   const before = (await tx.query(`select status from sales.quotations where id = $1`, [id])).rows[0];
   await tx.query(`update sales.quotations set status = $2, status_reason = coalesce($3, status_reason), updated_by = $4 where id = $1`, [id, status, reason, actor.userId]);
@@ -139,7 +155,7 @@ export async function expireQuotations(db: Db): Promise<number> {
   return withTx(db, async (tx) => {
     const rows = (await tx.query(`select id from sales.quotations where status in ('Approved','Sent') and valid_until < $1::date for update`, [todayIST()])).rows;
     const system: Actor = { userId: null, label: 'system' };
-    for (const r of rows) await setStatus(tx, system, r.id, 'Expired', 'Validity period ended');
+    for (const r of rows) await setQuotationStatus(tx, system, r.id, 'Expired', 'Validity period ended');
     return rows.length;
   });
 }
@@ -179,16 +195,17 @@ function allowedActions(req: Request, status: string) {
   if (['Approved', 'Sent'].includes(status) && can(req, 'sales.quotation:send')) out.push('accept');
   if (['Approved', 'Sent', 'Expired'].includes(status) && edit) out.push('revise');
   if (['Draft', 'Rejected', 'Approved', 'Sent'].includes(status) && can(req, 'sales.quotation:cancel')) out.push('cancel');
+  if (['Approved', 'Sent', 'Accepted'].includes(status) && can(req, 'sales.order:create')) out.push('convert');
   if (can(req, 'sales.quotation:create')) out.push('duplicate');
   return out;
 }
 
 export function quotationRoutes(db: Db) {
   registerSubjectHandler(SUBJECT, {
-    onApproved: (tx, r, a) => setStatus(tx, a, r.subject_id, 'Approved'),
-    onRejected: (tx, r, a) => setStatus(tx, a, r.subject_id, 'Rejected'),
-    onReturned: (tx, r, a) => setStatus(tx, a, r.subject_id, 'Draft'),
-    onCancelled: (tx, r, a) => setStatus(tx, a, r.subject_id, 'Draft'),
+    onApproved: (tx, r, a) => setQuotationStatus(tx, a, r.subject_id, 'Approved'),
+    onRejected: (tx, r, a) => setQuotationStatus(tx, a, r.subject_id, 'Rejected'),
+    onReturned: (tx, r, a) => setQuotationStatus(tx, a, r.subject_id, 'Draft'),
+    onCancelled: (tx, r, a) => setQuotationStatus(tx, a, r.subject_id, 'Draft'),
   });
   const r = Router();
 
@@ -249,16 +266,7 @@ export function quotationRoutes(db: Db) {
   r.get('/priced-packs', requirePermission('sales.quotation:create'), asyncHandler(async (req, res) => {
     const partyId = str(req.query.partyId);
     if (!partyId) throw Errors.validation([{ field: 'partyId', message: 'Choose a dealer' }]);
-    const date = str(req.query.date) ?? todayIST();
-    const rows = await db.query(
-      `select p.id, i.code as "itemCode", i.name as "itemName", p.pack_code as "packCode", p.pack_size as "packSize", p.pack_uom as "packUom", p.container,
-              x.rate, pl.code as "priceListCode",
-              coalesce((select json_agg(json_build_object('minQty', s.min_qty, 'discountPct', s.discount_pct) order by s.min_qty) from sales.price_slabs s where s.price_list_item_id = x.id), '[]') as slabs
-         from mdm.dealer_profiles dp
-         join sales.price_lists pl on pl.price_group = dp.price_group and pl.status = 'Active' and pl.valid_from <= $2::date and (pl.valid_to is null or pl.valid_to >= $2::date)
-         join sales.price_list_items x on x.price_list_id = pl.id join mdm.item_packs p on p.id = x.item_pack_id join mdm.items i on i.id = p.item_id
-        where dp.party_id = $1 and p.status = 'Active' and i.status = 'Active' order by i.code, p.pack_size`, [partyId, date]);
-    res.json({ data: rows.rows });
+    res.json({ data: await pricedPacks(db, partyId, str(req.query.date) ?? todayIST()) });
   }));
 
   // ------------------------------------------------------------------ live preview (nothing saved)
@@ -355,7 +363,7 @@ export function quotationRoutes(db: Db) {
       await writeLines(tx, q.id, b);
       if (day(q.validUntil) < todayIST()) throw Errors.rule('QUOTATION_EXPIRED', 'The validity date has passed. Change the quotation date to today and save before submitting.');
       const facts = await approvalFacts(tx, req, { maxExtraDiscount: b.maxExtraDiscount, grandTotal: toRupees(b.totals.grandTotal) });
-      await setStatus(tx, actorOf(req), q.id, 'Submitted', null, facts);
+      await setQuotationStatus(tx, actorOf(req), q.id, 'Submitted', null, facts);
       const ar = await submitForApproval(tx, actorOf(req), { subjectType: SUBJECT, subjectId: q.id, subjectLabel: `${q.docNo} R${q.revision} — ${q.partyName}`,
         revision: q.revision, facts, legalEntityId: q.legalEntityId });
       await tx.query(`update sales.quotations set needs_approval = $2 where id = $1`, [q.id, ar.status !== 'Approved']);
@@ -369,7 +377,7 @@ export function quotationRoutes(db: Db) {
       const q = await load(tx, req, req.params.id!, 'sales.quotation:send', true);
       if (q.status !== 'Approved') throw Errors.state('Only an approved quotation can be marked as sent.');
       if (day(q.validUntil) < todayIST()) throw Errors.rule('QUOTATION_EXPIRED', 'The quotation has expired. Revise it.');
-      await setStatus(tx, actorOf(req), q.id, 'Sent');
+      await setQuotationStatus(tx, actorOf(req), q.id, 'Sent');
     });
     res.json({ ok: true });
   }));
@@ -380,7 +388,7 @@ export function quotationRoutes(db: Db) {
       const q = await load(tx, req, req.params.id!, 'sales.quotation:send', true);
       if (!['Approved', 'Sent'].includes(q.status)) throw Errors.state('Only an approved or sent quotation can be accepted.');
       if (day(q.validUntil) < todayIST()) throw Errors.rule('QUOTATION_EXPIRED', 'The quotation has expired. Revise it.');
-      await setStatus(tx, actorOf(req), q.id, 'Accepted', body.remarks ?? null);
+      await setQuotationStatus(tx, actorOf(req), q.id, 'Accepted', body.remarks ?? null);
     });
     res.json({ ok: true });
   }));
@@ -390,7 +398,7 @@ export function quotationRoutes(db: Db) {
     await withTx(db, async (tx) => {
       const q = await load(tx, req, req.params.id!, 'sales.quotation:cancel', true);
       if (!['Draft', 'Rejected', 'Approved', 'Sent'].includes(q.status)) throw Errors.state(`A ${q.status} quotation cannot be cancelled.`);
-      await setStatus(tx, actorOf(req), q.id, 'Cancelled', reason);
+      await setQuotationStatus(tx, actorOf(req), q.id, 'Cancelled', reason);
     });
     res.json({ ok: true });
   }));
@@ -405,7 +413,7 @@ export function quotationRoutes(db: Db) {
       const d = await inputOf(tx, q.id);
       const b = await buildQuote(tx, req, d, todayIST(), true);
       const id = await insertQuote(tx, req, d, b, q.docNo, q.revision + 1);
-      await setStatus(tx, actorOf(req), q.id, 'Superseded', `Revised as R${q.revision + 1}`);
+      await setQuotationStatus(tx, actorOf(req), q.id, 'Superseded', `Revised as R${q.revision + 1}`);
       await audit(tx, actorOf(req), { action: `${SUBJECT}.revised`, entityType: SUBJECT, entityId: id, after: { from: q.id, revision: q.revision + 1 } });
       return { id, revision: q.revision + 1 };
     });

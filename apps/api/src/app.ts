@@ -22,6 +22,7 @@ import { crmRoutes } from './modules/crm/routes';
 import { notificationRoutes } from './modules/notifications/routes';
 import { pricingRoutes } from './modules/sales/pricing';
 import { quotationRoutes } from './modules/sales/quotations';
+import { salesOrderRoutes } from './modules/sales/orders';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
@@ -63,6 +64,7 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/crm', crmRoutes(db));
   v1.use('/price-lists', pricingRoutes(db));
   v1.use('/quotations', quotationRoutes(db));
+  v1.use('/sales-orders', salesOrderRoutes(db));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);

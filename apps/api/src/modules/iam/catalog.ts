@@ -34,6 +34,7 @@ export const PERMISSIONS = [
   ...P('Sales', 'mdm.dealer', ['view', 'create', 'edit_draft', 'submit', 'verify_documents', 'view_sensitive', 'suspend'], 'dealers and their KYC'),
   ...P('Sales', 'sales.price_list', ['view', 'create', 'edit_draft', 'submit', 'approve', 'deactivate'], 'price lists and volume slabs'),
   ...P('Sales', 'sales.quotation', ['view', 'create', 'edit', 'submit', 'send', 'cancel'], 'quotations'),
+  ...P('Sales', 'sales.order', ['view', 'create', 'edit', 'submit', 'cancel'], 'sales orders'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -43,7 +44,8 @@ const ORG_VIEW = VIEW.filter((c) => (c.startsWith('org.') || c.startsWith('mdm.'
 const MASTER = (c: string) => (c.startsWith('org.') || c.startsWith('mdm.')) && !c.startsWith('mdm.dealer');
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
-  'sales.quotation:send', 'sales.quotation:cancel'];
+  'sales.quotation:send', 'sales.quotation:cancel',
+  'sales.order:view', 'sales.order:create', 'sales.order:edit', 'sales.order:submit', 'sales.order:cancel'];
 const PRICE_MANAGE = ['sales.price_list:view', 'sales.price_list:create', 'sales.price_list:edit_draft', 'sales.price_list:submit', 'sales.price_list:deactivate'];
 const DEALER_SALES = ['mdm.dealer:view', 'mdm.dealer:create', 'mdm.dealer:edit_draft', 'mdm.dealer:submit', ...CRM_BASE, ...QUOTE_SALES];
 /** BRD p.3: lead allocation from ASM upward; reopening closed opportunities from RSM upward. */
@@ -53,11 +55,11 @@ const tierCrm = (t: string) => [...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM', 'SASM', '
 const DEALER_EXTRA: Record<string, string[]> = {
   SALES_OPS: [...DEALER_SALES, 'crm.lead:assign', ...PRICE_MANAGE],
   DOC_VERIFIER: ['mdm.dealer:view', 'mdm.dealer:verify_documents', 'mdm.dealer:view_sensitive'],
-  CREDIT_CONTROLLER: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend', 'sales.quotation:view'],
+  CREDIT_CONTROLLER: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend', 'sales.quotation:view', 'sales.order:view'],
   FINANCE_HEAD: ['mdm.dealer:view', 'mdm.dealer:view_sensitive', 'mdm.dealer:suspend', 'mdm.tax_rate:configure', 'mdm.hsn:create', 'mdm.hsn:edit',
-    'sales.price_list:view', 'sales.quotation:view'],
-  ACCOUNTS_EXEC: ['mdm.dealer:view', 'sales.price_list:view', 'sales.quotation:view'],
-  MANAGEMENT_VIEWER: ['mdm.dealer:view', 'crm.lead:view', 'crm.opportunity:view', 'crm.activity:view', 'sales.price_list:view', 'sales.quotation:view'],
+    'sales.price_list:view', 'sales.quotation:view', 'sales.order:view'],
+  ACCOUNTS_EXEC: ['mdm.dealer:view', 'sales.price_list:view', 'sales.quotation:view', 'sales.order:view'],
+  MANAGEMENT_VIEWER: ['mdm.dealer:view', 'crm.lead:view', 'crm.opportunity:view', 'crm.activity:view', 'sales.price_list:view', 'sales.quotation:view', 'sales.order:view'],
 };
 
 interface RoleDef { code: string; name: string; department: string; description: string; privileged?: boolean; requiresMfa?: boolean; permissions: string[] }
@@ -136,15 +138,24 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
       { name: 'No extra discount', when: { fact: 'maxDiscountPct', op: 'lte', value: 0 }, steps: [] },
       { name: 'Within own authority', when: { fact: 'withinOwnAuthority', op: 'eq', value: true }, steps: [] },
       { name: 'Authority ladder', when: { fact: 'limitsActive', op: 'eq', value: true }, steps: [
-        { kind: 'authority_ladder', label: 'Discount approval', amountFact: 'ladderAmount', discountFact: 'maxDiscountPct', notifySkipped: true }] },
+        { kind: 'authority_ladder', label: 'Discount approval', amountFact: 'ladderAmount', discountFact: 'maxDiscountPct', notifySkipped: true, whenLimitsInactive: 'block' }] },
       { name: 'Reporting manager (limits pending D15)', steps: [{ kind: 'reporting_manager', label: 'Discount approval (reporting manager)' }] },
     ] } },
-  // D01 approved: hybrid routing. Used by sales orders in Stage 2; simulation is available now.
+  // D01 approved: hybrid routing — the lowest tier in the initiator's chain covering the order value and the highest extra discount,
+  // skipped tiers notified, then accounts review. While D15 keeps tier limits inactive, the reporting manager approves instead.
+  // An order taking the dealer over the credit limit also needs the finance head (credit override).
   { docType: 'sales.order', name: 'Sales order approval (D01 hybrid)', description: 'Lowest covering tier in the initiator’s chain, skipped tiers notified, then Accounts review',
-    definition: { distinctApprovers: true, rules: [{ name: 'Hybrid routing', steps: [
-      { kind: 'authority_ladder', label: 'Commercial approval', amountFact: 'amount', discountFact: 'maxDiscountPct', notifySkipped: true },
-      { kind: 'role', label: 'Accounts review (credit & stock)', roles: ['ACCOUNTS_EXEC', 'CREDIT_CONTROLLER', 'FINANCE_HEAD'] },
-    ] }] } },
+    definition: (() => {
+      const base = [
+        { kind: 'authority_ladder' as const, key: 'commercial', label: 'Commercial approval', amountFact: 'amount', discountFact: 'maxDiscountPct', notifySkipped: true, whenLimitsInactive: 'reporting_manager' as const },
+        { kind: 'role' as const, key: 'accounts', label: 'Accounts review (credit & stock)', roles: ['ACCOUNTS_EXEC', 'CREDIT_CONTROLLER', 'FINANCE_HEAD'] },
+      ];
+      return { distinctApprovers: true, rules: [
+        { name: 'Over credit limit', when: { fact: 'overCreditLimit', op: 'eq' as const, value: true },
+          steps: [...base, { kind: 'role' as const, key: 'credit_override', label: 'Credit limit override (finance head)', roles: ['FINANCE_HEAD'] }] },
+        { name: 'Hybrid routing', steps: base },
+      ] };
+    })() },
 ];
 
 /** Idempotent: brings permissions, system roles and first policy versions in line with the code. */
