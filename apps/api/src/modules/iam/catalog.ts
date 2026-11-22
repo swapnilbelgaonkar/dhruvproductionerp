@@ -76,6 +76,9 @@ export const PERMISSIONS = [
   ...P('Finance', 'finance.payment', ['view', 'create', 'submit', 'release'], 'payments to vendors and transporters (release = record the UTR once the bank transfer is made)'),
   ...P('Finance', 'finance.payable', ['view'], 'payables ageing and vendor ledgers'),
   ...P('Logistics', 'logistics.freight_bill', ['view', 'create'], 'transporter freight bills checked against the shipments'),
+  ...P('Finance', 'finance.gl', ['view', 'journal', 'post', 'lock', 'unlock'], 'general ledger (journal = draft manual journals; post = post or reverse them; lock and unlock accounting periods)'),
+  ...P('Finance', 'finance.coa', ['manage'], 'the chart of accounts'),
+  ...P('Finance', 'finance.gst', ['view'], 'GST summaries (GSTR-1 and GSTR-3B working)'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -139,14 +142,17 @@ const RETURN_IN = ['sales.invoice:view', 'sales.return:view', 'sales.return:rece
 /** Payables (Stage 6 part 4): accounts draft and release payments after the finance head approves; logistics enters freight bills. */
 const PAYING = ['finance.payment:view', 'finance.payment:create', 'finance.payment:submit', 'finance.payment:release', 'finance.payable:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'];
 const PAY_SEE = ['finance.payment:view', 'finance.payable:view', 'logistics.freight_bill:view'];
+/** General ledger (Stage 6 part 5): accounts draft manual journals; the finance head posts them, keeps the chart of accounts and locks periods. */
+const GL_ACC = ['finance.gl:view', 'finance.gl:journal', 'finance.gst:view'];
+const GL_HEAD = [...GL_ACC, 'finance.gl:post', 'finance.gl:lock', 'finance.coa:manage'];
 const LOGISTICS_EXTRA: Record<string, string[]> = {
   LOGISTICS_EXEC: [...SHIP_RUN, 'sales.invoice:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'],
   LOGISTICS_HEAD: [...SHIP_RUN, 'logistics.transporter:manage', 'sales.invoice:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'],
   PURCHASE_HEAD: ['finance.payable:view', 'finance.payment:view'],
   STOREKEEPER: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN], STORES_HEAD: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN],
   SCANNER_OPERATOR: ['logistics.shipment:view', 'logistics.shipment:pick', 'mfg.packing:view'],
-  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING, ...PAYING], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel', ...PAYING],
-  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view', ...PAY_SEE],
+  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING, ...PAYING, ...GL_ACC], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel', ...PAYING, ...GL_HEAD],
+  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view', ...PAY_SEE, 'finance.gl:view', 'finance.gst:view'],
   QA_HEAD: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'], QA_MANAGER: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
@@ -178,7 +184,8 @@ export const ROLES: RoleDef[] = [
   { code: 'EXEC_ADMIN', name: 'Executive Administrator', department: 'Executive', privileged: true, requiresMfa: true,
     description: 'Approves policies, authority limits and privileged role grants (BRD Admins 01/02).',
     permissions: [...VIEW, 'iam.authority_limit:configure', 'sys.settings:configure', 'sys.number_series:configure', 'wf.policy:configure',
-      'wf.policy:simulate', 'wf.approval:view_all', 'sys.dashboard:view_admin', 'sys.audit:verify', 'mdm.dealer:suspend', 'mdm.dealer:view_sensitive'] },
+      'wf.policy:simulate', 'wf.approval:view_all', 'sys.dashboard:view_admin', 'sys.audit:verify', 'mdm.dealer:suspend', 'mdm.dealer:view_sensitive',
+      'finance.gl:view', 'finance.gl:unlock'] },
   { code: 'SECURITY_ADMIN', name: 'Security Administrator', department: 'IT', privileged: true, requiresMfa: true,
     description: 'Users, roles, sessions and audit forensics (BRD Admin 03). Role grants of privileged roles need executive approval.',
     permissions: ['iam.user:view', 'iam.user:create', 'iam.user:edit', 'iam.user:deactivate', 'iam.role:view', 'iam.role:configure',

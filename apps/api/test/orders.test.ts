@@ -99,7 +99,7 @@ describe('Sales orders (SO-001…011, D01)', () => {
     const sh = (await db.query(`insert into logistics.shipments (doc_no, sales_order_id, legal_entity_id, party_id, ship_to_id, warehouse_id, planned_date, status)
       values ('DSP-T-' || substr(md5(random()::text), 1, 8), $1, $2, $3, $4, $5, $6, 'Planned') returning id`, [a.body.id, f.le, f.party, f.registered, wh, plusDays(-40)])).rows[0].id;
     await db.query(`insert into sales.invoices (doc_no, legal_entity_id, seller_state, party_id, bill_to_id, ship_to_id, place_of_supply, inter_state, sales_order_id, shipment_id, invoice_date, due_date,
-      payment_terms, taxable_total, grand_total) values ('T' || substr(md5(random()::text), 1, 12), $1, '27', $2, $3, $3, '27', false, $4, $5, $6, $7, '30 days', 3810, 4000)`,
+      payment_terms, taxable_total, cgst_total, sgst_total, grand_total) values ('T' || substr(md5(random()::text), 1, 12), $1, '27', $2, $3, $3, '27', false, $4, $5, $6, $7, '30 days', 3810, 95, 95, 4000)`,
       [f.le, f.party, f.registered, a.body.id, sh, plusDays(-35), plusDays(-5)]);
     const b = await f.se.post('/api/v1/sales-orders', { ...quote(f), dealerPoNo: 'PO-B' }).expect(201);
     const live = (await f.se.get(`/api/v1/sales-orders/${b.body.id}`).expect(200)).body.liveCredit;

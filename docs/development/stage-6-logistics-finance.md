@@ -6,7 +6,9 @@ Order follows D12 (business flow). Stage 6 parts:
 2. Sales invoicing: GST tax invoice from the dispatch, credit notes, customer returns — **done**
 3. Receivables: receipts and allocation, ageing, credit exposure and the overdue freeze (D18) — **done**
 4. Payables: vendor ledger, payments, debit note adjustment, freight bills — **done**
-5. Native general ledger (D02): chart of accounts, idempotent postings, trial balance, P&L, balance sheet, period lock, GST summaries
+5. Native general ledger (D02): chart of accounts, idempotent postings, trial balance, P&L, balance sheet, period lock, GST summaries — **done**
+
+**Stage 6 is complete.**
 
 ## Part 1 — Dispatch (BRD p.17; MP §15.1–15.6; LOG-001…LOG-007, LOG-009…LOG-011, FIN-015)
 
@@ -135,7 +137,7 @@ Order follows D12 (business flow). Stage 6 parts:
   - **Ageing and ledger.** The ageing shows ₹4,160 not due. The vendor ledger reads debit note 28,320 Dr, invoice 42,480 Cr, payment 10,000 Dr, ₹4,160 Cr.
   - **Freight bill.** A shipment dispatched with ₹1,800 agreed is billable. The bill of ₹2,000 is ₹200 over, so it goes to the logistics head and then the finance head. A duplicate bill number and the same shipment on another bill are both refused. Under RCM, GST of ₹100 is ours and ₹2,000 is payable.
   - **Transporter payment.** Paid with ₹40 TDS u/s 194C after the finance head's approval, which settles the bill.
-- Totals: **82 API + 4 contract tests passing**. Typecheck clean.
+- Totals at the end of part 4: 82 API + 4 contract tests passing. Typecheck clean.
 - Browser run (local, [SAMPLE] data, after the part 3 run):
   1. Accounts adjusted DN/2026-27/000001 (₹72,534) against PINV/2026-27/000001 (₹1,08,746) and drafted PAY/2026-27/000001 for the ₹36,212 balance, with ₹31 TDS u/s 194Q.
   2. The finance head approved it, and accounts released it with the UTR. The vendor ledger closes at nil.
@@ -145,3 +147,40 @@ Order follows D12 (business flow). Stage 6 parts:
 - **Bank payment file (H2H / bulk upload) and positive pay**: Stage 7 integrations.
 - **TDS computation, challans and Form 16A**: TDS is recorded per payment; computing it from thresholds and rates, and the returns, are with the GL and statutory reports (part 5 / Stage 7).
 - **Advances to vendors and expense bills without a PO**: not in the BRD scope for this release; can be added on request.
+
+## Part 5 — Native general ledger (D02; BRD p.19; MP §18; FIN-013…FIN-020)
+
+| Area | What works | RTM |
+|---|---|---|
+| Chart of accounts | Schedule III groups: bank and cash, trade receivables, inventories (RM, PM, FG, WIP), input GST (CGST, SGST, IGST, RCM, other), trade payables (vendors, transporters), GRNI, output GST, RCM payable, TDS payable, equity, sales, sales returns, round-off, COGS, freight, packing, production loss, QC samples, inventory adjustments. Automatic accounts carry a system key; finance adds its own for manual journals. Party ledgers (receivables, payables) carry the dealer, vendor or transporter on every line | FIN-013 |
+| Automatic postings | **Sales invoice**: Dr receivables, Cr sales and output GST, with round-off. **Cancellation**: reversed. **Credit note** (on approval): Dr sales returns and output GST, Cr receivables. **Receipt**: Dr bank (or cash), Cr receivables; a bounce or cancellation is reversed. **Supplier invoice** (matched or approved): Dr GRNI and input GST, Cr payables. **Debit note**: the reverse. **Freight bill** (approved): Dr freight, Cr transporter, with GST under RCM (input and payable) or as input. **Payment** (released): Dr payables, Cr bank and TDS payable | FIN-014 |
+| Stock valuation | Every stock-ledger row is valued into the GL once, at its own cost: receipts against GRNI, opening stock against opening equity, issues and output through WIP, dispatches and customer returns through COGS, packing losses, packaging consumed and QC samples to their expense accounts. Transfers between buckets (QC/QA release, hold, recall) move no value | FIN-014 |
+| Idempotent and catching up | One journal per document event, one valuation per stock row (database-enforced), so posting can run any number of times. It runs every minute in the worker, before every report, and on demand, and it posted the documents raised before the ledger existed. A document that cannot post (e.g. unbalanced data) is reported and does not block the rest | FIN-014 |
+| Integrity | Every posted journal balances, checked by the database at commit. Posted journals cannot be edited, only reversed. Nothing can be dated in a locked period | FIN-015 |
+| Manual journals | Accounts drafts (balanced; party required on party ledgers); **another person** with posting rights posts it (maker-checker); a posted manual journal can be reversed once, with a reason | FIN-013 |
+| Period lock | The finance head locks a month after posting everything pending (earlier months first, no drafts left); only an executive director can unlock it, with a reason. A document dated in a locked month posts on the first day of the next open month and keeps its own date | FIN-018 |
+| Reports | Trial balance for any period (opening, movement, closing, balanced check), account ledger with party filter and links to the source document, profit and loss by statement group, balance sheet with profit to date (balanced check), journal register with search | FIN-016, FIN-017 |
+| GST working | For a month: GSTR-1 tables (B2B invoices, B2C by place of supply and rate, credit notes, HSN summary, cancelled invoices) and a GSTR-3B style summary of output tax (incl. RCM) and input credit booked, from the ledger | FIN-019 |
+| Roles | Accounts executive: view, draft journals, GST. Finance head: also post and reverse journals, lock periods, manage the chart of accounts. Executive director: unlock. Management: view | — |
+
+### Evidence
+- `apps/api/test/ledger.test.ts`:
+  - **Postings.** After dispatch, invoice and a ₹3,000 receipt, the trial balance balances: sales ₹4,800 Cr, CGST and SGST ₹120 Cr each, receivables ₹2,040 Dr, bank ₹3,000 Dr, COGS posted. Stock moves only between stock, WIP, GRNI and cost accounts.
+  - **Idempotency.** Re-syncing posts nothing, the invoice has exactly one journal, and every stock row of the entity is valued exactly once.
+  - **Reversal.** Cancelling the receipt reverses it: receivables ₹5,040, bank 0. The party ledger shows 5,040 Dr, 3,000 Cr, 3,000 Dr.
+  - **Manual journals.** Unbalanced, and a receivable without a party, are refused. Accounts cannot post. The finance head cannot post their own draft; they post the accountant's.
+  - **Statements.** P&L income is ₹4,800 with freight ₹500. The balance sheet balances, and its profit equals the P&L.
+  - **Period lock.** Accounts cannot lock, and drafts block the lock. After locking, a receipt dated in the month posts on the 1st of the next month with its own date kept, and a manual journal into the month is refused. The finance head cannot unlock; the executive director does, and the journal then posts.
+  - **GST.** One B2C row at 5 % (₹4,800, ₹120 + ₹120) and the HSN summary; the GSTR-3B output matches.
+- Full test database: the ledger posted every document and stock movement the whole suite creates, with no failures and no unbalanced entity. It correctly refused one hand-inserted test invoice whose tax did not add up, and that fixture was corrected.
+- Totals: **83 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local, [SAMPLE] data):
+  1. The ledger caught up all 33 earlier documents and stock movements of the walkthrough with no failures, and the trial balance and balance sheet balance.
+  2. Accounts drafted the November bank charges and an opening bank balance; the finance head posted them.
+  3. A journal coded to the wrong account was reversed and re-posted.
+  4. The GST working for November lists SI/2026-27/00001, CN/2026-27/00001 and the HSN summary.
+
+### Not built yet (part 5)
+- **Filing**: GSTR-1/3B upload, e-invoice IRN and e-way bills through the GSP, and TDS returns are Stage 7 integrations; the working here is for review.
+- **Bank reconciliation, depreciation and fixed assets, budgets, cost centres**: not in the BRD scope for this release.
+- **Year-end close** (transfer of profit to retained earnings): with the first year-end, as a locked-period routine.

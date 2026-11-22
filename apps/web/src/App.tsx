@@ -4,6 +4,7 @@ import { PlantSettingsPage } from './pages/production/PlantSettings';
 import { CreditNoteDetailPage, CreditNotePrintPage, CreditNotesPage, CustomerReturnDetailPage, CustomerReturnsPage, SalesInvoiceDetailPage, SalesInvoicePrintPage, SalesInvoicesPage } from './pages/finance/SalesInvoices';
 import { AgeingPage, CustomerReceiptDetailPage, CustomerReceiptsPage, StatementPage } from './pages/finance/Receivables';
 import { FreightBillDetailPage, FreightBillsPage, PayablesAgeingPage, PaymentDetailPage, PaymentsPage, VendorLedgerPage } from './pages/finance/Payables';
+import { AccountLedgerPage, ChartOfAccountsPage, FinancialStatementsPage, GstPage, JournalDetailPage, JournalsPage, PeriodsPage, TrialBalancePage } from './pages/finance/Ledger';
 import { DispatchQueuePage, ShipmentChallanPage, ShipmentDetailPage, ShipmentsPage, TransportersPage } from './pages/logistics/Dispatch';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
 import { DowntimePage, PackingLabelsPage, PackingRunDetailPage, PackingRunsPage, ProductionDashboardPage, VerifyPage } from './pages/production/Packing';
@@ -154,6 +155,14 @@ export function App() {
         <Route path="finance/vendor-ledger/:partyId" element={<Protected perm="finance.payable:view"><VendorLedgerPage /></Protected>} />
         <Route path="logistics/freight-bills" element={<Protected perm="logistics.freight_bill:view"><FreightBillsPage /></Protected>} />
         <Route path="logistics/freight-bills/:id" element={<Protected perm="logistics.freight_bill:view"><FreightBillDetailPage /></Protected>} />
+        <Route path="finance/trial-balance" element={<Protected perm="finance.gl:view"><TrialBalancePage /></Protected>} />
+        <Route path="finance/ledger/:accountId" element={<Protected perm="finance.gl:view"><AccountLedgerPage /></Protected>} />
+        <Route path="finance/journals" element={<Protected perm="finance.gl:view"><JournalsPage /></Protected>} />
+        <Route path="finance/journals/:id" element={<Protected perm="finance.gl:view"><JournalDetailPage /></Protected>} />
+        <Route path="finance/statements" element={<Protected perm="finance.gl:view"><FinancialStatementsPage /></Protected>} />
+        <Route path="finance/periods" element={<Protected perm="finance.gl:view"><PeriodsPage /></Protected>} />
+        <Route path="finance/gst" element={<Protected perm="finance.gst:view"><GstPage /></Protected>} />
+        <Route path="finance/accounts" element={<Protected perm="finance.gl:view"><ChartOfAccountsPage /></Protected>} />
         <Route path="finance/invoices" element={<Protected perm="sales.invoice:view"><SalesInvoicesPage /></Protected>} />
         <Route path="finance/invoices/:id" element={<Protected perm="sales.invoice:view"><SalesInvoiceDetailPage /></Protected>} />
         <Route path="finance/credit-notes" element={<Protected perm="sales.credit_note:view"><CreditNotesPage /></Protected>} />

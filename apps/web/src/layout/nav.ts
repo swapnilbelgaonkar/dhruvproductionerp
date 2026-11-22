@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, Notebook, Books, ChartLine, CalendarX, ListNumbers, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -72,6 +72,14 @@ export const NAV: NavGroup[] = [
     { to: '/finance/ageing', label: 'Receivables Ageing', icon: HourglassMedium, perm: 'finance.receivable:view' },
     { to: '/finance/payments', label: 'Payments', icon: Bank, perm: 'finance.payment:view' },
     { to: '/finance/payables', label: 'Payables Ageing', icon: HourglassMedium, perm: 'finance.payable:view' },
+  ] },
+  { label: 'Accounts', items: [
+    { to: '/finance/trial-balance', label: 'Trial Balance', icon: Books, perm: 'finance.gl:view' },
+    { to: '/finance/statements', label: 'Financial Statements', icon: ChartLine, perm: 'finance.gl:view' },
+    { to: '/finance/journals', label: 'Journals', icon: Notebook, perm: 'finance.gl:view' },
+    { to: '/finance/gst', label: 'GST Working', icon: Percent, perm: 'finance.gst:view' },
+    { to: '/finance/periods', label: 'Accounting Periods', icon: CalendarX, perm: 'finance.gl:view' },
+    { to: '/finance/accounts', label: 'Chart of Accounts', icon: ListNumbers, perm: 'finance.gl:view' },
   ] },
   { label: 'Masters', items: [
     { to: '/masters/legal-entities', label: 'Legal Entities', icon: Buildings, perm: 'org.legal_entity:view' },

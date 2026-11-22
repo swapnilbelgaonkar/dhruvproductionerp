@@ -2,11 +2,13 @@
 import { loadConfig } from './config';
 import { createPool } from './db/pool';
 import { startRelay } from './modules/notifications/relay';
+import { startLedgerSync } from './modules/finance/ledger';
 
 const cfg = loadConfig();
 const db = createPool(cfg.DATABASE_URL);
 const stop = startRelay(db, 1000);
+const stopLedger = startLedgerSync(db);
 console.log('Dhruv ERP worker started');
-const shutdown = () => { stop(); db.end().then(() => process.exit(0)); };
+const shutdown = () => { stop(); stopLedger(); db.end().then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);

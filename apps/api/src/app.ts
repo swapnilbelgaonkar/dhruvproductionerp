@@ -47,6 +47,7 @@ import { shipmentRoutes } from './modules/logistics/shipments';
 import { creditNoteRoutes, customerReturnRoutes, salesInvoiceRoutes } from './modules/sales/invoices';
 import { receiptRoutes, receivableRoutes } from './modules/finance/receivables';
 import { freightBillRoutes, payableRoutes, paymentRoutes } from './modules/finance/payables';
+import { ledgerRoutes } from './modules/finance/ledger';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
@@ -121,6 +122,7 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/freight-bills', freightBillRoutes(db));
   v1.use('/payments', paymentRoutes(db));
   v1.use('/payables', payableRoutes(db));
+  v1.use('/gl', ledgerRoutes(db));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);
