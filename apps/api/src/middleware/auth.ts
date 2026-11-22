@@ -42,8 +42,10 @@ export function loadSession(db: Db) {
         if (r.requires_mfa) mfaRequiredByRole = true;
         if (r.permission_code) grants.set(r.permission_code, [...(grants.get(r.permission_code) ?? []), r.scope]);
       }
+      // pre-go-live switch: with two-factor off, nobody is asked to enrol or verify
+      const mfaOn = (await getSetting<boolean>(db, 'auth.mfa.enforced', true)) !== false;
       req.auth = {
-        sessionId: id, csrfToken: row.csrf_token, mfaSatisfied: row.mfa_satisfied, mfaRequiredByRole,
+        sessionId: id, csrfToken: row.csrf_token, mfaSatisfied: mfaOn ? row.mfa_satisfied : true, mfaRequiredByRole: mfaOn && mfaRequiredByRole,
         user: { id: row.user_id, email: row.email, fullName: row.full_name, status: row.status, mustChangePassword: row.must_change_password, mfaEnabled: row.mfa_enabled, employeeId: row.employee_id },
         roles: [...roles].map(([code, name]) => ({ code, name })),
         grants,

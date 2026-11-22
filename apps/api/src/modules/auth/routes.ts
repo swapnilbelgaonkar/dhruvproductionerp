@@ -59,6 +59,8 @@ export function authRoutes(db: Db, cfg: Config) {
 
     const token = randomToken();
     const csrf = randomToken(24);
+    const mfaOn = (await getSetting<boolean>(db, 'auth.mfa.enforced', true)) !== false;
+    const needMfa = mfaOn && !!u.mfa_enabled;
     await withTx(db, async (tx) => {
       await tx.query(`update iam.users set failed_login_count = 0, locked_until = null, last_login_at = now() where id = $1`, [u.id]);
       await tx.query(
@@ -69,7 +71,7 @@ export function authRoutes(db: Db, cfg: Config) {
     });
     res.cookie(SESSION_COOKIE, token, { ...cookieOpts, maxAge: absoluteHours * 3600_000 });
     res.cookie(CSRF_COOKIE, csrf, { ...cookieOpts, httpOnly: false, maxAge: absoluteHours * 3600_000 });
-    res.json({ mfaRequired: !!u.mfa_enabled, csrfToken: csrf });
+    res.json({ mfaRequired: needMfa, csrfToken: csrf });
   }));
 
   r.post('/logout', requireAuth, asyncHandler(async (req, res) => {
