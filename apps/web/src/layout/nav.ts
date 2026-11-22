@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -62,6 +62,7 @@ export const NAV: NavGroup[] = [
     { to: '/logistics/queue', label: 'Dispatch Queue', icon: ListDashes, perm: 'logistics.shipment:view' },
     { to: '/logistics/shipments', label: 'Shipments', icon: Truck, perm: 'logistics.shipment:view' },
     { to: '/logistics/returns', label: 'Customer Returns', icon: ArrowUDownLeft, perm: 'sales.return:view' },
+    { to: '/logistics/freight-bills', label: 'Freight Bills', icon: Scroll, perm: 'logistics.freight_bill:view' },
     { to: '/logistics/transporters', label: 'Transporters', icon: Van, perm: 'logistics.shipment:view' },
   ] },
   { label: 'Finance', items: [
@@ -69,6 +70,8 @@ export const NAV: NavGroup[] = [
     { to: '/finance/credit-notes', label: 'Credit Notes', icon: ReceiptX, perm: 'sales.credit_note:view' },
     { to: '/finance/receipts', label: 'Receipts', icon: HandCoins, perm: 'finance.receipt:view' },
     { to: '/finance/ageing', label: 'Receivables Ageing', icon: HourglassMedium, perm: 'finance.receivable:view' },
+    { to: '/finance/payments', label: 'Payments', icon: Bank, perm: 'finance.payment:view' },
+    { to: '/finance/payables', label: 'Payables Ageing', icon: HourglassMedium, perm: 'finance.payable:view' },
   ] },
   { label: 'Masters', items: [
     { to: '/masters/legal-entities', label: 'Legal Entities', icon: Buildings, perm: 'org.legal_entity:view' },

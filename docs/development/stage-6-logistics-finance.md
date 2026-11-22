@@ -5,7 +5,7 @@ Order follows D12 (business flow). Stage 6 parts:
 1. Dispatch: transporters, dispatch queue, shipment planning, picking by box scan, loading with LR and e-way bill, delivery challan, proof of delivery — **done**
 2. Sales invoicing: GST tax invoice from the dispatch, credit notes, customer returns — **done**
 3. Receivables: receipts and allocation, ageing, credit exposure and the overdue freeze (D18) — **done**
-4. Payables: vendor ledger, payments, debit note adjustment, freight bills
+4. Payables: vendor ledger, payments, debit note adjustment, freight bills — **done**
 5. Native general ledger (D02): chart of accounts, idempotent postings, trial balance, P&L, balance sheet, period lock, GST summaries
 
 ## Part 1 — Dispatch (BRD p.17; MP §15.1–15.6; LOG-001…LOG-007, LOG-009…LOG-011, FIN-015)
@@ -103,7 +103,7 @@ Order follows D12 (business flow). Stage 6 parts:
   - **Manual allocation and cancel.** UPI ₹500 kept on account cannot be over-allocated; it is allocated, then cancelled by the finance head (not accounts), which reverses it.
   - **Overdue.** Five days past due, the invoice ages into 1–30 and the dealer is frozen. The statement reads invoice 5,040 Dr, receipts 3,000 and 3,000 Cr, bounce 3,000 Dr, closing 2,040.
 - `apps/api/test/orders.test.ts` (new test): an invoice 5 days overdue freezes the next order (`OVERDUE_FREEZE`, invoice listed). Raising the grace days lets it through, and the order's snapshot records ₹4,000 unpaid and overdue.
-- Totals: **80 API + 4 contract tests passing**. Typecheck clean.
+- Totals at the end of part 3: 80 API + 4 contract tests passing. Typecheck clean.
 - Browser run (local, [SAMPLE] data, after the part 2 run):
   1. Accounts recorded NEFT ₹3,000 for Krishi Seva Kendra (allocated to SI/2026-27/00001) and a ₹2,632 cheque that cleared the rest.
   2. The cheque bounced.
@@ -113,3 +113,35 @@ Order follows D12 (business flow). Stage 6 parts:
 - **Bounce charges and interest on overdue**: as debit notes once the GL exists (part 5), if the client wants them.
 - **Exception path to lift a freeze**: open in D18.
 - **Payment reminders and escalation (`receivable.escalate`)**: with alerts in Stage 7.
+
+## Part 4 — Payables (BRD p.19; MP §17.4–17.6; FIN-009…FIN-012)
+
+| Area | What works | RTM |
+|---|---|---|
+| What is payable | Supplier invoices that passed the three-way match (Matched, or Approved after an exception) and approved freight bills. Outstanding = total − settled − amounts held on payments in flight, so the same bill is never paid twice | FIN-009 |
+| Debit-note adjustment | An open debit note from a supplier return is adjusted against an open invoice of the same vendor (never more than its outstanding); the invoice's payable falls by the note | FIN-011 |
+| Payments | `PAY/…` to a vendor or a transporter from one entity: the bills and the amount against each, mode, our account, TDS section and amount (entered by accounts — rates are not hard-coded), net to bank. Drafted by accounts → approved through policy `fin.payment` (finance head; an executive director too above ₹10 lakh, provisional) → **released** with the UTR and date, and only then are the bills settled. A vendor is paid only into a **finance-verified bank account** (MDM-011), checked again at submission | FIN-009, FIN-010 |
+| Freight bills | `FRB/…`: the transporter's bill against the shipments it carried with freight paid by us (to-pay freight is refused), each shipment billed once, GST rate and reverse charge (GTA RCM by default: the tax is ours, not the transporter's). The variance against the freight agreed at dispatch is computed; above the tolerance (setting, 5 %) the finance head approves after the logistics head. The bill copy goes in the vault | FIN-012 |
+| Payables ageing | Vendors and transporters by days past due (not due, 1–30, 31–60, 60+), with open debit notes beside them | FIN-011 |
+| Vendor ledger | Supplier invoices credit, debit notes and released payments (with TDS) debit; opening and running balance; printable | FIN-011 |
+| Roles | Accounts executive: draft, submit, release, adjust debit notes. Finance head: approves (and can do the same). Logistics executive or head: enter freight bills; logistics head approves them. Purchase head and management: view | — |
+
+### Evidence
+- `apps/api/test/payables.test.ts` has 2 tests:
+  - **Vendor setup.** A rejected receipt gives a debit note of ₹28,320; the released receipt is invoiced and matched at ₹42,480.
+  - **Debit note.** Purchase cannot adjust it; accounts adjusts it, leaving ₹14,160 payable.
+  - **Payment drafts.** Paying ₹20,000 is refused, and TDS without a section is refused. ₹10,000 with ₹10 TDS u/s 194Q gives ₹9,990 net. While it is in flight, a second payment of ₹5,000 is refused.
+  - **Approval and release.** An unverified bank blocks submission. Release before approval is refused, and accounts cannot approve. After the finance head approves, release with the UTR leaves ₹4,160 payable.
+  - **Ageing and ledger.** The ageing shows ₹4,160 not due. The vendor ledger reads debit note 28,320 Dr, invoice 42,480 Cr, payment 10,000 Dr, ₹4,160 Cr.
+  - **Freight bill.** A shipment dispatched with ₹1,800 agreed is billable. The bill of ₹2,000 is ₹200 over, so it goes to the logistics head and then the finance head. A duplicate bill number and the same shipment on another bill are both refused. Under RCM, GST of ₹100 is ours and ₹2,000 is payable.
+  - **Transporter payment.** Paid with ₹40 TDS u/s 194C after the finance head's approval, which settles the bill.
+- Totals: **82 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local, [SAMPLE] data, after the part 3 run):
+  1. Accounts adjusted DN/2026-27/000001 (₹72,534) against PINV/2026-27/000001 (₹1,08,746) and drafted PAY/2026-27/000001 for the ₹36,212 balance, with ₹31 TDS u/s 194Q.
+  2. The finance head approved it, and accounts released it with the UTR. The vendor ledger closes at nil.
+  3. The logistics executive entered Sahyadri's bill for DSP/2026-27/000001 at the agreed ₹1,800, the logistics head approved it, and accounts drafted the transporter's payment.
+
+### Not built yet (part 4)
+- **Bank payment file (H2H / bulk upload) and positive pay**: Stage 7 integrations.
+- **TDS computation, challans and Form 16A**: TDS is recorded per payment; computing it from thresholds and rates, and the returns, are with the GL and statutory reports (part 5 / Stage 7).
+- **Advances to vendors and expense bills without a PO**: not in the BRD scope for this release; can be added on request.

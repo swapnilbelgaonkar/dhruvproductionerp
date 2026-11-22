@@ -28,6 +28,7 @@ const ENTITIES: Record<string, EntityRule> = {
   'logistics.shipment': { table: 'logistics.shipments', view: 'logistics.shipment:view', edit: ['logistics.shipment:pod'], scope: 'legal_entity_id' },
   'sales.customer_return': { table: 'sales.customer_returns', view: 'sales.return:view', edit: ['sales.return:receive'], scope: 'legal_entity_id' },
   'fin.receipt': { table: 'fin.receipts', view: 'finance.receipt:view', edit: ['finance.receipt:create'], scope: 'legal_entity_id' },
+  'logistics.freight_bill': { table: 'logistics.freight_bills', view: 'logistics.freight_bill:view', edit: ['logistics.freight_bill:create'], scope: 'legal_entity_id' },
   'purchase.goods_receipt': { table: 'purchase.goods_receipts', view: 'purchase.grn:view', edit: ['purchase.grn:create'], scope: null },
   'mdm.party': { table: 'mdm.parties', view: 'mdm.dealer:view', edit: ['mdm.dealer:edit_draft'], scope: 'territory', sensitivePerm: 'mdm.dealer:view_sensitive' },
 };

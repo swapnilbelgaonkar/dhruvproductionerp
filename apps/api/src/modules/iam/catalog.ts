@@ -73,6 +73,9 @@ export const PERMISSIONS = [
   ...P('Stores', 'sales.return', ['view', 'receive', 'decide'], 'customer returns (receive into quarantine; decide = QA restock or reject)'),
   ...P('Finance', 'finance.receipt', ['view', 'create', 'allocate', 'bounce', 'cancel'], 'customer receipts and their allocation to invoices (bounce = dishonoured cheque)'),
   ...P('Finance', 'finance.receivable', ['view'], 'receivables ageing, dealer statements and credit exposure'),
+  ...P('Finance', 'finance.payment', ['view', 'create', 'submit', 'release'], 'payments to vendors and transporters (release = record the UTR once the bank transfer is made)'),
+  ...P('Finance', 'finance.payable', ['view'], 'payables ageing and vendor ledgers'),
+  ...P('Logistics', 'logistics.freight_bill', ['view', 'create'], 'transporter freight bills checked against the shipments'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -133,12 +136,17 @@ const BILL_SEE = ['sales.invoice:view', 'sales.credit_note:view', 'sales.return:
 const COLLECT = ['finance.receipt:view', 'finance.receipt:create', 'finance.receipt:allocate', 'finance.receipt:bounce'];
 const BILLING = [...BILL_SEE, ...COLLECT, 'sales.invoice:create', 'sales.invoice:cancel', 'sales.credit_note:create', 'sales.credit_note:submit', 'sales.credit_note:cancel'];
 const RETURN_IN = ['sales.invoice:view', 'sales.return:view', 'sales.return:receive'];
+/** Payables (Stage 6 part 4): accounts draft and release payments after the finance head approves; logistics enters freight bills. */
+const PAYING = ['finance.payment:view', 'finance.payment:create', 'finance.payment:submit', 'finance.payment:release', 'finance.payable:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'];
+const PAY_SEE = ['finance.payment:view', 'finance.payable:view', 'logistics.freight_bill:view'];
 const LOGISTICS_EXTRA: Record<string, string[]> = {
-  LOGISTICS_EXEC: [...SHIP_RUN, 'sales.invoice:view'], LOGISTICS_HEAD: [...SHIP_RUN, 'logistics.transporter:manage', 'sales.invoice:view'],
+  LOGISTICS_EXEC: [...SHIP_RUN, 'sales.invoice:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'],
+  LOGISTICS_HEAD: [...SHIP_RUN, 'logistics.transporter:manage', 'sales.invoice:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'],
+  PURCHASE_HEAD: ['finance.payable:view', 'finance.payment:view'],
   STOREKEEPER: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN], STORES_HEAD: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN],
   SCANNER_OPERATOR: ['logistics.shipment:view', 'logistics.shipment:pick', 'mfg.packing:view'],
-  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel'],
-  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'],
+  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING, ...PAYING], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel', ...PAYING],
+  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view', ...PAY_SEE],
   QA_HEAD: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'], QA_MANAGER: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
@@ -334,6 +342,22 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
         { kind: 'role', key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] },
         { kind: 'role', key: 'executive', label: 'Executive director approval (above ₹1 lakh)', roles: ['EXEC_ADMIN'] }] },
       { name: 'Default', steps: [{ kind: 'role', key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] }] },
+    ] } },
+  // FIN-010 (provisional default, D06-style bands; editable in Approval Policies): the finance head approves payments; above ₹10 lakh an executive director too
+  { docType: 'fin.payment', name: 'Payment approval', description: 'Finance head; executive director above ₹10 lakh',
+    definition: { distinctApprovers: true, rules: [
+      { name: 'Above ₹10 lakh', when: { fact: 'amount', op: 'gt', value: 1000000 }, steps: [
+        { kind: 'role', key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] },
+        { kind: 'role', key: 'executive', label: 'Executive director approval (above ₹10 lakh)', roles: ['EXEC_ADMIN'] }] },
+      { name: 'Default', steps: [{ kind: 'role', key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] }] },
+    ] } },
+  // FIN-012: the logistics head confirms a freight bill; above the variance tolerance against the agreed freight the finance head as well
+  { docType: 'logistics.freight_bill', name: 'Freight bill approval', description: 'Logistics head; finance head too when the bill exceeds the agreed freight beyond tolerance',
+    definition: { distinctApprovers: true, rules: [
+      { name: 'Above agreed freight', when: { fact: 'overTolerance', op: 'eq', value: true }, steps: [
+        { kind: 'role', key: 'logistics', label: 'Logistics head approval', roles: ['LOGISTICS_HEAD'] },
+        { kind: 'role', key: 'finance', label: 'Finance head approval (freight above agreed)', roles: ['FINANCE_HEAD'] }] },
+      { name: 'Default', steps: [{ kind: 'role', key: 'logistics', label: 'Logistics head approval', roles: ['LOGISTICS_HEAD'] }] },
     ] } },
 ];
 
