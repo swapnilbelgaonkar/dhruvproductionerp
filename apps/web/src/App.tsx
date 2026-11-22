@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { FormulationDetailPage, FormulationsPage, FormulationVersionFormPage, FormulationVersionLink, FormulationVersionPage } from './pages/production/Formulations';
 import { PlantSettingsPage } from './pages/production/PlantSettings';
+import { DispatchQueuePage, ShipmentChallanPage, ShipmentDetailPage, ShipmentsPage, TransportersPage } from './pages/logistics/Dispatch';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
 import { DowntimePage, PackingLabelsPage, PackingRunDetailPage, PackingRunsPage, ProductionDashboardPage, VerifyPage } from './pages/production/Packing';
 import { OverrideLink, ProductionOrderDetailPage, ProductionOrderFormPage, ProductionOrdersPage } from './pages/production/ProductionOrders';
@@ -73,6 +74,7 @@ export function App() {
       <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
       <Route path="stores/returns/:id/print" element={<Protected perm="purchase.return:view"><ReturnPrintPage /></Protected>} />
       <Route path="purchase/orders/:id/print" element={<Protected perm="purchase.order:view"><PurchaseOrderPrintPage /></Protected>} />
+      <Route path="logistics/shipments/:id/challan" element={<Protected perm="logistics.shipment:view"><ShipmentChallanPage /></Protected>} />
       <Route path="sales/orders/:id/print" element={<Protected perm="sales.order:view"><SalesOrderPrintPage /></Protected>} />
       <Route element={<AppShell />}>
         <Route index element={<OverviewPage />} />
@@ -137,6 +139,10 @@ export function App() {
         <Route path="production/orders/:id/edit" element={<Protected perm="mfg.order:edit"><ProductionOrderFormPage /></Protected>} />
         <Route path="production/overrides/:oid" element={<Protected perm="mfg.order:view"><OverrideLink /></Protected>} />
         <Route path="production/dashboard" element={<Protected perm="mfg.order:view"><ProductionDashboardPage /></Protected>} />
+        <Route path="logistics/queue" element={<Protected perm="logistics.shipment:view"><DispatchQueuePage /></Protected>} />
+        <Route path="logistics/shipments" element={<Protected perm="logistics.shipment:view"><ShipmentsPage /></Protected>} />
+        <Route path="logistics/shipments/:id" element={<Protected perm="logistics.shipment:view"><ShipmentDetailPage /></Protected>} />
+        <Route path="logistics/transporters" element={<Protected perm="logistics.shipment:view"><TransportersPage /></Protected>} />
         <Route path="production/packing" element={<Protected perm="mfg.packing:view"><PackingRunsPage /></Protected>} />
         <Route path="production/packing/:id" element={<Protected perm="mfg.packing:view"><PackingRunDetailPage /></Protected>} />
         <Route path="production/downtime" element={<Protected perm="mfg.batch:view"><DowntimePage /></Protected>} />

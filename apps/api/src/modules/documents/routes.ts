@@ -25,6 +25,7 @@ const ENTITIES: Record<string, EntityRule> = {
   'purchase.supplier_invoice': { table: 'purchase.supplier_invoices', view: 'purchase.invoice:view', edit: ['purchase.invoice:create'], scope: null },
   'qc.instrument': { table: 'qc.instruments', view: 'qc.instrument:view', edit: ['qc.instrument:manage'], scope: null },
   'qa.controlled_document': { table: 'qa.controlled_documents', view: 'qa.document:view', edit: ['qa.document:manage'], scope: null },
+  'logistics.shipment': { table: 'logistics.shipments', view: 'logistics.shipment:view', edit: ['logistics.shipment:pod'], scope: 'legal_entity_id' },
   'purchase.goods_receipt': { table: 'purchase.goods_receipts', view: 'purchase.grn:view', edit: ['purchase.grn:create'], scope: null },
   'mdm.party': { table: 'mdm.parties', view: 'mdm.dealer:view', edit: ['mdm.dealer:edit_draft'], scope: 'territory', sensitivePerm: 'mdm.dealer:view_sensitive' },
 };

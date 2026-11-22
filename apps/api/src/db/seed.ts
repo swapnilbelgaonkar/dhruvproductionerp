@@ -128,6 +128,9 @@ async function seedDemoUsers(tx: pg.PoolClient, password: string) {
   const qaHead = await person('SMP-QAH', '[SAMPLE] QA Head', null, null, state, 'qa-head@demo.local', ['QA_HEAD']);
   const qaManager = await person('SMP-QAM', '[SAMPLE] QA Manager', null, qaHead, state, 'qa-manager@demo.local', ['QA_MANAGER']);
   await person('SMP-QAE', '[SAMPLE] QA Executive', null, qaManager, state, 'qa-exec@demo.local', ['QA_EXECUTIVE']);
+  // logistics (Stage 6): the executive plans and dispatches; the head also keeps the transporter master
+  const logHead = await person('SMP-LGH', '[SAMPLE] Logistics Head', null, null, state, 'logistics-head@demo.local', ['LOGISTICS_HEAD']);
+  await person('SMP-LGE', '[SAMPLE] Logistics Executive', null, logHead, state, 'logistics@demo.local', ['LOGISTICS_EXEC']);
   // read-only auditor: approval policies, audit log and every register, for demonstrations and audits
   await person('SMP-AUD', '[SAMPLE] Auditor (read-only)', null, null, state, 'auditor@demo.local', ['AUDITOR']);
   await audit(tx, SYSTEM, { action: 'demo.users_seeded', entityType: 'iam.user', reason: '[SAMPLE] demo hierarchy for UAT' });

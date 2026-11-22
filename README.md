@@ -10,6 +10,7 @@ Enterprise ERP for Dhruv Agro Technologies Pvt. Ltd. It covers chemical, fertili
 - **Stage 3 Purchase, Stores and Quality (vendors, requisitions, RFQs, purchase orders, goods receipts, QC, returns, three-way match):** built and tested. See [`docs/development/stage-3-purchase.md`](docs/development/stage-3-purchase.md).
 - **Stage 4 Production (formulations, production orders, batches, QA release, traceability, packing with signed box labels, cost sheet, downtime, dashboard):** built and tested. See [`docs/development/stage-4-production.md`](docs/development/stage-4-production.md).
 - **Stage 5 Quality (specifications, instruments, OOS, CoA, CAPA, NC, change control, complaints, recall, documents and training, audits, risks, line clearance, quality dashboard):** built and tested. See [`docs/development/stage-5-quality.md`](docs/development/stage-5-quality.md).
+- **Stage 6 Logistics and finance:** in progress — dispatch (planning, box-scan picking, loading with LR and e-way bill, delivery challan, POD) is built and tested. See [`docs/development/stage-6-logistics-finance.md`](docs/development/stage-6-logistics-finance.md).
 - **Client decisions and pending items:** [`docs/pre-development/12-open-decision-register.md`](docs/pre-development/12-open-decision-register.md).
 
 ## Repository layout

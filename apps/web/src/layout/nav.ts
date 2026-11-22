@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -57,6 +57,11 @@ export const NAV: NavGroup[] = [
     { to: '/production/downtime', label: 'Downtime', icon: Timer, perm: 'mfg.batch:view' },
     { to: '/production/formulations', label: 'Formulations (BOM)', icon: Flask, perm: 'mfg.bom:view' },
     { to: '/production/settings', label: 'Plant & Line Settings', icon: SlidersHorizontal, perm: 'mfg.settings:view' },
+  ] },
+  { label: 'Logistics', items: [
+    { to: '/logistics/queue', label: 'Dispatch Queue', icon: ListDashes, perm: 'logistics.shipment:view' },
+    { to: '/logistics/shipments', label: 'Shipments', icon: Truck, perm: 'logistics.shipment:view' },
+    { to: '/logistics/transporters', label: 'Transporters', icon: Van, perm: 'logistics.shipment:view' },
   ] },
   { label: 'Masters', items: [
     { to: '/masters/legal-entities', label: 'Legal Entities', icon: Buildings, perm: 'org.legal_entity:view' },

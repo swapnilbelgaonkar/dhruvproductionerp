@@ -146,9 +146,29 @@ export function SalesOrderDetailPage() {
       <Card title="Products" padded={false} className="mt-6">
         <LinesTable lines={d.lines} interState={d.interState} />
       </Card>
+      {['Approved', 'Closed'].includes(d.status) && <OrderShipments orderId={d.id} lines={d.lines} />}
       <ReasonDialog open={cancel} danger title={`Cancel ${d.docNo}`} confirmLabel="Cancel order" onClose={() => setCancel(false)}
         description={d.quotationId ? 'The quotation becomes convertible again while it is still valid.' : 'The order can no longer be approved or dispatched.'}
         onConfirm={async (reason) => { await api(`/sales-orders/${id}/cancel`, { body: { reason } }); toast('success', 'Order cancelled.'); await qc.invalidateQueries(); }} />
     </>
+  );
+}
+
+/** Dispatch progress of an approved order and its shipments (LOG-001, LOG-009). */
+function OrderShipments({ orderId, lines }: { orderId: string; lines: (Line & { dispatchedQty: string })[] }) {
+  const { can } = useAuth();
+  const q = useQuery({ queryKey: ['order-shipments', orderId], enabled: can('logistics.shipment:view'),
+    queryFn: () => api<{ data: { id: string; docNo: string; plannedDate: string; status: string; statusReason: string | null; vehicleNo: string | null; lrNo: string | null }[] }>(`/shipments?salesOrderId=${orderId}`) });
+  const ordered = lines.reduce((a, l) => a + Number(l.qty), 0);
+  const sent = lines.reduce((a, l) => a + Number(l.dispatchedQty), 0);
+  return (
+    <Card title="Dispatch" className="mt-6" actions={can('logistics.shipment:create') && sent < ordered && <Link className="font-semibold text-primary" to="/logistics/queue">Plan in the dispatch queue</Link>}>
+      <p className="text-[14px]">{sent} of {ordered} packs dispatched.</p>
+      {can('logistics.shipment:view') && (q.data?.data.length ? (
+        <ul className="mt-3 space-y-2">{q.data.data.map((s) => (
+          <li key={s.id} className="flex flex-wrap items-center gap-3 text-[14px]"><Link className="font-semibold text-primary num" to={`/logistics/shipments/${s.id}`}>{s.docNo}</Link>
+            <span className="text-ink-2">{fmtDate(s.plannedDate)}{s.vehicleNo ? ` · ${s.vehicleNo} · LR ${s.lrNo}` : ''}</span><StatusBadge status={s.status} label={s.statusReason === 'Delivered short' ? 'Delivered short' : undefined} /></li>))}</ul>
+      ) : <p className="mt-2 text-ink-2">No shipments yet.</p>)}
+    </Card>
   );
 }

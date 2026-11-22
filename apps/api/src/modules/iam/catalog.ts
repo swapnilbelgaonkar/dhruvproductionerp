@@ -66,6 +66,8 @@ export const PERMISSIONS = [
   ...P('Quality', 'qa.risk', ['view', 'manage'], 'the quality risk register'),
   ...P('Quality', 'qa.clearance', ['view', 'record'], 'line clearance before a batch or packing run'),
   ...P('Quality', 'qa.release', ['view', 'decide'], 'QA batch review and the disposition of finished goods (release, hold, reject, rework)'),
+  ...P('Logistics', 'logistics.shipment', ['view', 'create', 'pick', 'dispatch', 'pod'], 'shipments (plan, pick by box scan, load and dispatch, proof of delivery)'),
+  ...P('Logistics', 'logistics.transporter', ['manage'], 'the transporter master'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -119,6 +121,14 @@ const PRODUCTION_EXTRA: Record<string, string[]> = {
   PURCHASE_HEAD: ['mfg.bom:view', 'mfg.order:view', ...QA_RAISE], FINANCE_HEAD: ['mfg.bom:view', ...PROD_VIEW],
   MANAGEMENT_VIEWER: ['mfg.settings:view', 'mfg.bom:view', ...PROD_VIEW, ...QA_SEE],
 };
+/** Logistics (Stage 6 part 1): logistics plans and dispatches; stores picks by scanning boxes; sales and finance see shipments. */
+const SHIP_RUN = ['logistics.shipment:view', 'logistics.shipment:create', 'logistics.shipment:dispatch', 'logistics.shipment:pod', 'sales.order:view', 'inv.stock:view', 'mfg.packing:view'];
+const LOGISTICS_EXTRA: Record<string, string[]> = {
+  LOGISTICS_EXEC: SHIP_RUN, LOGISTICS_HEAD: [...SHIP_RUN, 'logistics.transporter:manage'],
+  STOREKEEPER: ['logistics.shipment:view', 'logistics.shipment:pick'], STORES_HEAD: ['logistics.shipment:view', 'logistics.shipment:pick'], SCANNER_OPERATOR: ['logistics.shipment:view', 'logistics.shipment:pick', 'mfg.packing:view'],
+  SALES_OPS: ['logistics.shipment:view'], ACCOUNTS_EXEC: ['logistics.shipment:view'], FINANCE_HEAD: ['logistics.shipment:view'], CREDIT_CONTROLLER: ['logistics.shipment:view'],
+  MANAGEMENT_VIEWER: ['logistics.shipment:view'], QA_HEAD: ['logistics.shipment:view'], QA_MANAGER: ['logistics.shipment:view'],
+};
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
   'sales.quotation:send', 'sales.quotation:cancel',
@@ -164,7 +174,7 @@ export const ROLES: RoleDef[] = [
     permissions: [...VIEW, 'sys.audit:export', 'sys.audit:verify', 'wf.approval:view_all'] },
   // Business roles (doc 07 §3). Module permissions are added as each module is built.
   ...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM', 'SASM', 'ASM', 'TSM', 'SE'] as const).map((t) => ({
-    code: `SALES_${t}`, name: `Sales — ${t}`, department: 'Sales', description: `Sales hierarchy tier ${t}`, permissions: [...ORG_VIEW, ...DEALER_SALES, ...tierCrm(t)] })),
+    code: `SALES_${t}`, name: `Sales — ${t}`, department: 'Sales', description: `Sales hierarchy tier ${t}`, permissions: [...ORG_VIEW, ...DEALER_SALES, ...tierCrm(t), 'logistics.shipment:view'] })),
   ...[
     ['MANAGEMENT_VIEWER', 'Management Viewer', 'Executive'], ['SALES_OPS', 'Sales Operations', 'Sales'], ['DOC_VERIFIER', 'Document Verifier', 'Compliance'],
     ['ACCOUNTS_EXEC', 'Accounts Executive', 'Finance'], ['CREDIT_CONTROLLER', 'Credit Controller', 'Finance'], ['FINANCE_HEAD', 'Finance Head', 'Finance'],
@@ -175,7 +185,7 @@ export const ROLES: RoleDef[] = [
     ['QA_EXECUTIVE', 'QA Executive', 'QA'], ['QA_MANAGER', 'QA Manager', 'QA'], ['QA_HEAD', 'QA Head', 'QA'],
     ['LOGISTICS_EXEC', 'Logistics Executive', 'Logistics'], ['LOGISTICS_HEAD', 'Logistics Head', 'Logistics'],
   ].map(([code, name, department]) => ({ code: code!, name: name!, department: department!, description: name!,
-    permissions: [...ORG_VIEW, ...(DEALER_EXTRA[code!] ?? []), ...(PURCHASE_EXTRA[code!] ?? []), ...(PRODUCTION_EXTRA[code!] ?? [])] })),
+    permissions: [...ORG_VIEW, ...(DEALER_EXTRA[code!] ?? []), ...(PURCHASE_EXTRA[code!] ?? []), ...(PRODUCTION_EXTRA[code!] ?? []), ...(LOGISTICS_EXTRA[code!] ?? [])] })),
 ];
 
 const masterActivation = (label: string): PolicyDefinition => ({

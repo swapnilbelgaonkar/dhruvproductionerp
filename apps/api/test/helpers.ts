@@ -27,6 +27,7 @@ export interface Agent {
   post: (url: string, body?: object) => supertest.Test;
   put: (url: string, body?: object) => supertest.Test;
   patch: (url: string, body?: object) => supertest.Test;
+  delete: (url: string) => supertest.Test;
   upload: (url: string, data: Buffer, mime: string) => supertest.Test;
   raw: supertest.Agent;
 }
@@ -62,6 +63,7 @@ export async function login(email: string, secret?: string): Promise<Agent & { c
     post: (url, body) => withCsrf(agent.post(url), body),
     put: (url, body) => withCsrf(agent.put(url), body),
     patch: (url, body) => withCsrf(agent.patch(url), body),
+    delete: (url) => withCsrf(agent.delete(url)),
     upload: (url, data, mime) => agent.post(url).set('x-csrf-token', csrf).set('content-type', mime).send(data),
     raw: agent,
   };

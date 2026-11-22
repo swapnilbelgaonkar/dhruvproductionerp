@@ -58,7 +58,7 @@ const FAMILY: Record<string, keyof typeof BADGE> = {
   Active: 'positive', Approved: 'positive', Published: 'positive', Accepted: 'positive', Notified: 'special', Sent: 'special', Converted: 'special',
   Rejected: 'negative', Returned: 'negative', Expired: 'negative', Superseded: 'locked', Closed: 'locked',
   Acknowledged: 'positive', Received: 'positive', PartiallyReceived: 'pending', Issued: 'special', Awarded: 'positive', Lapsed: 'negative', Matched: 'positive', Exception: 'negative', Posted: 'positive',
-  OnHold: 'hold', Suspended: 'hold',
+  OnHold: 'hold', Suspended: 'hold', Planned: 'pending', Picked: 'pending', Dispatched: 'special', Delivered: 'positive',
 };
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
   const b = BADGE[FAMILY[status] ?? 'neutral']!;
