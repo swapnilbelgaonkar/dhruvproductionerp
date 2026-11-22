@@ -9,6 +9,7 @@ import { nextDocNo } from '../../lib/numbering';
 import { getSetting } from '../../lib/settings';
 import { requirePermission } from '../../middleware/auth';
 import { actorOf, can } from '../../middleware/context';
+import { creditExposure } from '../finance/receivables';
 import { registerSubjectHandler, submitForApproval } from '../workflow/engine';
 import { amountInWords, toRupees } from './calc';
 import { buildQuote, lineOut, pricedPacks, rupees, scopeSql, setQuotationStatus, todayIST, type Built } from './quotations';
@@ -27,17 +28,14 @@ async function setStatus(tx: Tx, actor: Actor, id: string, status: string, reaso
 }
 
 /**
- * Credit position used for routing (SO-004). Until receivables exist (Stage 6, D18) exposure = value of this dealer's open orders
- * (Submitted or Approved). A dealer with no credit limit and no credit days is an advance-payment dealer: accounts confirm payment instead.
+ * Credit position used for routing (SO-004, D18): exposure = unpaid invoices + other orders not yet invoiced − unapplied receipts, plus this order.
+ * A dealer with no credit limit and no credit days is an advance-payment dealer: accounts confirm payment instead.
  */
 async function creditPosition(tx: Tx, partyId: string, orderId: string | null, orderValue: number) {
-  const d = (await tx.query(`select credit_limit, credit_days from mdm.dealer_profiles where party_id = $1`, [partyId])).rows[0];
-  const open = Number((await tx.query(
-    `select coalesce(sum(grand_total), 0) as v from sales.sales_orders where party_id = $1 and status in ('Submitted','Approved') and id is distinct from $2`,
-    [partyId, orderId])).rows[0].v);
-  const limit = Number(d.credit_limit);
-  const advancePayment = limit === 0 && Number(d.credit_days) === 0;
-  return { creditLimit: limit, openOrderValue: open, exposure: open + orderValue, advancePayment, overCreditLimit: !advancePayment && open + orderValue > limit };
+  const e = await creditExposure(tx, partyId, orderId);
+  const exposure = Math.round((e.exposure + orderValue) * 100) / 100;
+  return { creditLimit: e.creditLimit, openOrderValue: e.uninvoicedOrders, outstanding: e.outstanding, overdue: e.overdue, onAccount: e.onAccount, exposure,
+    advancePayment: e.advancePayment, overCreditLimit: !e.advancePayment && exposure > e.creditLimit, frozen: e.frozen, overdueInvoices: e.overdueInvoices };
 }
 
 const orderSelect = `select o.id, o.doc_no as "docNo", o.party_id as "partyId", p.code as "partyCode", p.legal_name as "partyName", p.gstin as "partyGstin",
@@ -47,7 +45,7 @@ const orderSelect = `select o.id, o.doc_no as "docNo", o.party_id as "partyId", 
     o.price_list_id as "priceListId", pl.code as "priceListCode", o.contact_person as "contactPerson", o.payment_terms as "paymentTerms",
     o.delivery_terms as "deliveryTerms", o.notes, o.sales_owner_id as "salesOwnerId", e.full_name as "salesOwner", o.territory_id as "territoryId",
     t.name as territory, o.opportunity_id as "opportunityId", op.code as "opportunityCode", o.status, o.status_reason as "statusReason",
-    o.max_extra_discount as "maxExtraDiscount", o.credit_limit as "creditLimit", o.open_order_value as "openOrderValue", o.over_credit_limit as "overCreditLimit",
+    o.max_extra_discount as "maxExtraDiscount", o.credit_limit as "creditLimit", o.open_order_value as "openOrderValue", o.outstanding_value as "outstandingValue", o.overdue_value as "overdueValue", o.on_account_value as "onAccountValue", o.over_credit_limit as "overCreditLimit",
     o.sub_total as "subTotal", o.discount_total as "discountTotal", o.taxable_total as "taxableTotal", o.cgst_total as "cgstTotal", o.sgst_total as "sgstTotal",
     o.igst_total as "igstTotal", o.round_off as "roundOff", o.grand_total as "grandTotal", o.approved_at as "approvedAt", o.created_at as "createdAt",
     o.updated_at as "updatedAt", o.version
@@ -289,9 +287,15 @@ export function salesOrderRoutes(db: Db) {
       const b = await buildQuote(tx, req, d, o.orderDate, true, 'sales.order:submit', o.quotationId ? await lockedRates(tx, o.quotationId) : undefined);
       const amount = toRupees(b.totals.grandTotal);
       const credit = await creditPosition(tx, o.partyId, o.id, amount);
+      // D18 (BRD p.7, p.19): invoices unpaid beyond the credit days freeze order-taking
+      if (credit.frozen) {
+        throw Errors.rule('OVERDUE_FREEZE', `${o.partyName} has invoices unpaid beyond their credit days (${credit.overdueInvoices.map((x) => `${x.docNo}, ${x.daysOverdue} days`).join('; ')}). Collect them before taking a new order.`,
+          { overdueInvoices: credit.overdueInvoices });
+      }
+      const H = HEADER_COLS.length;
       await tx.query(`update sales.sales_orders set ${HEADER_COLS.map((c, i) => `${c} = $${i + 2}`).join(', ')},
-                        credit_limit = $${HEADER_COLS.length + 2}, open_order_value = $${HEADER_COLS.length + 3}, over_credit_limit = $${HEADER_COLS.length + 4} where id = $1`,
-        [o.id, ...headerValues(b), credit.creditLimit, credit.openOrderValue, credit.overCreditLimit]);
+                        credit_limit = $${H + 2}, open_order_value = $${H + 3}, over_credit_limit = $${H + 4}, outstanding_value = $${H + 5}, overdue_value = $${H + 6}, on_account_value = $${H + 7} where id = $1`,
+        [o.id, ...headerValues(b), credit.creditLimit, credit.openOrderValue, credit.overCreditLimit, credit.outstanding, credit.overdue, credit.onAccount]);
       await writeLines(tx, o.id, b);
       const facts = { amount, maxDiscountPct: b.maxExtraDiscount, overCreditLimit: credit.overCreditLimit, advancePayment: credit.advancePayment,
         creditLimit: credit.creditLimit, exposure: credit.exposure, fromQuotation: !!o.quotationId };

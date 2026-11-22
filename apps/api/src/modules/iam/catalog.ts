@@ -71,6 +71,8 @@ export const PERMISSIONS = [
   ...P('Finance', 'sales.invoice', ['view', 'create', 'cancel'], 'GST tax invoices raised from dispatches (cancel only within the window)'),
   ...P('Finance', 'sales.credit_note', ['view', 'create', 'submit', 'cancel'], 'credit notes against invoices (approved through the approval policy)'),
   ...P('Stores', 'sales.return', ['view', 'receive', 'decide'], 'customer returns (receive into quarantine; decide = QA restock or reject)'),
+  ...P('Finance', 'finance.receipt', ['view', 'create', 'allocate', 'bounce', 'cancel'], 'customer receipts and their allocation to invoices (bounce = dishonoured cheque)'),
+  ...P('Finance', 'finance.receivable', ['view'], 'receivables ageing, dealer statements and credit exposure'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -127,15 +129,16 @@ const PRODUCTION_EXTRA: Record<string, string[]> = {
 /** Logistics (Stage 6 part 1): logistics plans and dispatches; stores picks by scanning boxes; sales and finance see shipments. */
 const SHIP_RUN = ['logistics.shipment:view', 'logistics.shipment:create', 'logistics.shipment:dispatch', 'logistics.shipment:pod', 'sales.order:view', 'inv.stock:view', 'mfg.packing:view'];
 /** Sales invoicing (Stage 6 part 2): accounts invoice and draft credit notes; the finance head approves them; stores receives returns; QA decides them. */
-const BILL_SEE = ['sales.invoice:view', 'sales.credit_note:view', 'sales.return:view'];
-const BILLING = [...BILL_SEE, 'sales.invoice:create', 'sales.invoice:cancel', 'sales.credit_note:create', 'sales.credit_note:submit', 'sales.credit_note:cancel'];
+const BILL_SEE = ['sales.invoice:view', 'sales.credit_note:view', 'sales.return:view', 'finance.receivable:view'];
+const COLLECT = ['finance.receipt:view', 'finance.receipt:create', 'finance.receipt:allocate', 'finance.receipt:bounce'];
+const BILLING = [...BILL_SEE, ...COLLECT, 'sales.invoice:create', 'sales.invoice:cancel', 'sales.credit_note:create', 'sales.credit_note:submit', 'sales.credit_note:cancel'];
 const RETURN_IN = ['sales.invoice:view', 'sales.return:view', 'sales.return:receive'];
 const LOGISTICS_EXTRA: Record<string, string[]> = {
   LOGISTICS_EXEC: [...SHIP_RUN, 'sales.invoice:view'], LOGISTICS_HEAD: [...SHIP_RUN, 'logistics.transporter:manage', 'sales.invoice:view'],
   STOREKEEPER: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN], STORES_HEAD: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN],
   SCANNER_OPERATOR: ['logistics.shipment:view', 'logistics.shipment:pick', 'mfg.packing:view'],
-  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING],
-  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE],
+  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel'],
+  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'],
   QA_HEAD: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'], QA_MANAGER: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];

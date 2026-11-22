@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { FormulationDetailPage, FormulationsPage, FormulationVersionFormPage, FormulationVersionLink, FormulationVersionPage } from './pages/production/Formulations';
 import { PlantSettingsPage } from './pages/production/PlantSettings';
 import { CreditNoteDetailPage, CreditNotePrintPage, CreditNotesPage, CustomerReturnDetailPage, CustomerReturnsPage, SalesInvoiceDetailPage, SalesInvoicePrintPage, SalesInvoicesPage } from './pages/finance/SalesInvoices';
+import { AgeingPage, CustomerReceiptDetailPage, CustomerReceiptsPage, StatementPage } from './pages/finance/Receivables';
 import { DispatchQueuePage, ShipmentChallanPage, ShipmentDetailPage, ShipmentsPage, TransportersPage } from './pages/logistics/Dispatch';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
 import { DowntimePage, PackingLabelsPage, PackingRunDetailPage, PackingRunsPage, ProductionDashboardPage, VerifyPage } from './pages/production/Packing';
@@ -142,6 +143,10 @@ export function App() {
         <Route path="production/orders/:id/edit" element={<Protected perm="mfg.order:edit"><ProductionOrderFormPage /></Protected>} />
         <Route path="production/overrides/:oid" element={<Protected perm="mfg.order:view"><OverrideLink /></Protected>} />
         <Route path="production/dashboard" element={<Protected perm="mfg.order:view"><ProductionDashboardPage /></Protected>} />
+        <Route path="finance/receipts" element={<Protected perm="finance.receipt:view"><CustomerReceiptsPage /></Protected>} />
+        <Route path="finance/receipts/:id" element={<Protected perm="finance.receipt:view"><CustomerReceiptDetailPage /></Protected>} />
+        <Route path="finance/ageing" element={<Protected perm="finance.receivable:view"><AgeingPage /></Protected>} />
+        <Route path="finance/statements/:partyId" element={<Protected perm="finance.receivable:view"><StatementPage /></Protected>} />
         <Route path="finance/invoices" element={<Protected perm="sales.invoice:view"><SalesInvoicesPage /></Protected>} />
         <Route path="finance/invoices/:id" element={<Protected perm="sales.invoice:view"><SalesInvoiceDetailPage /></Protected>} />
         <Route path="finance/credit-notes" element={<Protected perm="sales.credit_note:view"><CreditNotesPage /></Protected>} />

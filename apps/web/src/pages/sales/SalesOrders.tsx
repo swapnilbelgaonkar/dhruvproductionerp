@@ -21,7 +21,9 @@ interface OrderRow extends Totals {
 interface OrderDetail extends OrderRow {
   lines: (Line & { dispatchedQty: string })[]; allowedActions: string[]; billTo: Address | null; shipTo: Address | null;
   approval: { id: string; docNo: string; status: string; ruleName: string; steps: { seq: number; label: string; kind: string; status: string }[] | null } | null;
-  liveCredit: { creditLimit: number; openOrderValue: number; exposure: number; advancePayment: boolean; overCreditLimit: boolean } | null;
+  liveCredit: { creditLimit: number; openOrderValue: number; outstanding: number; overdue: number; onAccount: number; exposure: number; advancePayment: boolean; overCreditLimit: boolean; frozen: boolean;
+    overdueInvoices: { docNo: string; daysOverdue: number; outstanding: number }[] } | null;
+  outstandingValue: string | null; overdueValue: string | null; onAccountValue: string | null;
   print: { amountInWords: string };
 }
 
@@ -73,8 +75,10 @@ export function SalesOrderDetailPage() {
   if (!d) return <ErrorBanner error={q.error} />;
   const a = d.allowedActions;
   const credit = d.liveCredit
-    ? { limit: d.liveCredit.creditLimit, open: d.liveCredit.openOrderValue, over: d.liveCredit.overCreditLimit, advance: d.liveCredit.advancePayment, live: true }
-    : d.creditLimit !== null ? { limit: Number(d.creditLimit), open: Number(d.openOrderValue), over: d.overCreditLimit, advance: false, live: false } : null;
+    ? { limit: d.liveCredit.creditLimit, open: d.liveCredit.openOrderValue, unpaid: d.liveCredit.outstanding, overdue: d.liveCredit.overdue, onAccount: d.liveCredit.onAccount,
+        over: d.liveCredit.overCreditLimit, advance: d.liveCredit.advancePayment, frozen: d.liveCredit.frozen, overdueInvoices: d.liveCredit.overdueInvoices, live: true }
+    : d.creditLimit !== null ? { limit: Number(d.creditLimit), open: Number(d.openOrderValue), unpaid: Number(d.outstandingValue ?? 0), overdue: Number(d.overdueValue ?? 0), onAccount: Number(d.onAccountValue ?? 0),
+        over: d.overCreditLimit, advance: false, frozen: false, overdueInvoices: [], live: false } : null;
   return (
     <>
       <PageHeader title={d.docNo} crumbs={<Link to="/sales/orders" className="hover:text-primary">Sales Orders</Link>}
@@ -121,13 +125,20 @@ export function SalesOrderDetailPage() {
             ) : (
               <dl className="space-y-2 text-[14px]">
                 <Row k="Credit limit" v={fmtINR(credit.limit)} />
-                <Row k="Other open orders" v={fmtINR(credit.open)} />
+                <Row k="Unpaid invoices" v={fmtINR(credit.unpaid)} />
+                {credit.overdue > 0 && <Row k="of which overdue" v={fmtINR(credit.overdue)} />}
+                <Row k="Other orders not yet invoiced" v={fmtINR(credit.open)} />
+                {credit.onAccount > 0 && <Row k="Unapplied receipts" v={`− ${fmtINR(credit.onAccount)}`} />}
                 <Row k="This order" v={fmtINR(d.grandTotal)} />
-                <div className="border-t border-line pt-2"><Row k="Exposure" v={fmtINR(credit.open + Number(d.grandTotal))} strong /></div>
-                <p className={`rounded-md px-3 py-2 text-[13px] ${credit.over ? 'bg-danger-bg text-danger-text' : 'bg-success-bg text-success-text'}`}>
-                  {credit.over ? 'Over the credit limit — the finance head must approve a credit override.' : 'Within the credit limit.'}
-                </p>
-                <p className="text-[12px] text-ink-2">{credit.live ? 'Live figure.' : 'As at submission.'} Outstanding invoices are added once invoicing is live (Stage 6).</p>
+                <div className="border-t border-line pt-2"><Row k="Exposure" v={fmtINR(credit.unpaid + credit.open - credit.onAccount + Number(d.grandTotal))} strong /></div>
+                {credit.frozen ? (
+                  <p className="rounded-md bg-danger-bg px-3 py-2 text-[13px] text-danger-text">Order-taking is frozen: {credit.overdueInvoices.map((x) => `${x.docNo} is ${x.daysOverdue} days overdue`).join('; ')}. Collect before submitting.</p>
+                ) : (
+                  <p className={`rounded-md px-3 py-2 text-[13px] ${credit.over ? 'bg-danger-bg text-danger-text' : 'bg-success-bg text-success-text'}`}>
+                    {credit.over ? 'Over the credit limit — the finance head must approve a credit override.' : 'Within the credit limit.'}
+                  </p>
+                )}
+                <p className="text-[12px] text-ink-2">{credit.live ? 'Live figure.' : 'As at submission.'} Exposure = unpaid invoices + orders not yet invoiced − unapplied receipts (D18).</p>
               </dl>
             )}
           </Card>

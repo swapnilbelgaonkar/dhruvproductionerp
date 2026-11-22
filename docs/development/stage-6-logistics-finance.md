@@ -4,7 +4,7 @@ Order follows D12 (business flow). Stage 6 parts:
 
 1. Dispatch: transporters, dispatch queue, shipment planning, picking by box scan, loading with LR and e-way bill, delivery challan, proof of delivery — **done**
 2. Sales invoicing: GST tax invoice from the dispatch, credit notes, customer returns — **done**
-3. Receivables: receipts and allocation, ageing, credit exposure and the overdue freeze (D18)
+3. Receivables: receipts and allocation, ageing, credit exposure and the overdue freeze (D18) — **done**
 4. Payables: vendor ledger, payments, debit note adjustment, freight bills
 5. Native general ledger (D02): chart of accounts, idempotent postings, trial balance, P&L, balance sheet, period lock, GST summaries
 
@@ -69,7 +69,7 @@ Order follows D12 (business flow). Stage 6 parts:
   - **Customer return.** QA cannot receive it. A return that would push credits past what was invoiced is refused. Two packs come back into quarantine with a ₹420 draft credit note.
   - **QA decision.** The storekeeper cannot decide. QA restocks one pack (unrestricted stock +1) and rejects one (rejected stock +1), and the return closes.
   - **Re-shipping.** The restocked pack is offered as a loose pack on a new shipment: 2 are refused, 1 is picked, and then none are left.
-- Totals: **78 API + 4 contract tests passing**. Typecheck clean.
+- Totals at the end of part 2: 78 API + 4 contract tests passing. Typecheck clean.
 - Browser run (local, [SAMPLE] data, after the part 1 run):
   1. Accounts saw DSP/2026-27/000001 under "Dispatched, not yet invoiced", because it was dispatched before invoicing existed, and raised SI/2026-27/00001 for ₹5,877. The tax invoice printed with the HSN summary and lot.
   2. Accounts credited the 1-pack shortage as CN/2026-27/00001 (₹245), and the finance head approved it.
@@ -80,3 +80,36 @@ Order follows D12 (business flow). Stage 6 parts:
 - **E-invoice IRN and QR from the IRP, e-way bill generation**: Stage 7 integrations.
 - **Receipts against invoices, ageing and the overdue freeze**: part 3.
 - **GL postings of invoices, credit notes and returns**: part 5. Postings will be generated from these documents idempotently, including the ones already raised.
+
+## Part 3 — Receivables (BRD p.7, p.19; MP §17.1–17.3; FIN-005…FIN-008; D18)
+
+| Area | What works | RTM |
+|---|---|---|
+| Receipts | `RCT/…` per entity and dealer: date, mode (NEFT, RTGS, IMPS, UPI, cheque, DD, cash), UTR or instrument number and date, drawee bank, our deposit account, amount, and the bank slip in the vault. The same UTR or cheque cannot be entered twice for a dealer. Cash from one dealer in a day must stay within the s.269ST limit (setting, ₹1,99,999) | FIN-006 |
+| Allocation | Oldest due first by default, or a chosen split, or kept on account. Never more than the receipt or than an invoice's outstanding. On-account money can be allocated later; an allocation can be reversed with a reason | FIN-006 |
+| Bounce | A cheque or DD can be marked bounced with the bank's reason and date: its allocations are reversed and the invoices are due again. A wrong electronic entry is cancelled instead (finance head only) | FIN-007 |
+| Ageing | Outstanding per dealer by days past due: not due, 1–30, 31–60, 61–90, 91–180, 180+; oldest overdue days, credit limit and days, unapplied receipts, totals, and a red banner when overdue debt is above the alert level (BRD KPI, ₹10 lakh) | FIN-005, MIS-007 |
+| Dealer statement | Invoices and bounced cheques debit; approved credit notes and receipts credit; opening and running balance for any period; printable. Shows today's credit position | FIN-008 |
+| Credit exposure (D18) | Unpaid invoices + orders not yet invoiced − unapplied receipts (doc 04 §4.10). Used at order submission: over the limit adds the finance head's credit override (existing policy); the order stores the snapshot (limit, unpaid, overdue, uninvoiced, on account) | FIN-005, SO-004 |
+| Overdue freeze (D18) | BRD p.7, p.19: an invoice unpaid beyond its credit days freezes order-taking automatically. Order submission is refused (`OVERDUE_FREEZE`) with the overdue invoices listed. Settings: on/off and grace days (0, provisional). The exception path for the freeze is still open in D18 | FIN-005 |
+| Roles | Accounts executive: receipts, allocation, bounce. Finance head: also cancel. Credit control, sales and management: ageing, statements, credit | — |
+
+### Evidence
+- `apps/api/test/receivables.test.ts`:
+  - **Exposure.** The ₹5,040 invoice plus ₹1,260 of the order not yet invoiced gives exposure of ₹6,300.
+  - **Receipts.** The credit controller cannot post receipts, and a missing UTR is refused. NEFT ₹3,000 is allocated in full; a duplicate UTR is refused, and cash of ₹2.5 lakh is refused (s.269ST).
+  - **Cheque.** A cheque without its date is refused. A ₹3,000 cheque settles the remaining ₹2,040 and leaves ₹960 on account (exposure ₹300).
+  - **Bounce.** NEFT cannot bounce. The cheque bounces, its allocation is reversed, and ₹2,040 is due again.
+  - **Manual allocation and cancel.** UPI ₹500 kept on account cannot be over-allocated; it is allocated, then cancelled by the finance head (not accounts), which reverses it.
+  - **Overdue.** Five days past due, the invoice ages into 1–30 and the dealer is frozen. The statement reads invoice 5,040 Dr, receipts 3,000 and 3,000 Cr, bounce 3,000 Dr, closing 2,040.
+- `apps/api/test/orders.test.ts` (new test): an invoice 5 days overdue freezes the next order (`OVERDUE_FREEZE`, invoice listed). Raising the grace days lets it through, and the order's snapshot records ₹4,000 unpaid and overdue.
+- Totals: **80 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local, [SAMPLE] data, after the part 2 run):
+  1. Accounts recorded NEFT ₹3,000 for Krishi Seva Kendra (allocated to SI/2026-27/00001) and a ₹2,632 cheque that cleared the rest.
+  2. The cheque bounced.
+  3. The ageing shows ₹2,632 not yet due. The statement runs invoice, credit note, two receipts and the bounce to ₹2,632 Dr.
+
+### Not built yet (part 3)
+- **Bounce charges and interest on overdue**: as debit notes once the GL exists (part 5), if the client wants them.
+- **Exception path to lift a freeze**: open in D18.
+- **Payment reminders and escalation (`receivable.escalate`)**: with alerts in Stage 7.

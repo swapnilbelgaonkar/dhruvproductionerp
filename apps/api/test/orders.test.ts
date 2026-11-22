@@ -86,4 +86,34 @@ describe('Sales orders (SO-001…011, D01)', () => {
     const sc = await f.se.post(`/api/v1/sales-orders/${c.body.id}/submit`).expect(200);
     expect(sc.body.overCreditLimit).toBe(false);
   });
+
+  it('counts unpaid invoices in the exposure and freezes order-taking once an invoice is past its credit days (D18)', async () => {
+    const f = await ready();
+    await creditTerms(f, 100000, 30);
+    const a = await f.se.post('/api/v1/sales-orders', { ...quote(f), dealerPoNo: 'PO-A' }).expect(201);
+    const sa = await f.se.post(`/api/v1/sales-orders/${a.body.id}/submit`).expect(200);
+    await approve(f.rsm, sa.body.approvalRequestId);
+    await approve(f.accounts, sa.body.approvalRequestId);
+    // an invoice of 4,000 against the order, 5 days past due (shipment and invoice inserted directly: dispatch and invoicing have their own tests)
+    const wh = (await db.query(`insert into org.warehouses (legal_entity_id, code, name, type, state_code, status) values ($1, 'FG-' || substr(md5(random()::text), 1, 6), '[TEST] FG', 'FG', '27', 'Active') returning id`, [f.le])).rows[0].id;
+    const sh = (await db.query(`insert into logistics.shipments (doc_no, sales_order_id, legal_entity_id, party_id, ship_to_id, warehouse_id, planned_date, status)
+      values ('DSP-T-' || substr(md5(random()::text), 1, 8), $1, $2, $3, $4, $5, $6, 'Planned') returning id`, [a.body.id, f.le, f.party, f.registered, wh, plusDays(-40)])).rows[0].id;
+    await db.query(`insert into sales.invoices (doc_no, legal_entity_id, seller_state, party_id, bill_to_id, ship_to_id, place_of_supply, inter_state, sales_order_id, shipment_id, invoice_date, due_date,
+      payment_terms, taxable_total, grand_total) values ('T' || substr(md5(random()::text), 1, 12), $1, '27', $2, $3, $3, '27', false, $4, $5, $6, $7, '30 days', 3810, 4000)`,
+      [f.le, f.party, f.registered, a.body.id, sh, plusDays(-35), plusDays(-5)]);
+    const b = await f.se.post('/api/v1/sales-orders', { ...quote(f), dealerPoNo: 'PO-B' }).expect(201);
+    const live = (await f.se.get(`/api/v1/sales-orders/${b.body.id}`).expect(200)).body.liveCredit;
+    expect(live).toMatchObject({ outstanding: 4000, overdue: 4000, frozen: true });
+    const frozen = await f.se.post(`/api/v1/sales-orders/${b.body.id}/submit`).expect(422);
+    expect(frozen.body.error.code).toBe('OVERDUE_FREEZE');
+    expect(frozen.body.error.details.overdueInvoices[0]).toMatchObject({ outstanding: 4000, daysOverdue: 5 });
+    // the grace setting (provisional) lifts it; the snapshot then records the receivables
+    await db.query(`update sys.settings set value = '10' where key = 'sales.credit.overdueGraceDays'`);
+    try {
+      await f.se.post(`/api/v1/sales-orders/${b.body.id}/submit`).expect(200);
+    } finally {
+      await db.query(`update sys.settings set value = '0' where key = 'sales.credit.overdueGraceDays'`);
+    }
+    expect((await f.se.get(`/api/v1/sales-orders/${b.body.id}`).expect(200)).body).toMatchObject({ outstandingValue: '4000.00', overdueValue: '4000.00' });
+  });
 });

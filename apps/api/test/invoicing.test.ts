@@ -1,19 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { todayIST } from '../src/modules/sales/quotations';
-import { db, userAgent } from './helpers';
-import { ready, release } from './dispatch-fixtures';
+import { db } from './helpers';
+import { dispatched } from './dispatch-fixtures';
+import { inDays } from './purchase-fixtures';
 import { lotQty } from './production-fixtures';
-
-/** Dispatches 24 of the 30 packs (₹200 + 5 % GST, intra-state) and returns the shipment with its auto-raised invoice. */
-async function dispatched() {
-  const x = await ready();
-  await release(x.fgLot, x.f.fgWh);
-  const s = await x.logistics.post('/api/v1/shipments', { salesOrderId: x.so, warehouseId: x.f.fgWh, plannedDate: todayIST(), lines: [{ soLineId: x.line, packs: 24 }] }).expect(201);
-  for (const b of x.boxes.slice(0, 2)) await x.keeper.post(`/api/v1/shipments/${s.body.id}/pick`, { boxSerial: b.serial }).expect(201);
-  const out = await x.logistics.post(`/api/v1/shipments/${s.body.id}/dispatch`, { transporterId: x.transporterId, vehicleNo: 'MH12AB1234', driverName: '[TEST] Ramesh', freightTerms: 'PAID', lrNo: 'LR-1', lrDate: todayIST() }).expect(200);
-  return { ...x, shipmentId: s.body.id as string, invoice: out.body.invoice as { id: string; docNo: string; grandTotal: number },
-    accounts: await userAgent([{ code: 'ACCOUNTS_EXEC' }]), fh: await userAgent([{ code: 'FINANCE_HEAD' }]), qa: await userAgent([{ code: 'QA_MANAGER' }]) };
-}
 
 describe('Sales invoicing: tax invoice at dispatch, cancellation, credit notes and customer returns (FIN-001…FIN-005, LOG-012)', () => {
   it('raises a GST invoice with the dispatch, priced from the order, and lets it be cancelled and raised again only inside the rules', async () => {
@@ -21,7 +11,7 @@ describe('Sales invoicing: tax invoice at dispatch, cancellation, credit notes a
     expect(invoice.docNo).toMatch(/^SI\/\d{4}-\d{2}\/\d{5}$/);
     expect(invoice.docNo.length).toBeLessThanOrEqual(16);
     const inv = (await accounts.get(`/api/v1/sales-invoices/${invoice.id}`).expect(200)).body;
-    expect(inv).toMatchObject({ status: 'Posted', interState: false, taxableTotal: '4800.00', cgstTotal: '120.00', sgstTotal: '120.00', grandTotal: '5040.00', invoiceDate: todayIST(), dueDate: todayIST(),
+    expect(inv).toMatchObject({ status: 'Posted', interState: false, taxableTotal: '4800.00', cgstTotal: '120.00', sgstTotal: '120.00', grandTotal: '5040.00', invoiceDate: todayIST(), dueDate: inDays(30),
       shipmentId, lrNo: 'LR-1', amountInWords: expect.stringMatching(/Five Thousand Forty/i) });
     expect(inv.lines).toHaveLength(1);
     expect(inv.lines[0]).toMatchObject({ qty: '24.0000', rate: '200.00', taxable: '4800.00', gstRate: '5.00' });

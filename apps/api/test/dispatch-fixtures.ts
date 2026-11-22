@@ -16,6 +16,8 @@ export async function ready() {
   const emp = (await mdo.post('/api/v1/employees', { empCode: uniq('E'), fullName: '[TEST] RSM', salesTier: 'RSM', managerId: null, territoryId: terr }).expect(201)).body.id as string;
   const party = (await db.query(`insert into mdm.parties (code, legal_name, constitution, pan, gst_registered, contact_person, mobile) values ($1,'[TEST] Krishi Kendra','PROPRIETORSHIP','AAAAA0000A',false,'Owner','9876543210') returning id`,
     [uniq('DLR-T-')])).rows[0].id as string;
+  await db.query(`insert into mdm.dealer_profiles (party_id, dealer_category, territory_id, sales_owner_id, licence_types, price_group, credit_days, credit_limit, status)
+      values ($1,'DEALER',$2,$3,'{FERTILIZER}','STANDARD',30,100000,'Active')`, [party, terr, emp]);
   const addr = (await db.query(`insert into mdm.party_addresses (party_id, kind, line1, city, district, state_code, pincode) values ($1,'REGISTERED','[TEST] Market yard','Baramati','Pune','27','413102') returning id`, [party])).rows[0].id as string;
   const so = (await db.query(`insert into sales.sales_orders (doc_no, party_id, legal_entity_id, seller_state, bill_to_id, ship_to_id, place_of_supply, inter_state, order_date, payment_terms, delivery_terms,
       sales_owner_id, territory_id, status, taxable_total, cgst_total, sgst_total, grand_total) values ($1,$2,$3,'27',$4,$4,'27',false,$5,'30 days','Ex-works',$6,$7,'Approved',6000,150,150,6300) returning id`,
@@ -24,7 +26,7 @@ export async function ready() {
       values ($1,1,$2,'[TEST] Zinc EDTA 12%','31059090','1 L Bottle',30,200,200,6000,5,150,150,6300) returning id`, [so, pack])).rows[0].id as string;
   const logistics = await userAgent([{ code: 'LOGISTICS_HEAD' }]);
   const tr = await logistics.post('/api/v1/shipments/transporters', { code: uniq('TR').slice(0, 20), name: '[TEST] Sahyadri Roadways', gstin: null, phone: '9876500000' }).expect(201);
-  return { f, fgLot, pack, boxes, so, line, logistics, transporterId: tr.body.id as string, keeper: f.keeper };
+  return { f, fgLot, pack, boxes, so, line, party, logistics, transporterId: tr.body.id as string, keeper: f.keeper };
 }
 
 /** QA release of the FG lot (QA release itself is covered by qa-release.test.ts): status Released, stock moved to unrestricted. */
@@ -36,3 +38,14 @@ export async function release(lotId: string, warehouseId: string) {
     ($1,$2,$3,'QUARANTINE',$4,100,'QA_RELEASE','test',$2), ($1,$2,$3,'UNRESTRICTED',$5,100,'QA_RELEASE','test',$2)`, [item, lotId, warehouseId, -q, q]);
 }
 
+
+/** Dispatches 24 of the 30 packs (₹200 + 5 % GST, intra-state) and returns the shipment with its auto-raised invoice. */
+export async function dispatched() {
+  const x = await ready();
+  await release(x.fgLot, x.f.fgWh);
+  const s = await x.logistics.post('/api/v1/shipments', { salesOrderId: x.so, warehouseId: x.f.fgWh, plannedDate: todayIST(), lines: [{ soLineId: x.line, packs: 24 }] }).expect(201);
+  for (const b of x.boxes.slice(0, 2)) await x.keeper.post(`/api/v1/shipments/${s.body.id}/pick`, { boxSerial: b.serial }).expect(201);
+  const out = await x.logistics.post(`/api/v1/shipments/${s.body.id}/dispatch`, { transporterId: x.transporterId, vehicleNo: 'MH12AB1234', driverName: '[TEST] Ramesh', freightTerms: 'PAID', lrNo: 'LR-1', lrDate: todayIST() }).expect(200);
+  return { ...x, shipmentId: s.body.id as string, invoice: out.body.invoice as { id: string; docNo: string; grandTotal: number },
+    accounts: await userAgent([{ code: 'ACCOUNTS_EXEC' }]), fh: await userAgent([{ code: 'FINANCE_HEAD' }]), qa: await userAgent([{ code: 'QA_MANAGER' }]) };
+}
