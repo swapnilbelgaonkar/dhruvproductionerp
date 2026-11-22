@@ -68,6 +68,9 @@ export const PERMISSIONS = [
   ...P('Quality', 'qa.release', ['view', 'decide'], 'QA batch review and the disposition of finished goods (release, hold, reject, rework)'),
   ...P('Logistics', 'logistics.shipment', ['view', 'create', 'pick', 'dispatch', 'pod'], 'shipments (plan, pick by box scan, load and dispatch, proof of delivery)'),
   ...P('Logistics', 'logistics.transporter', ['manage'], 'the transporter master'),
+  ...P('Finance', 'sales.invoice', ['view', 'create', 'cancel'], 'GST tax invoices raised from dispatches (cancel only within the window)'),
+  ...P('Finance', 'sales.credit_note', ['view', 'create', 'submit', 'cancel'], 'credit notes against invoices (approved through the approval policy)'),
+  ...P('Stores', 'sales.return', ['view', 'receive', 'decide'], 'customer returns (receive into quarantine; decide = QA restock or reject)'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -123,11 +126,17 @@ const PRODUCTION_EXTRA: Record<string, string[]> = {
 };
 /** Logistics (Stage 6 part 1): logistics plans and dispatches; stores picks by scanning boxes; sales and finance see shipments. */
 const SHIP_RUN = ['logistics.shipment:view', 'logistics.shipment:create', 'logistics.shipment:dispatch', 'logistics.shipment:pod', 'sales.order:view', 'inv.stock:view', 'mfg.packing:view'];
+/** Sales invoicing (Stage 6 part 2): accounts invoice and draft credit notes; the finance head approves them; stores receives returns; QA decides them. */
+const BILL_SEE = ['sales.invoice:view', 'sales.credit_note:view', 'sales.return:view'];
+const BILLING = [...BILL_SEE, 'sales.invoice:create', 'sales.invoice:cancel', 'sales.credit_note:create', 'sales.credit_note:submit', 'sales.credit_note:cancel'];
+const RETURN_IN = ['sales.invoice:view', 'sales.return:view', 'sales.return:receive'];
 const LOGISTICS_EXTRA: Record<string, string[]> = {
-  LOGISTICS_EXEC: SHIP_RUN, LOGISTICS_HEAD: [...SHIP_RUN, 'logistics.transporter:manage'],
-  STOREKEEPER: ['logistics.shipment:view', 'logistics.shipment:pick'], STORES_HEAD: ['logistics.shipment:view', 'logistics.shipment:pick'], SCANNER_OPERATOR: ['logistics.shipment:view', 'logistics.shipment:pick', 'mfg.packing:view'],
-  SALES_OPS: ['logistics.shipment:view'], ACCOUNTS_EXEC: ['logistics.shipment:view'], FINANCE_HEAD: ['logistics.shipment:view'], CREDIT_CONTROLLER: ['logistics.shipment:view'],
-  MANAGEMENT_VIEWER: ['logistics.shipment:view'], QA_HEAD: ['logistics.shipment:view'], QA_MANAGER: ['logistics.shipment:view'],
+  LOGISTICS_EXEC: [...SHIP_RUN, 'sales.invoice:view'], LOGISTICS_HEAD: [...SHIP_RUN, 'logistics.transporter:manage', 'sales.invoice:view'],
+  STOREKEEPER: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN], STORES_HEAD: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN],
+  SCANNER_OPERATOR: ['logistics.shipment:view', 'logistics.shipment:pick', 'mfg.packing:view'],
+  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING],
+  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE],
+  QA_HEAD: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'], QA_MANAGER: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
@@ -174,7 +183,7 @@ export const ROLES: RoleDef[] = [
     permissions: [...VIEW, 'sys.audit:export', 'sys.audit:verify', 'wf.approval:view_all'] },
   // Business roles (doc 07 §3). Module permissions are added as each module is built.
   ...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM', 'SASM', 'ASM', 'TSM', 'SE'] as const).map((t) => ({
-    code: `SALES_${t}`, name: `Sales — ${t}`, department: 'Sales', description: `Sales hierarchy tier ${t}`, permissions: [...ORG_VIEW, ...DEALER_SALES, ...tierCrm(t), 'logistics.shipment:view'] })),
+    code: `SALES_${t}`, name: `Sales — ${t}`, department: 'Sales', description: `Sales hierarchy tier ${t}`, permissions: [...ORG_VIEW, ...DEALER_SALES, ...tierCrm(t), 'logistics.shipment:view', ...BILL_SEE] })),
   ...[
     ['MANAGEMENT_VIEWER', 'Management Viewer', 'Executive'], ['SALES_OPS', 'Sales Operations', 'Sales'], ['DOC_VERIFIER', 'Document Verifier', 'Compliance'],
     ['ACCOUNTS_EXEC', 'Accounts Executive', 'Finance'], ['CREDIT_CONTROLLER', 'Credit Controller', 'Finance'], ['FINANCE_HEAD', 'Finance Head', 'Finance'],
@@ -315,6 +324,14 @@ export const DEFAULT_POLICIES: { docType: string; name: string; description: str
         { name: 'Hybrid routing', steps: base },
       ] };
     })() },
+  // FIN-004 (provisional default; the client may change the band in Approval Policies): the finance head approves credit notes; above ₹1 lakh an executive director too
+  { docType: 'sales.credit_note', name: 'Credit note approval', description: 'Finance head; executive director above ₹1 lakh',
+    definition: { distinctApprovers: true, rules: [
+      { name: 'Above ₹1 lakh', when: { fact: 'amount', op: 'gt', value: 100000 }, steps: [
+        { kind: 'role', key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] },
+        { kind: 'role', key: 'executive', label: 'Executive director approval (above ₹1 lakh)', roles: ['EXEC_ADMIN'] }] },
+      { name: 'Default', steps: [{ kind: 'role', key: 'finance', label: 'Finance head approval', roles: ['FINANCE_HEAD'] }] },
+    ] } },
 ];
 
 /** Idempotent: brings permissions, system roles and first policy versions in line with the code. */

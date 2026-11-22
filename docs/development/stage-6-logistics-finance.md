@@ -3,7 +3,7 @@
 Order follows D12 (business flow). Stage 6 parts:
 
 1. Dispatch: transporters, dispatch queue, shipment planning, picking by box scan, loading with LR and e-way bill, delivery challan, proof of delivery — **done**
-2. Sales invoicing: GST tax invoice from the dispatch, credit notes, customer returns — next
+2. Sales invoicing: GST tax invoice from the dispatch, credit notes, customer returns — **done**
 3. Receivables: receipts and allocation, ageing, credit exposure and the overdue freeze (D18)
 4. Payables: vendor ledger, payments, debit note adjustment, freight bills
 5. Native general ledger (D02): chart of accounts, idempotent postings, trial balance, P&L, balance sheet, period lock, GST summaries
@@ -31,14 +31,52 @@ Order follows D12 (business flow). Stage 6 parts:
   - With the e-way bill threshold lowered, dispatch needs the number and its validity. Stock falls by exactly the 24 packs scanned, boxes are marked Dispatched, and the order line shows 24 dispatched.
   - POD refuses over-delivery and a shortage without remarks, then records "Delivered short".
   - A remainder shipment of 6 cannot take a box of 12 and is cancelled. Shipping the final 12 closes the order.
-- Totals: **76 API + 4 contract tests passing**. Typecheck clean.
+- Totals at the end of part 1: 76 API + 4 contract tests passing. Typecheck clean.
 - Browser run (local, [SAMPLE] data):
   1. The logistics head added Sahyadri Roadways and planned 24 × 1 L of SO/2026-27/000001 from WH-01.
   2. The storekeeper scanned two boxes; a repeat scan and a third box were refused.
   3. The logistics executive loaded the shipment (vehicle MH12AB4521, LR SRW/7781) and dispatched it. The delivery challan printed with lot B/2026-27/000001 and both box serials.
   4. The POD recorded 23 received with one bottle leaked, so the shipment shows "Delivered short".
 
-### Not built yet
+### Not built yet (part 1)
 - **Route planning and vehicle capacity (LOG-008)**: Stage 7 (reporting and mobile).
 - **E-way bill and e-invoice generation through the NIC portal**: Stage 7 integrations. Numbers are entered by hand until then.
 - **Freight bills against shipments**: with payables (part 4).
+
+## Part 2 — Sales invoicing (BRD p.18; MP §16.1–16.4; FIN-001…FIN-005, FIN-014, LOG-012)
+
+| Area | What works | RTM |
+|---|---|---|
+| Tax invoice at dispatch | Dispatching a shipment raises its GST tax invoice in the same step (setting `sales.invoice.autoOnDispatch`, on by default), so the invoice travels with the goods. Accounts can raise it from "Dispatched, not yet invoiced" when the setting is off or after a cancellation. One live invoice per shipment | FIN-001 |
+| Pricing and tax | Each line is priced from the approved sales-order line for the packs actually dispatched: list rate, scheme and extra discount, and the GST rate taken from the tax master when the order was made. Nothing is re-keyed. CGST + SGST or IGST follow the order's place of supply. Integer-paise maths, grand total rounded to the rupee | FIN-002 |
+| Invoice number | `SI/2026-27/00001`: 16 characters, unique per financial year (GST rule 46), enforced by the database | FIN-002 |
+| Due date | Invoice date plus the dealer's credit days | FIN-002 |
+| Printable tax invoice | Seller and buyer GSTIN, state codes, place of supply, HSN, quantity, rate, discount, taxable value, tax per line, HSN summary, amount in words, lots with expiry, challan, transporter, LR and e-way bill, reverse-charge statement and signatory. IRN prints once e-invoicing is connected (Stage 7) | FIN-002, FIN-014 |
+| Cancellation | Only within `sales.invoice.cancelWindowHours` (24 by default, the IRN window), with a reason, and only while nothing is settled, credited or returned against it. The goods stay dispatched and the shipment can be invoiced again; after the window a credit note is the only route | FIN-003 |
+| Credit notes | `CN/2026-27/00001` against one invoice, for a shortage or damage (packs at the invoice line's net rate) or a rate difference, scheme or other reason (taxable value, explanation required). GST follows the invoice line. Credited packs and value can never exceed what was invoiced, counting other notes in flight. Approved through policy `sales.credit_note`: finance head; an executive director too above ₹1 lakh (provisional default, editable in Approval Policies). An approved note settles part of the invoice | FIN-004 |
+| Customer returns | Stores receives goods back against the invoice (`CRN/…`): reason, the lot of each line (only lots that went out on that invoice, never more than were sent), condition, transport reference, evidence in the vault. Stock comes back into **quarantine** at the cost it left with, and a credit note for the packs is drafted for accounts | LOG-012, FIN-005 |
+| QA decision on returns | The QA manager or head restocks each line to saleable stock (only if the lot is still released) or rejects it to rejected stock. The return closes when every line is decided | LOG-012 |
+| Restocked packs ship again | Restocked returns are loose packs outside boxes, so a shipment can pick them by lot. Only packs actually returned and restocked are offered; bulk stock that was never packed is not a pack | LOG-002 |
+| Links | Shipment ↔ invoice ↔ credit notes and returns are linked both ways; a "delivered short" shipment points accounts to the invoice to credit | — |
+| Roles | Accounts executive and finance head: invoice, cancel, credit notes. The finance head approves credit notes. Storekeeper and stores head: receive returns. QA manager and head: decide returns. Sales, credit control, logistics and management: view | — |
+
+### Evidence
+- `apps/api/test/invoicing.test.ts` has 2 tests:
+  - **Dispatch raises the invoice.** For 24 packs at ₹200 with 5 % GST intra-state: taxable 4,800, CGST 120, SGST 120, total 5,040. The number is at most 16 characters, and the lots, HSN summary and due date are correct.
+  - **Cancel and re-raise.** A second invoice for the same shipment is refused, and logistics cannot cancel. Accounts cancels within the window, and the shipment reappears in "to invoice" and gets a new number. After 25 hours cancellation is refused.
+  - **Shortage credit note.** A return reason without goods, over-crediting, and a rate difference without an explanation are all refused. A shortage of 1 pack is credited at ₹210 and approved by the finance head, not accounts, which settles ₹210 and blocks cancellation.
+  - **Rate-difference note.** It is drafted, then cancelled.
+  - **Customer return.** QA cannot receive it. A return that would push credits past what was invoiced is refused. Two packs come back into quarantine with a ₹420 draft credit note.
+  - **QA decision.** The storekeeper cannot decide. QA restocks one pack (unrestricted stock +1) and rejects one (rejected stock +1), and the return closes.
+  - **Re-shipping.** The restocked pack is offered as a loose pack on a new shipment: 2 are refused, 1 is picked, and then none are left.
+- Totals: **78 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local, [SAMPLE] data, after the part 1 run):
+  1. Accounts saw DSP/2026-27/000001 under "Dispatched, not yet invoiced", because it was dispatched before invoicing existed, and raised SI/2026-27/00001 for ₹5,877. The tax invoice printed with the HSN summary and lot.
+  2. Accounts credited the 1-pack shortage as CN/2026-27/00001 (₹245), and the finance head approved it.
+  3. The storekeeper received 2 damaged packs back as CRN/2026-27/000001 into WH-01 quarantine, which drafted CN/2026-27/00002.
+  4. The QA manager restocked both packs. The invoice now shows ₹245 settled and ₹5,632 outstanding.
+
+### Not built yet (part 2)
+- **E-invoice IRN and QR from the IRP, e-way bill generation**: Stage 7 integrations.
+- **Receipts against invoices, ageing and the overdue freeze**: part 3.
+- **GL postings of invoices, credit notes and returns**: part 5. Postings will be generated from these documents idempotently, including the ones already raised.

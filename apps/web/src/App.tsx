@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { FormulationDetailPage, FormulationsPage, FormulationVersionFormPage, FormulationVersionLink, FormulationVersionPage } from './pages/production/Formulations';
 import { PlantSettingsPage } from './pages/production/PlantSettings';
+import { CreditNoteDetailPage, CreditNotePrintPage, CreditNotesPage, CustomerReturnDetailPage, CustomerReturnsPage, SalesInvoiceDetailPage, SalesInvoicePrintPage, SalesInvoicesPage } from './pages/finance/SalesInvoices';
 import { DispatchQueuePage, ShipmentChallanPage, ShipmentDetailPage, ShipmentsPage, TransportersPage } from './pages/logistics/Dispatch';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
 import { DowntimePage, PackingLabelsPage, PackingRunDetailPage, PackingRunsPage, ProductionDashboardPage, VerifyPage } from './pages/production/Packing';
@@ -74,6 +75,8 @@ export function App() {
       <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
       <Route path="stores/returns/:id/print" element={<Protected perm="purchase.return:view"><ReturnPrintPage /></Protected>} />
       <Route path="purchase/orders/:id/print" element={<Protected perm="purchase.order:view"><PurchaseOrderPrintPage /></Protected>} />
+      <Route path="finance/invoices/:id/print" element={<Protected perm="sales.invoice:view"><SalesInvoicePrintPage /></Protected>} />
+      <Route path="finance/credit-notes/:id/print" element={<Protected perm="sales.credit_note:view"><CreditNotePrintPage /></Protected>} />
       <Route path="logistics/shipments/:id/challan" element={<Protected perm="logistics.shipment:view"><ShipmentChallanPage /></Protected>} />
       <Route path="sales/orders/:id/print" element={<Protected perm="sales.order:view"><SalesOrderPrintPage /></Protected>} />
       <Route element={<AppShell />}>
@@ -139,6 +142,12 @@ export function App() {
         <Route path="production/orders/:id/edit" element={<Protected perm="mfg.order:edit"><ProductionOrderFormPage /></Protected>} />
         <Route path="production/overrides/:oid" element={<Protected perm="mfg.order:view"><OverrideLink /></Protected>} />
         <Route path="production/dashboard" element={<Protected perm="mfg.order:view"><ProductionDashboardPage /></Protected>} />
+        <Route path="finance/invoices" element={<Protected perm="sales.invoice:view"><SalesInvoicesPage /></Protected>} />
+        <Route path="finance/invoices/:id" element={<Protected perm="sales.invoice:view"><SalesInvoiceDetailPage /></Protected>} />
+        <Route path="finance/credit-notes" element={<Protected perm="sales.credit_note:view"><CreditNotesPage /></Protected>} />
+        <Route path="finance/credit-notes/:id" element={<Protected perm="sales.credit_note:view"><CreditNoteDetailPage /></Protected>} />
+        <Route path="logistics/returns" element={<Protected perm="sales.return:view"><CustomerReturnsPage /></Protected>} />
+        <Route path="logistics/returns/:id" element={<Protected perm="sales.return:view"><CustomerReturnDetailPage /></Protected>} />
         <Route path="logistics/queue" element={<Protected perm="logistics.shipment:view"><DispatchQueuePage /></Protected>} />
         <Route path="logistics/shipments" element={<Protected perm="logistics.shipment:view"><ShipmentsPage /></Protected>} />
         <Route path="logistics/shipments/:id" element={<Protected perm="logistics.shipment:view"><ShipmentDetailPage /></Protected>} />

@@ -18,7 +18,7 @@ const thead = 'border-b border-line text-left text-[12px] uppercase tracking-wid
 interface QueueLine { id: string; lineNo: number; itemPackId: string; description: string; packLabel: string; qty: string; dispatchedQty: string; onOpenShipments: string; open: number; availablePacks: number }
 interface QueueOrder { id: string; docNo: string; orderDate: string; requiredBy: string | null; legalEntityId: string; partyName: string; partyCode: string; shipToCity: string; shipToState: string; grandTotal: string; lines: QueueLine[] }
 interface ShipmentRow { id: string; docNo: string; salesOrderId: string; salesOrderNo: string; partyName: string; partyCode: string; warehouseCode: string; plannedDate: string; status: string;
-  statusReason: string | null; transporterName: string | null; vehicleNo: string | null; lrNo: string | null; ewbNo: string | null; dispatchedAt: string | null; shipToAddress: string }
+  statusReason: string | null; transporterName: string | null; vehicleNo: string | null; lrNo: string | null; ewbNo: string | null; dispatchedAt: string | null; shipToAddress: string; invoiceNo: string | null }
 interface Pick { id: string; lotId: string; lotNo: string; expiryDate: string | null; boxSerial: string | null; packs: string; qty: string }
 interface ShipLine { id: string; soLineId: string; lineNo: number; description: string; packLabel: string; hsnCode: string; plannedPacks: string; pickedPacks: string; deliveredPacks: string | null;
   orderedPacks: string; lineTotal: string; packSize: string; packUom: string; unitsPerBox: number; picks: Pick[] }
@@ -28,6 +28,7 @@ interface ShipmentDetail extends ShipmentRow {
   podReceivedOn: string | null; podReceivedBy: string | null; podRemarks: string | null; remarks: string | null; createdAt: string;
   lines: ShipLine[]; pickedValue: number; ewbRequired: boolean; ewbThreshold: number; allowedActions: string[];
   seller?: { name: string; address: string | null; pan: string | null; gstin: string | null };
+  invoice: { id: string; docNo: string; grandTotal: string; status: string } | null; shortageCreditNote: { id: string; docNo: string; status: string } | null;
 }
 interface Transporter { id: string; code: string; name: string; gstin: string | null; pan: string | null; contact: string | null; phone: string | null; status: string }
 
@@ -115,13 +116,13 @@ export function ShipmentsPage() {
       <Card padded={false} className="mt-4">
         {q.isLoading ? <Skeleton className="h-40" /> : q.error ? <div className="p-5"><ErrorBanner error={q.error} /></div> : !rows.length ? <div className="p-5"><EmptyState title="No shipments here" text="Plan a shipment from the dispatch queue." /></div> : (
           <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-[14px]"><thead><tr className={thead}>
-            <th className="px-5 py-3">Shipment</th><th className={th}>Order</th><th className={th}>Dealer</th><th className={th}>From</th><th className={th}>Planned</th><th className={th}>Vehicle / LR</th><th className={th}>Status</th></tr></thead>
+            <th className="px-5 py-3">Shipment</th><th className={th}>Order</th><th className={th}>Dealer</th><th className={th}>From</th><th className={th}>Planned</th><th className={th}>Vehicle / LR</th><th className={th}>Invoice</th><th className={th}>Status</th></tr></thead>
             <tbody>{rows.map((s) => (
               <tr key={s.id} className="border-b border-line last:border-0">
                 <td className="px-5 py-3"><Link className="font-semibold text-primary num" to={`/logistics/shipments/${s.id}`}>{s.docNo}</Link></td>
                 <td className={th}><Link className="text-primary num" to={`/sales/orders/${s.salesOrderId}`}>{s.salesOrderNo}</Link></td>
                 <td className={th}>{s.partyName}</td><td className={th}>{s.warehouseCode}</td><td className={th}>{fmtDate(s.plannedDate)}</td>
-                <td className={th}>{s.vehicleNo ? `${s.vehicleNo} · LR ${s.lrNo}` : '—'}</td>
+                <td className={th}>{s.vehicleNo ? `${s.vehicleNo} · LR ${s.lrNo}` : '—'}</td><td className={`${th} num`}>{s.invoiceNo ?? '—'}</td>
                 <td className={th}><StatusBadge status={s.status} label={s.statusReason === 'Delivered short' ? 'Delivered short' : undefined} /></td>
               </tr>))}</tbody></table></div>
         )}
@@ -169,6 +170,11 @@ export function ShipmentDetailPage() {
           {can('dispatch') && <Button icon={<Truck size={18} />} onClick={() => setDialog('dispatch')}>Load & dispatch</Button>}
           {can('pod') && <Button onClick={() => setDialog('pod')}>Record delivery (POD)</Button>}
         </>} />
+      {s.statusReason === 'Delivered short' && s.invoice && (
+        <p className="mb-4 rounded-md bg-warning-bg px-4 py-3 text-[14px] text-warning-text">Delivered short: {s.podRemarks}. {s.shortageCreditNote
+          ? <>Credit note <Link className="font-semibold underline" to={`/finance/credit-notes/${s.shortageCreditNote.id}`}>{s.shortageCreditNote.docNo}</Link> ({s.shortageCreditNote.status.toLowerCase()}).</>
+          : <>Accounts can credit the shortage from <Link className="font-semibold underline" to={`/finance/invoices/${s.invoice.id}`}>{s.invoice.docNo}</Link>.</>}</p>
+      )}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
           {can('pick') && (
@@ -179,6 +185,7 @@ export function ShipmentDetailPage() {
               </form>
               {scanError && <p role="alert" className="mt-2 rounded-md bg-danger-bg px-3 py-2 text-[14px] text-danger-text">{scanError}</p>}
               <p className="mt-2 text-[13px] text-ink-2">Only boxes of QA-released lots, of a pack on this shipment, can be added. {fmtNum(picked)} of {fmtNum(planned)} packs scanned.</p>
+              <LoosePacks shipmentId={s.id} onDone={refresh} />
             </Card>
           )}
           <Card title="Lines" padded={false}>
@@ -205,6 +212,7 @@ export function ShipmentDetailPage() {
               ['Transporter', s.transporterName ?? '—'], ['Vehicle', s.vehicleNo ? `${s.vehicleNo} · ${s.driverName}${s.driverPhone ? ` (${s.driverPhone})` : ''}` : '—'],
               ['LR', s.lrNo ? `${s.lrNo} dated ${fmtDate(s.lrDate)}` : '—'], ['Freight', s.freightTerms ? `${s.freightTerms.replace('_', ' ')}${s.freightAmount ? ` · ${fmtINR(s.freightAmount)}` : ''}` : '—'],
               ['Dispatched', s.dispatchedAt ? `${s.dispatchedBy}, ${fmtDateTime(s.dispatchedAt)}` : '—'],
+              ['Tax invoice', s.invoice ? <Link key="i" className="text-primary" to={`/finance/invoices/${s.invoice.id}`}>{s.invoice.docNo} · {fmtINR(s.invoice.grandTotal)}</Link> : ['Dispatched', 'Delivered'].includes(s.status) ? 'Not raised yet' : '—'],
               ['Delivered', s.podReceivedOn ? `${fmtDate(s.podReceivedOn)} — received by ${s.podReceivedBy}` : '—'], ['POD remarks', s.podRemarks ?? '—'], ['Remarks', s.remarks ?? '—']]} />
           </Card>
           {['Dispatched', 'Delivered'].includes(s.status) && <DocumentsPanel entityType="logistics.shipment" entityId={s.id} />}
@@ -218,6 +226,32 @@ export function ShipmentDetailPage() {
   );
 }
 
+/** Loose packs (returned by a customer and restocked by QA) are picked by lot rather than scanned. */
+function LoosePacks({ shipmentId, onDone }: { shipmentId: string; onDone: () => void }) {
+  const toast = useToast();
+  const q = useQuery({ queryKey: ['loose-lots', shipmentId], queryFn: () => api<{ data: { shipmentLineId: string; lineNo: number; lotId: string; lotNo: string; expiryDate: string | null; packs: number }[] }>(`/shipments/${shipmentId}/loose-lots`) });
+  const [qty, setQty] = useState<Record<string, string>>({});
+  if (!q.data?.data.length) return null;
+  const add = async (x: { shipmentLineId: string; lotId: string; lotNo: string }) => {
+    try {
+      await api(`/shipments/${shipmentId}/pick`, { body: { shipmentLineId: x.shipmentLineId, lotId: x.lotId, packs: Number(qty[`${x.shipmentLineId}|${x.lotId}`]) || 0 } });
+      toast('success', `Loose packs of lot ${x.lotNo} added.`); setQty({}); await q.refetch(); onDone();
+    } catch (e) { toast('error', e instanceof ApiError ? e.message : 'Could not add them.'); }
+  };
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      <p className="mb-2 font-semibold">Loose packs (restocked returns)</p>
+      <ul className="space-y-2">{q.data.data.map((x) => {
+        const k = `${x.shipmentLineId}|${x.lotId}`;
+        return (
+          <li key={k} className="flex flex-wrap items-center gap-2 text-[14px]"><span>Line {x.lineNo} · lot {x.lotNo}{x.expiryDate ? ` (exp ${fmtDate(x.expiryDate)})` : ''} · {x.packs} available</span>
+            <Input aria-label={`Loose packs of lot ${x.lotNo}`} className="w-24" type="number" min="1" max={x.packs} step="1" value={qty[k] ?? ''} onChange={(e) => setQty({ ...qty, [k]: e.target.value })} />
+            <Button size="sm" variant="secondary" disabled={!(Number(qty[k]) > 0)} onClick={() => add(x)}>Add loose packs</Button></li>);
+      })}</ul>
+    </div>
+  );
+}
+
 function DispatchDialog({ s, onClose, onDone }: { s: ShipmentDetail; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const trs = useQuery({ queryKey: ['transporters'], queryFn: () => api<{ data: Transporter[] }>('/shipments/transporters') });
@@ -228,10 +262,10 @@ function DispatchDialog({ s, onClose, onDone }: { s: ShipmentDetail; onClose: ()
   const save = async () => {
     setBusy(true); setError(null);
     try {
-      const r = await api<{ orderClosed: boolean }>(`/shipments/${s.id}/dispatch`, { body: { transporterId: f.transporterId, vehicleNo: f.vehicleNo.replace(/[\s-]/g, '').toUpperCase(), driverName: f.driverName,
+      const r = await api<{ orderClosed: boolean; invoice: { id: string; docNo: string } | null }>(`/shipments/${s.id}/dispatch`, { body: { transporterId: f.transporterId, vehicleNo: f.vehicleNo.replace(/[\s-]/g, '').toUpperCase(), driverName: f.driverName,
         driverPhone: f.driverPhone || null, freightTerms: f.freightTerms, freightAmount: f.freightAmount ? Number(f.freightAmount) : null, lrNo: f.lrNo, lrDate: f.lrDate,
         ewbNo: f.ewbNo || null, ewbValidUntil: f.ewbValidUntil || null } });
-      toast('success', `${s.docNo} dispatched${r.orderClosed ? `; ${s.salesOrderNo} is fully shipped and closed` : ''}.`); onDone(); onClose();
+      toast('success', `${s.docNo} dispatched${r.invoice ? ` with tax invoice ${r.invoice.docNo}` : ''}${r.orderClosed ? `; ${s.salesOrderNo} is fully shipped and closed` : ''}.`); onDone(); onClose();
     } catch (e) { setError(e); } finally { setBusy(false); }
   };
   return (

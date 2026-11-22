@@ -7,6 +7,8 @@ import { asyncHandler, parse, str } from '../../lib/http';
 import { nextDocNo } from '../../lib/numbering';
 import { requirePermission } from '../../middleware/auth';
 import { actorOf, can, legalEntityScope } from '../../middleware/context';
+import { getSetting } from '../../lib/settings';
+import { raiseInvoice } from '../sales/invoices';
 import { todayIST } from '../sales/quotations';
 
 /**
@@ -44,7 +46,8 @@ const shipSel = `select s.id, s.doc_no as "docNo", s.sales_order_id as "salesOrd
     s.planned_date as "plannedDate", s.status, s.status_reason as "statusReason", s.transporter_id as "transporterId", t.name as "transporterName", t.gstin as "transporterGstin",
     s.vehicle_no as "vehicleNo", s.driver_name as "driverName", s.driver_phone as "driverPhone", s.freight_terms as "freightTerms", s.freight_amount as "freightAmount",
     s.lr_no as "lrNo", s.lr_date as "lrDate", s.ewb_no as "ewbNo", s.ewb_valid_until as "ewbValidUntil", s.dispatched_at as "dispatchedAt", du.full_name as "dispatchedBy",
-    s.pod_received_on as "podReceivedOn", s.pod_received_by as "podReceivedBy", s.pod_document_id as "podDocumentId", s.pod_remarks as "podRemarks", s.remarks, s.created_at as "createdAt", s.version
+    s.pod_received_on as "podReceivedOn", s.pod_received_by as "podReceivedBy", s.pod_document_id as "podDocumentId", s.pod_remarks as "podRemarks", s.remarks, s.created_at as "createdAt", s.version,
+    (select i.doc_no from sales.invoices i where i.shipment_id = s.id and i.status <> 'Cancelled') as "invoiceNo"
   from logistics.shipments s join sales.sales_orders so on so.id = s.sales_order_id join org.legal_entities le on le.id = s.legal_entity_id join mdm.parties p on p.id = s.party_id
   join mdm.party_addresses a on a.id = s.ship_to_id join org.warehouses w on w.id = s.warehouse_id left join logistics.transporters t on t.id = s.transporter_id
   left join iam.users du on du.id = s.dispatched_by`;
@@ -144,7 +147,9 @@ export function shipmentRoutes(db: Db) {
     const ewbThreshold = Number((await db.query(`select value from sys.settings where key = 'logistics.ewb.thresholdValue'`)).rows[0]?.value ?? 50000);
     const seller = (await db.query(`select le.name, le.registered_address as address, le.pan, g.gstin from org.legal_entities le join sales.sales_orders so on so.id = $2
         left join org.gst_registrations g on g.legal_entity_id = le.id and g.state_code = so.seller_state and g.status = 'Active' where le.id = $1`, [s.legalEntityId, s.salesOrderId])).rows[0];
-    res.json({ ...s, lines: ls, pickedValue: value, ewbRequired: value > ewbThreshold, ewbThreshold, seller, allowedActions: actions(req, s, picked) });
+    const invoice = (await db.query(`select id, doc_no as "docNo", grand_total as "grandTotal", status from sales.invoices where shipment_id = $1 and status <> 'Cancelled'`, [s.id])).rows[0] ?? null;
+    const credit = (await db.query(`select id, doc_no as "docNo", status from sales.credit_notes where shipment_id = $1 and status <> 'Cancelled' order by created_at desc limit 1`, [s.id])).rows[0] ?? null;
+    res.json({ ...s, lines: ls, invoice, shortageCreditNote: credit, pickedValue: value, ewbRequired: value > ewbThreshold, ewbThreshold, seller, allowedActions: actions(req, s, picked) });
   }));
 
   r.post('/', requirePermission(P('create')), asyncHandler(async (req, res) => {
@@ -172,31 +177,82 @@ export function shipmentRoutes(db: Db) {
     res.status(201).json(out);
   }));
 
-  // LOG-002/003: scan a box; it must be packed, unshipped, of a QA-released lot, of a pack on the shipment, and in the dispatch warehouse
+  /** Stock of a lot free in the warehouse: unrestricted, less what open shipments have picked. */
+  async function freeQty(tx: Tx, lotId: string, warehouseId: string) {
+    const q = (await tx.query(`select
+        (select coalesce(sum(qty), 0) from inv.stock_ledger where lot_id = $1 and warehouse_id = $2 and bucket = 'UNRESTRICTED') as stock,
+        (select coalesce(sum(pk.qty), 0) from logistics.shipment_picks pk join logistics.shipment_lines l on l.id = pk.shipment_line_id join logistics.shipments x on x.id = l.shipment_id
+          where pk.lot_id = $1 and x.status in ('Planned','Picked') and x.warehouse_id = $2) as picked`, [lotId, warehouseId])).rows[0];
+    return r4(Number(q.stock) - Number(q.picked));
+  }
+  /** Loose packs outside boxes: packs returned by customers and restocked by QA, less loose packs already picked from that store. Bulk stock not yet packed is not a pack. */
+  async function loosePacks(dbx: Db | Tx, lotId: string, itemPackId: string, warehouseId: string) {
+    const q = (await dbx.query(`select
+        (select coalesce(sum(rl.packs), 0) from sales.customer_return_lines rl join sales.customer_returns r on r.id = rl.return_id join sales.invoice_lines il on il.id = rl.invoice_line_id
+          where rl.lot_id = $1 and il.item_pack_id = $2 and r.warehouse_id = $3 and rl.disposition = 'Restock') as back,
+        (select coalesce(sum(pk.packs), 0) from logistics.shipment_picks pk join logistics.shipment_lines l on l.id = pk.shipment_line_id join logistics.shipments x on x.id = l.shipment_id
+          where pk.lot_id = $1 and pk.box_id is null and l.item_pack_id = $2 and x.warehouse_id = $3 and x.status <> 'Cancelled') as gone`, [lotId, itemPackId, warehouseId])).rows[0];
+    return Number(q.back) - Number(q.gone);
+  }
+  async function pickLine(tx: Tx, req: Request, s: { id: string; status: string }, line: { id: string; lineNo: number }, lotId: string, boxId: string | null, packs: number, qty: number) {
+    await tx.query(`insert into logistics.shipment_picks (shipment_line_id, lot_id, box_id, packs, qty, picked_by) values ($1,$2,$3,$4,$5,$6)`, [line.id, lotId, boxId, packs, qty, req.auth!.user.id]);
+    if (boxId) await tx.query(`update inv.boxes set shipment_id = $2 where id = $1`, [boxId, s.id]);
+    if (s.status === 'Planned') await setStatus(tx, actorOf(req), s.id, 'Picked');
+  }
+
+  // loose packs (returned by a customer and restocked by QA) that can be picked for each line
+  r.get('/:id/loose-lots', requirePermission(P('pick')), asyncHandler(async (req, res) => {
+    const s = await load(db, req, req.params.id!);
+    const rows = [];
+    for (const l of await lines(db, s.id)) {
+      const lots = (await db.query(`select distinct lt.id, lt.lot_no as "lotNo", lt.expiry_date as "expiryDate" from sales.customer_return_lines rl join sales.customer_returns r on r.id = rl.return_id
+          join sales.invoice_lines il on il.id = rl.invoice_line_id join inv.lots lt on lt.id = rl.lot_id
+          where il.item_pack_id = $1 and r.warehouse_id = $2 and rl.disposition = 'Restock' and lt.qc_status = 'Released' order by lt.expiry_date nulls last, lt.lot_no`, [l.itemPackId, s.warehouseId])).rows;
+      for (const lt of lots) {
+        const packs = await loosePacks(db, lt.id, l.itemPackId, s.warehouseId);
+        if (packs > 0) rows.push({ shipmentLineId: l.id, lineNo: l.lineNo, lotId: lt.id, lotNo: lt.lotNo, expiryDate: lt.expiryDate, packs });
+      }
+    }
+    res.json({ data: rows });
+  }));
+
+  // LOG-002/003: scan a box (it must be packed, unshipped, of a QA-released lot, of a pack on the shipment, and in the dispatch warehouse) or pick loose packs of a released lot
   r.post('/:id/pick', requirePermission(P('pick')), asyncHandler(async (req, res) => {
-    const { boxSerial } = parse(z.object({ boxSerial: text(40) }), req.body);
+    const d = parse(z.union([z.object({ boxSerial: text(40) }), z.object({ shipmentLineId: z.string().uuid(), lotId: z.string().uuid(), packs: z.number().int().positive() })]), req.body);
     const out = await withTx(db, async (tx) => {
       const s = await load(tx, req, req.params.id!, true);
       if (!['Planned', 'Picked'].includes(s.status)) throw Errors.state(`This shipment is ${s.status}.`);
-      const b = (await tx.query(`select b.id, b.serial, b.units, b.status, b.shipment_id, b.item_pack_id, b.lot_id, lt.lot_no, lt.qc_status, ip.pack_size, ip.pack_uom, i.base_uom, lt.item_id
-          from inv.boxes b join inv.lots lt on lt.id = b.lot_id join mdm.item_packs ip on ip.id = b.item_pack_id join mdm.items i on i.id = lt.item_id where b.serial = $1 for update of b`, [boxSerial.trim()])).rows[0];
-      if (!b) throw Errors.rule('UNKNOWN_BOX', `No box ${boxSerial}.`);
-      if (b.status !== 'Packed' || b.shipment_id) throw Errors.rule('BOX_NOT_AVAILABLE', `Box ${b.serial} is already ${b.shipment_id ? 'on a shipment' : b.status.toLowerCase()}.`);
-      if (b.qc_status !== 'Released') throw Errors.rule('LOT_NOT_RELEASED', `Lot ${b.lot_no} is ${b.qc_status === 'Quarantine' ? 'not released by QA' : b.qc_status.toLowerCase()}; it cannot be dispatched (LOG-003).`);
-      const line = (await lines(tx, s.id)).find((l) => l.itemPackId === b.item_pack_id);
-      if (!line) throw Errors.rule('WRONG_PACK', `Box ${b.serial} holds a pack that is not on this shipment.`);
-      if (Number(line.pickedPacks) + b.units > Number(line.plannedPacks)) throw Errors.rule('OVER_PICK', `Line ${line.lineNo}: ${Number(line.plannedPacks)} planned, ${Number(line.pickedPacks)} already scanned — this box of ${b.units} is too many.`);
-      const per = b.pack_uom === b.base_uom ? Number(b.pack_size) : null;
-      const qty = per ? r4(per * b.units) : null;
-      if (qty === null) throw Errors.rule('NO_CONVERSION', 'The pack unit differs from the stock unit; set up the conversion first.');
-      const free = Number((await tx.query(`select coalesce(sum(qty), 0) as q from inv.stock_ledger where lot_id = $1 and warehouse_id = $2 and bucket = 'UNRESTRICTED'`, [b.lot_id, s.warehouseId])).rows[0].q)
-        - Number((await tx.query(`select coalesce(sum(pk.qty), 0) as q from logistics.shipment_picks pk join logistics.shipment_lines l on l.id = pk.shipment_line_id join logistics.shipments x on x.id = l.shipment_id
-                                   where pk.lot_id = $1 and x.status in ('Planned','Picked') and x.warehouse_id = $2`, [b.lot_id, s.warehouseId])).rows[0].q);
-      if (qty > free + 1e-6) throw Errors.rule('NOT_IN_WAREHOUSE', `Lot ${b.lot_no}: only ${r4(free)} is free in ${s.warehouseCode}.`);
-      await tx.query(`insert into logistics.shipment_picks (shipment_line_id, lot_id, box_id, packs, qty, picked_by) values ($1,$2,$3,$4,$5,$6)`, [line.id, b.lot_id, b.id, b.units, qty, req.auth!.user.id]);
-      await tx.query(`update inv.boxes set shipment_id = $2 where id = $1`, [b.id, s.id]);
-      if (s.status === 'Planned') await setStatus(tx, actorOf(req), s.id, 'Picked');
-      return { box: b.serial as string, lotNo: b.lot_no as string, packs: b.units as number, line: line.lineNo as number };
+      const ls = await lines(tx, s.id);
+      if ('boxSerial' in d) {
+        const b = (await tx.query(`select b.id, b.serial, b.units, b.status, b.shipment_id, b.item_pack_id, b.lot_id, lt.lot_no, lt.qc_status, ip.pack_size, ip.pack_uom, i.base_uom, lt.item_id
+            from inv.boxes b join inv.lots lt on lt.id = b.lot_id join mdm.item_packs ip on ip.id = b.item_pack_id join mdm.items i on i.id = lt.item_id where b.serial = $1 for update of b`, [d.boxSerial.trim()])).rows[0];
+        if (!b) throw Errors.rule('UNKNOWN_BOX', `No box ${d.boxSerial}.`);
+        if (b.status !== 'Packed' || b.shipment_id) throw Errors.rule('BOX_NOT_AVAILABLE', `Box ${b.serial} is already ${b.shipment_id ? 'on a shipment' : b.status.toLowerCase()}.`);
+        if (b.qc_status !== 'Released') throw Errors.rule('LOT_NOT_RELEASED', `Lot ${b.lot_no} is ${b.qc_status === 'Quarantine' ? 'not released by QA' : b.qc_status.toLowerCase()}; it cannot be dispatched (LOG-003).`);
+        const line = ls.find((l) => l.itemPackId === b.item_pack_id);
+        if (!line) throw Errors.rule('WRONG_PACK', `Box ${b.serial} holds a pack that is not on this shipment.`);
+        if (Number(line.pickedPacks) + b.units > Number(line.plannedPacks)) throw Errors.rule('OVER_PICK', `Line ${line.lineNo}: ${Number(line.plannedPacks)} planned, ${Number(line.pickedPacks)} already scanned — this box of ${b.units} is too many.`);
+        if (b.pack_uom !== b.base_uom) throw Errors.rule('NO_CONVERSION', 'The pack unit differs from the stock unit; set up the conversion first.');
+        const qty = r4(Number(b.pack_size) * b.units);
+        const free = await freeQty(tx, b.lot_id, s.warehouseId);
+        if (qty > free + 1e-6) throw Errors.rule('NOT_IN_WAREHOUSE', `Lot ${b.lot_no}: only ${free} is free in ${s.warehouseCode}.`);
+        await pickLine(tx, req, s, line, b.lot_id, b.id, b.units, qty);
+        return { box: b.serial as string, lotNo: b.lot_no as string, packs: b.units as number, line: line.lineNo as number };
+      }
+      const line = ls.find((l) => l.id === d.shipmentLineId);
+      if (!line) throw Errors.notFound('Shipment line');
+      const lot = (await tx.query(`select lt.lot_no, lt.qc_status, lt.item_id, i.base_uom, ip.item_id as pack_item, ip.pack_uom from inv.lots lt join mdm.items i on i.id = lt.item_id
+          join mdm.item_packs ip on ip.id = $2 where lt.id = $1 for update of lt`, [d.lotId, line.itemPackId])).rows[0];
+      if (!lot || lot.item_id !== lot.pack_item) throw Errors.rule('WRONG_PACK', 'That lot is not of the product on this line.');
+      if (lot.qc_status !== 'Released') throw Errors.rule('LOT_NOT_RELEASED', `Lot ${lot.lot_no} is not released; it cannot be dispatched (LOG-003).`);
+      if (lot.pack_uom !== lot.base_uom) throw Errors.rule('NO_CONVERSION', 'The pack unit differs from the stock unit; set up the conversion first.');
+      if (Number(line.pickedPacks) + d.packs > Number(line.plannedPacks)) throw Errors.rule('OVER_PICK', `Line ${line.lineNo}: ${Number(line.plannedPacks)} planned, ${Number(line.pickedPacks)} already picked.`);
+      const qty = r4(Number(line.packSize) * d.packs);
+      const loose = await loosePacks(tx, d.lotId, line.itemPackId, s.warehouseId);
+      if (d.packs > loose) throw Errors.rule('NO_LOOSE_PACKS', `Lot ${lot.lot_no}: only ${Math.max(0, loose)} loose pack(s) outside boxes in ${s.warehouseCode}; scan boxes for the rest.`);
+      if (qty > (await freeQty(tx, d.lotId, s.warehouseId)) + 1e-6) throw Errors.rule('NOT_IN_WAREHOUSE', `Lot ${lot.lot_no} has not enough free stock in ${s.warehouseCode}.`);
+      await pickLine(tx, req, s, line, d.lotId, null, d.packs, qty);
+      return { box: null, lotNo: lot.lot_no as string, packs: d.packs, line: line.lineNo as number };
     });
     res.status(201).json(out);
   }));
@@ -251,7 +307,9 @@ export function shipmentRoutes(db: Db) {
         await allowTransition(tx);
         await tx.query(`update sales.sales_orders set status = 'Closed', status_reason = 'Fully dispatched', updated_by = $2 where id = $1`, [s.salesOrderId, req.auth!.user.id]);
       }
-      return { status: 'Dispatched', value: Math.round(value * 100) / 100, orderClosed: !left };
+      // FIN-001: the tax invoice travels with the goods
+      const invoice = (await getSetting(tx, 'sales.invoice.autoOnDispatch', true)) === true ? await raiseInvoice(tx, actorOf(req), s.id) : null;
+      return { status: 'Dispatched', value: Math.round(value * 100) / 100, orderClosed: !left, invoice };
     });
     res.json(out);
   }));

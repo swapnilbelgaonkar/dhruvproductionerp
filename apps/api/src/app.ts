@@ -44,6 +44,7 @@ import { oosRoutes, publicCoaRoutes } from './modules/quality/oos';
 import { qaRoutes } from './modules/quality/qa';
 import { qaSystemRoutes } from './modules/quality/qasystem';
 import { shipmentRoutes } from './modules/logistics/shipments';
+import { creditNoteRoutes, customerReturnRoutes, salesInvoiceRoutes } from './modules/sales/invoices';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
@@ -110,6 +111,9 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/qa', qaRoutes(db));
   v1.use('/qa', qaSystemRoutes(db));
   v1.use('/shipments', shipmentRoutes(db));
+  v1.use('/sales-invoices', salesInvoiceRoutes(db));
+  v1.use('/credit-notes', creditNoteRoutes(db));
+  v1.use('/customer-returns', customerReturnRoutes(db));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);
