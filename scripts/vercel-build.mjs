@@ -62,6 +62,7 @@ writeFileSync(join(out, 'config.json'), JSON.stringify({
   routes: [
     { src: '^/api/(.*)$', dest: '/api/index' },
     { src: '^/assets/(.*)$', headers: { 'cache-control': 'public, max-age=31536000, immutable' }, continue: true },
+    { src: '^/sw\\.js$', headers: { 'cache-control': 'no-cache' }, continue: true },
     { handle: 'filesystem' },
     { src: '/(.*)', dest: '/index.html' },
   ],

@@ -1,0 +1,19 @@
+{
+  "name": "Dhruv Agro ERP",
+  "short_name": "Dhruv ERP",
+  "description": "Dhruv Agro Enterprise ERP — portal and mobile scanner",
+  "start_url": "/m",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F6FB",
+  "theme_color": "#5B38F5",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Pick for dispatch", "url": "/m/pick" },
+    { "name": "Look up", "url": "/m/lookup" }
+  ]
+}

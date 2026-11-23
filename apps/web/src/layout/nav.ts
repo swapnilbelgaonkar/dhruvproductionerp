@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, Notebook, Books, ChartLine, CalendarX, ListNumbers, PresentationChart, FileCsv, BellRinging, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, Notebook, Books, ChartLine, CalendarX, ListNumbers, PresentationChart, FileCsv, BellRinging, DeviceMobile, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -11,6 +11,7 @@ export const NAV: NavGroup[] = [
     { to: '/dashboard/executive', label: 'Executive Dashboard', icon: PresentationChart, perm: 'mis.executive:view' },
     { to: '/reports', label: 'Reports', icon: FileCsv },
     { to: '/alerts', label: 'Alerts', icon: BellRinging },
+    { to: '/m', label: 'Mobile Scanner', icon: DeviceMobile },
   ] },
   { label: 'Sales', items: [
     { to: '/sales/leads', label: 'Leads', icon: Funnel, perm: 'crm.lead:view' },

@@ -7,6 +7,7 @@ import { FreightBillDetailPage, FreightBillsPage, PayablesAgeingPage, PaymentDet
 import { AccountLedgerPage, ChartOfAccountsPage, FinancialStatementsPage, GstPage, JournalDetailPage, JournalsPage, PeriodsPage, TrialBalancePage } from './pages/finance/Ledger';
 import { ExecutiveDashboardPage, ReportsPage, ReportViewerPage } from './pages/mis/Management';
 import { AlertRulesPage, AlertsPage } from './pages/admin/Alerts';
+import { MobileHomePage, MobileLookupPage, MobilePickListPage, MobilePickPage, MobileQueuePage } from './pages/mobile/Scanner';
 import { DispatchQueuePage, ShipmentChallanPage, ShipmentDetailPage, ShipmentsPage, TransportersPage } from './pages/logistics/Dispatch';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
 import { DowntimePage, PackingLabelsPage, PackingRunDetailPage, PackingRunsPage, ProductionDashboardPage, VerifyPage } from './pages/production/Packing';
@@ -48,6 +49,12 @@ function Protected({ perm, children }: { perm?: string; children: JSX.Element })
   return children;
 }
 
+/** Signed in while on /login: go where the user was heading (same-site paths only). */
+function AfterLogin() {
+  const next = new URLSearchParams(useLocation().search).get('next') ?? '/';
+  return <Navigate to={next.startsWith('/') && !next.startsWith('//') ? next : '/'} replace />;
+}
+
 export function App() {
   const { me, loading } = useAuth();
   const loc = useLocation();
@@ -74,12 +81,17 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="/login" element={<AfterLogin />} />
       <Route path="qc/inspections/:id/coa" element={<Protected perm="qc.inspection:view"><CoaPrintPage /></Protected>} />
       <Route path="production/packing/:id/labels" element={<Protected perm="mfg.packing:view"><PackingLabelsPage /></Protected>} />
       <Route path="sales/quotations/:id/print" element={<Protected perm="sales.quotation:view"><QuotationPrintPage /></Protected>} />
       <Route path="stores/returns/:id/print" element={<Protected perm="purchase.return:view"><ReturnPrintPage /></Protected>} />
       <Route path="purchase/orders/:id/print" element={<Protected perm="purchase.order:view"><PurchaseOrderPrintPage /></Protected>} />
+      <Route path="m" element={<MobileHomePage />} />
+      <Route path="m/pick" element={<Protected perm="logistics.shipment:pick"><MobilePickListPage /></Protected>} />
+      <Route path="m/pick/:id" element={<Protected perm="logistics.shipment:pick"><MobilePickPage /></Protected>} />
+      <Route path="m/lookup" element={<MobileLookupPage />} />
+      <Route path="m/queue" element={<MobileQueuePage />} />
       <Route path="finance/invoices/:id/print" element={<Protected perm="sales.invoice:view"><SalesInvoicePrintPage /></Protected>} />
       <Route path="finance/credit-notes/:id/print" element={<Protected perm="sales.credit_note:view"><CreditNotePrintPage /></Protected>} />
       <Route path="logistics/shipments/:id/challan" element={<Protected perm="logistics.shipment:view"><ShipmentChallanPage /></Protected>} />

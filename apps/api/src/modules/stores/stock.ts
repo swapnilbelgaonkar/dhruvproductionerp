@@ -3,12 +3,44 @@ import type { Db } from '../../db/pool';
 import { Errors } from '../../lib/errors';
 import { asyncHandler, pageParams, str } from '../../lib/http';
 import { requirePermission } from '../../middleware/auth';
+import { can } from '../../middleware/context';
 
 const P = 'inv.stock:view';
 
 /** Stock views over the append-only ledger (INV-001…): balances by bucket, lots with their history and origin. */
 export function stockRoutes(db: Db) {
   const r = Router();
+
+  /**
+   * Scan lookup for the mobile scanner (D09): a box serial, the QR link printed on a box label, or a lot number.
+   * Open to stores, dispatch and packing roles; returns what the code is, where it stands and what can be done with it.
+   */
+  r.get('/scan/:code', asyncHandler(async (req, res) => {
+    if (!['inv.stock:view', 'logistics.shipment:view', 'mfg.packing:view'].some((p) => can(req, p))) throw Errors.forbidden(P);
+    const raw = decodeURIComponent(req.params.code!).trim();
+    const code = (/\/verify\/([^/?#\s]+)/.exec(raw)?.[1] ?? raw).trim();
+    if (!code || code.length > 120) throw Errors.validation({ code: 'Scan a box or lot code' });
+    const stock = async (lotId: string) => (await db.query(`select w.code as warehouse, sl.bucket, sum(sl.qty) as qty from inv.stock_ledger sl join org.warehouses w on w.id = sl.warehouse_id
+        where sl.lot_id = $1 group by w.code, sl.bucket having sum(sl.qty) <> 0 order by w.code, sl.bucket`, [lotId])).rows;
+    const box = (await db.query(`select b.id, b.serial, b.units, b.status, b.created_at as "packedAt", ip.pack_size as "packSize", ip.pack_uom as "packUom", ip.container,
+        lt.id as "lotId", lt.lot_no as "lotNo", lt.qc_status as "qcStatus", lt.mfg_date as "mfgDate", lt.expiry_date as "expiryDate", i.code as "itemCode", i.name as "itemName",
+        pr.doc_no as "packingRun", s.id as "shipmentId", s.doc_no as "shipmentNo", s.status as "shipmentStatus"
+        from inv.boxes b join mdm.item_packs ip on ip.id = b.item_pack_id join inv.lots lt on lt.id = b.lot_id join mdm.items i on i.id = lt.item_id
+        join mfg.packing_runs pr on pr.id = b.packing_run_id left join logistics.shipments s on s.id = b.shipment_id where upper(b.serial) = upper($1)`, [code])).rows[0];
+    if (box) {
+      const dispatchable = box.status === 'Packed' && !box.shipmentId && box.qcStatus === 'Released';
+      return res.json({ kind: 'box', code, box, stock: await stock(box.lotId),
+        verdict: dispatchable ? 'Ready to dispatch' : box.status === 'Dispatched' ? `Dispatched on ${box.shipmentNo}` : box.shipmentId ? `On shipment ${box.shipmentNo}`
+          : box.qcStatus !== 'Released' ? `Lot ${box.qcStatus === 'Quarantine' ? 'not released by QA' : String(box.qcStatus).toLowerCase()} — do not dispatch` : box.status });
+    }
+    const lot = (await db.query(`select lt.id as "lotId", lt.lot_no as "lotNo", lt.qc_status as "qcStatus", lt.qa_disposition as "qaDisposition", lt.mfg_date as "mfgDate", lt.expiry_date as "expiryDate",
+        lt.vendor_lot_no as "vendorLotNo", i.code as "itemCode", i.name as "itemName", i.base_uom as uom,
+        (select count(*)::int from inv.boxes b where b.lot_id = lt.id and b.status = 'Packed' and b.shipment_id is null) as "boxesReady"
+        from inv.lots lt join mdm.items i on i.id = lt.item_id where upper(lt.lot_no) = upper($1)`, [code])).rows[0];
+    if (lot) return res.json({ kind: 'lot', code, lot, stock: await stock(lot.lotId),
+      verdict: lot.qcStatus === 'Released' ? 'Released for use' : lot.qcStatus === 'Quarantine' ? 'In quarantine — awaiting QC/QA' : lot.qcStatus });
+    throw Errors.notFound(`Box or lot ${code}`);
+  }));
 
   // per item and warehouse: quarantine / unrestricted / rejected / blocked quantities and value
   r.get('/balances', requirePermission(P), asyncHandler(async (req, res) => {

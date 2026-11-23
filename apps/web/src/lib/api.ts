@@ -11,12 +11,12 @@ export class ApiError extends Error {
   }
 }
 
-function csrfToken(): string {
+export function csrfToken(): string {
   const m = document.cookie.match(/(?:^|; )dcsrf=([^;]+)/);
   return m ? decodeURIComponent(m[1]!) : '';
 }
 
-export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<T> {
   const method = init.method ?? (init.body !== undefined ? 'POST' : 'GET');
   const res = await fetch(`/api/v1${path}`, {
     method,
@@ -24,6 +24,7 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
     headers: {
       ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
       ...(method !== 'GET' ? { 'x-csrf-token': csrfToken() } : {}),
+      ...(init.headers ?? {}),
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : method !== 'GET' ? '{}' : undefined,
   });

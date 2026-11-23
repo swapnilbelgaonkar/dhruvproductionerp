@@ -4,7 +4,7 @@ Stage 7 parts:
 
 1. Management dashboard and reports — **done**
 2. Alerts and escalations — **done** (in-app; e-mail, WhatsApp and scheduled e-mailed reports follow D11)
-3. Mobile PWA and offline scanning (D09)
+3. Mobile PWA and offline scanning (D09) — **done**
 4. Statutory and bank integrations: e-invoice IRN, e-way bill, GST filing through the GSP (D27), bank payment files, TDS
 
 ## Part 1 — Management dashboard and reports (BRD p.6, p.19; MP §19; MIS-001…MIS-004, MIS-007, MIS-008)
@@ -63,7 +63,7 @@ Stage 7 parts:
   - **Approval escalation.** A credit-note approval 30 h past its SLA alerts the finance head as critical. After 25 h unacknowledged it escalates to the finance head's reporting manager, who sees it on their alerts page. Approving the credit note resolves it.
   - **Receivable rules.** An invoice 10 days overdue raises "Payment overdue 10 days" and the dealer-freeze alert.
   - **Configuration.** Only the administrator can open the rules. An unknown role or setting is refused. Switching the rule off clears its alerts.
-- Totals: **88 API + 4 contract tests passing**. Typecheck clean.
+- Totals at the end of part 2: 88 API + 4 contract tests passing. Typecheck clean.
 - Browser run (local, [SAMPLE] data):
   1. The checks found three real overdue approvals in the demo data.
   2. Widening "Stock nearing expiry" to 730 days raised alerts for six lots, which reached the stores head. The stores head acknowledged one with a note.
@@ -73,3 +73,33 @@ Stage 7 parts:
 - **E-mail, SMS and WhatsApp delivery**, and **scheduled e-mailed reports**: the channel and provider are open in D11. The rule and recipient model is channel-ready.
 - **Reminders to dealers themselves** (payment reminders by WhatsApp): needs the D11 channel and dealer consent.
 - **Low-stock / reorder alerts**: items have no reorder levels yet. They will be added with stock controls (D05, parked).
+
+## Part 3 — Mobile scanner, installable app and offline scanning (D09 recommendation: PWA + keyboard-wedge scanners)
+
+| Area | What works | RTM |
+|---|---|---|
+| Installable app | The portal is a PWA: manifest, icons, home-screen shortcuts (Pick for dispatch, Look up), standalone display, opening on the scanner. A service worker keeps the app itself on the phone, so it opens with no network. Data is never cached by the service worker: it always comes from the server | X08, D09 |
+| Mobile scanner (`/m`) | Full-screen, large touch targets, one task per screen: **Pick for dispatch**, **Look up**, **Scans to send**. Reached from the portal menu ("Mobile Scanner") or the home-screen icon. Signing in from the scanner returns to the scanner | D09 |
+| Scanner hardware | Keyboard-wedge scanners (rugged handhelds, ring scanners) type the code and Enter. Where the phone's browser can read barcodes (Chrome on Android), a **camera** button reads QR, Code 128/39, EAN-13 and Data Matrix. The box label's QR (the verification link) is understood as the box serial | D09 |
+| Feedback | A short high beep and a buzz for an accepted box; a low double buzz and a red message for a refused one (already scanned, wrong pack, lot not released, too many) | — |
+| Picking | Choose a planned shipment and scan boxes. Each line shows packs scanned against planned. Every server rule for picking still applies | LOG-002, LOG-003 |
+| Offline | Scans made without a network are kept on the phone and sent automatically when it is back (and every 20 seconds while any wait), oldest first. Each carries its own idempotency key, so a send whose reply was lost is replayed safely: the box is never picked twice. A scan is sent only under the sign-in of the person who made it. Shipments opened once stay readable offline. The "Scans to send" screen shows waiting, sent and refused scans | D09, PLT-004 |
+| Look up | Scan a box, a label QR or a lot number to see the product, contents, lot, QC status, expiry, packing run, shipment, stock by warehouse, and a plain verdict ("Ready to dispatch", "Lot not released by QA — do not dispatch", "On shipment DSP/…") | INV-001 |
+
+### Evidence
+- `apps/api/test/scan.test.ts`:
+  - **Look-up.** A box serial, the label's QR link and a lower-case lot number are all recognised. The verdict follows QA release (not released, then ready, then on shipment), and lot stock is shown. An unknown code returns not found; a role without stores, dispatch or packing access is refused.
+  - **Replay.** A queued pick sent twice with the same idempotency key is picked once, and the second answer is the replayed first.
+- Totals: **89 API + 4 contract tests passing**. Typecheck clean.
+- Browser run on an emulated Pixel 7 (local, [SAMPLE] data):
+  1. A sales executive raised SO/2026-27/000003 for 36 × 1 L. The TSM, accounts and the finance head (credit override) approved it, and logistics planned DSP/2026-27/000002.
+  2. The storekeeper signed in to the scanner and scanned one box online (accepted). A repeat scan of the same box was refused on the phone.
+  3. With the phone offline, the storekeeper scanned a label QR and another box. Both were saved and shown as waiting.
+  4. Back online, both were sent automatically and the shipment showed 36 of 36 packs.
+  5. Look-up showed a dispatched box ("Dispatched on DSP/2026-27/000001") and a released raw-material lot.
+- Production build checked: the service worker takes control, and with the network cut the app still opens from the phone.
+
+### Not built yet (part 3)
+- **More offline tasks** (goods receipt, stock count, issue to production): these work online in the portal on a phone. Offline versions follow once the device pilot (D09) shows which sites lose network.
+- **Native Android wrapper (Capacitor):** only if the device pilot needs features a PWA cannot reach.
+- **Look-up offline:** it needs the server, because stock changes all the time.

@@ -27,3 +27,8 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// offline app shell for the mobile scanner (D09); production builds only, so development always loads fresh code
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => undefined); });
+}

@@ -70,7 +70,7 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const logout = async () => { await api('/auth/logout', { method: 'POST' }); location.assign('/login'); };
+  const logout = async () => { await api('/auth/logout', { method: 'POST' }); try { localStorage.removeItem('dhruv.me'); } catch { /* ignore */ } location.assign('/login'); };
 
   return (
     <div className="min-h-screen bg-white">
