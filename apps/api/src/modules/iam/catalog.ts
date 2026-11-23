@@ -79,6 +79,7 @@ export const PERMISSIONS = [
   ...P('Finance', 'finance.gl', ['view', 'journal', 'post', 'lock', 'unlock'], 'general ledger (journal = draft manual journals; post = post or reverse them; lock and unlock accounting periods)'),
   ...P('Finance', 'finance.coa', ['manage'], 'the chart of accounts'),
   ...P('Finance', 'finance.gst', ['view'], 'GST summaries (GSTR-1 and GSTR-3B working)'),
+  ...P('Management', 'mis.executive', ['view'], 'the executive dashboard (company-wide KPIs)'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -151,9 +152,10 @@ const LOGISTICS_EXTRA: Record<string, string[]> = {
   PURCHASE_HEAD: ['finance.payable:view', 'finance.payment:view'],
   STOREKEEPER: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN], STORES_HEAD: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN],
   SCANNER_OPERATOR: ['logistics.shipment:view', 'logistics.shipment:pick', 'mfg.packing:view'],
-  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING, ...PAYING, ...GL_ACC], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel', ...PAYING, ...GL_HEAD],
-  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view', ...PAY_SEE, 'finance.gl:view', 'finance.gst:view'],
-  QA_HEAD: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'], QA_MANAGER: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'],
+  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING, ...PAYING, ...GL_ACC], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel', ...PAYING, ...GL_HEAD, 'mis.executive:view'],
+  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view', ...PAY_SEE, 'finance.gl:view', 'finance.gst:view', 'mis.executive:view'],
+  PLANT_HEAD: ['mis.executive:view'],
+  QA_HEAD: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide', 'mis.executive:view'], QA_MANAGER: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'],
 };
 const CRM_BASE = ['crm.lead:view', 'crm.lead:create', 'crm.lead:edit', 'crm.opportunity:view', 'crm.opportunity:create', 'crm.opportunity:edit', 'crm.activity:view', 'crm.activity:create'];
 const QUOTE_SALES = ['sales.price_list:view', 'sales.quotation:view', 'sales.quotation:create', 'sales.quotation:edit', 'sales.quotation:submit',
@@ -185,7 +187,7 @@ export const ROLES: RoleDef[] = [
     description: 'Approves policies, authority limits and privileged role grants (BRD Admins 01/02).',
     permissions: [...VIEW, 'iam.authority_limit:configure', 'sys.settings:configure', 'sys.number_series:configure', 'wf.policy:configure',
       'wf.policy:simulate', 'wf.approval:view_all', 'sys.dashboard:view_admin', 'sys.audit:verify', 'mdm.dealer:suspend', 'mdm.dealer:view_sensitive',
-      'finance.gl:view', 'finance.gl:unlock'] },
+      'finance.gl:view', 'finance.gl:unlock', 'mis.executive:view'] },
   { code: 'SECURITY_ADMIN', name: 'Security Administrator', department: 'IT', privileged: true, requiresMfa: true,
     description: 'Users, roles, sessions and audit forensics (BRD Admin 03). Role grants of privileged roles need executive approval.',
     permissions: ['iam.user:view', 'iam.user:create', 'iam.user:edit', 'iam.user:deactivate', 'iam.role:view', 'iam.role:configure',
@@ -201,7 +203,7 @@ export const ROLES: RoleDef[] = [
     permissions: [...VIEW, 'sys.audit:export', 'sys.audit:verify', 'wf.approval:view_all'] },
   // Business roles (doc 07 §3). Module permissions are added as each module is built.
   ...(['BH', 'NSM', 'DSM', 'ZSM', 'RSM', 'SASM', 'ASM', 'TSM', 'SE'] as const).map((t) => ({
-    code: `SALES_${t}`, name: `Sales — ${t}`, department: 'Sales', description: `Sales hierarchy tier ${t}`, permissions: [...ORG_VIEW, ...DEALER_SALES, ...tierCrm(t), 'logistics.shipment:view', ...BILL_SEE] })),
+    code: `SALES_${t}`, name: `Sales — ${t}`, department: 'Sales', description: `Sales hierarchy tier ${t}`, permissions: [...ORG_VIEW, ...DEALER_SALES, ...tierCrm(t), 'logistics.shipment:view', ...BILL_SEE, ...(['BH', 'NSM'].includes(t) ? ['mis.executive:view'] : [])] })),
   ...[
     ['MANAGEMENT_VIEWER', 'Management Viewer', 'Executive'], ['SALES_OPS', 'Sales Operations', 'Sales'], ['DOC_VERIFIER', 'Document Verifier', 'Compliance'],
     ['ACCOUNTS_EXEC', 'Accounts Executive', 'Finance'], ['CREDIT_CONTROLLER', 'Credit Controller', 'Finance'], ['FINANCE_HEAD', 'Finance Head', 'Finance'],
