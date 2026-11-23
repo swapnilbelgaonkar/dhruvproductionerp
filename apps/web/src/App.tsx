@@ -6,6 +6,7 @@ import { AgeingPage, CustomerReceiptDetailPage, CustomerReceiptsPage, StatementP
 import { FreightBillDetailPage, FreightBillsPage, PayablesAgeingPage, PaymentDetailPage, PaymentsPage, VendorLedgerPage } from './pages/finance/Payables';
 import { AccountLedgerPage, ChartOfAccountsPage, FinancialStatementsPage, GstPage, JournalDetailPage, JournalsPage, PeriodsPage, TrialBalancePage } from './pages/finance/Ledger';
 import { ExecutiveDashboardPage, ReportsPage, ReportViewerPage } from './pages/mis/Management';
+import { AlertRulesPage, AlertsPage } from './pages/admin/Alerts';
 import { DispatchQueuePage, ShipmentChallanPage, ShipmentDetailPage, ShipmentsPage, TransportersPage } from './pages/logistics/Dispatch';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
 import { DowntimePage, PackingLabelsPage, PackingRunDetailPage, PackingRunsPage, ProductionDashboardPage, VerifyPage } from './pages/production/Packing';
@@ -156,6 +157,8 @@ export function App() {
         <Route path="finance/vendor-ledger/:partyId" element={<Protected perm="finance.payable:view"><VendorLedgerPage /></Protected>} />
         <Route path="logistics/freight-bills" element={<Protected perm="logistics.freight_bill:view"><FreightBillsPage /></Protected>} />
         <Route path="logistics/freight-bills/:id" element={<Protected perm="logistics.freight_bill:view"><FreightBillDetailPage /></Protected>} />
+        <Route path="alerts" element={<AlertsPage />} />
+        <Route path="admin/alert-rules" element={<Protected perm="sys.alert:configure"><AlertRulesPage /></Protected>} />
         <Route path="dashboard/executive" element={<Protected perm="mis.executive:view"><ExecutiveDashboardPage /></Protected>} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="reports/:id" element={<ReportViewerPage />} />

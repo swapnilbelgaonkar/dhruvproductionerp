@@ -3,7 +3,7 @@
 Stage 7 parts:
 
 1. Management dashboard and reports — **done**
-2. Alerts, escalations and scheduled reports (email; WhatsApp after D11) — next
+2. Alerts and escalations — **done** (in-app; e-mail, WhatsApp and scheduled e-mailed reports follow D11)
 3. Mobile PWA and offline scanning (D09)
 4. Statutory and bank integrations: e-invoice IRN, e-way bill, GST filing through the GSP (D27), bank payment files, TDS
 
@@ -37,7 +37,7 @@ Stage 7 parts:
   - **CSV.** The file has a BOM, the header row, the data rows and a total line.
   - **Reconciliation.** Receivables in the ledger equal the sub-ledger at ₹5,040.
   - **Dashboard.** The six cards have status, formula and owner, and six months of trend. A sales executive is refused the dashboard. Lowering the overdue threshold in the setting turns the card red.
-- Totals: **86 API + 4 contract tests passing**. Typecheck clean.
+- Totals at the end of part 1: 86 API + 4 contract tests passing. Typecheck clean.
 - Browser run (local, [SAMPLE] data): the super admin opened the dashboard, the KPI dictionary, the catalogue, the order grid filtered to Approved, the CSV export, the posting reconciliation, quarantine ageing and stock. A sales executive sees 19 reports.
 
 ### Not built yet (part 1)
@@ -45,3 +45,31 @@ Stage 7 parts:
 - **Report builder (MIS-005):** Enterprise scope.
 - **Inventory adjustments, purchase price variance and training compliance reports:** stock adjustments need their approval rule (D05, parked); PPV and training compliance can be added on request.
 - **Departmental dashboards:** production and quality already have theirs. Sales, purchase, logistics and finance dashboards beyond the reports and the executive view wait for the KPI workshop (D23).
+
+## Part 2 — Alerts and escalations (BRD p.6, p.19; MP §19.4; NOT-001…NOT-006, WF-008)
+
+| Area | What works | RTM |
+|---|---|---|
+| Rule engine | Ten rules. Each turns a business condition into one alert per subject (approval step, instrument, lot, invoice, dealer, bill, PO, CAPA, shipment) and notifies in-app the person responsible plus the rule's roles. No repeat notifications on later checks | NOT-001 |
+| Life cycle | **Worsens:** due becomes overdue, severity rises to critical and everyone is told again. **Acknowledged** with a note: it stops escalating. **Escalated** if not acknowledged within the rule's hours: to the escalation roles and, where set, the reporting manager of the person responsible. **Resolves itself** when the condition clears (approved, calibrated, paid, received, delivered, closed) or the rule is switched off | NOT-002, WF-008 |
+| Rules | **Approval past its SLA:** to the approvers; escalates to their manager and the executive admin. **Calibration due:** 7 days ahead and overdue. **Stock nearing expiry:** 30 days. **Quarantine over 48 h** (BRD KPI). **Dealer payment due:** 3 days ahead to the sales owner; overdue to accounts as well, escalating to credit control and the finance head. **Dealer order-taking frozen** (D18). **Bill to pay due:** supplier invoices and freight bills. **Purchase order delivery late. CAPA overdue. POD pending:** 7 days | NOT-003 |
+| Configuration | Administrators switch each rule on or off and set its days or hours, the roles notified, the escalation hours and roles, and manager escalation. Unknown roles or settings are refused, and every change is audited. "Check now" runs all rules | NOT-004 |
+| Schedule | Hourly in the worker, alongside the existing licence-expiry, quotation-expiry and unacknowledged-PO checks. Each rule runs on its own, so one failure does not stop the rest | NOT-005 |
+| Alerts page | Each user sees the alerts sent or escalated to them: open, resolved or all, by area, with links to the record and acknowledgement. Administrators can switch to everyone's alerts. Alerts also arrive in the notification bell | NOT-006 |
+
+### Evidence
+- `apps/api/test/alerts.test.ts` has 2 tests:
+  - **Calibration life cycle.** Every rule runs on the full test database without failure. An instrument due in 3 days raises a warning to the QC manager and nobody else, and a second check does not repeat it. Overdue raises it to critical and it is re-sent. Once acknowledged it does not escalate even after 3 days. Calibrating the instrument resolves it.
+  - **Approval escalation.** A credit-note approval 30 h past its SLA alerts the finance head as critical. After 25 h unacknowledged it escalates to the finance head's reporting manager, who sees it on their alerts page. Approving the credit note resolves it.
+  - **Receivable rules.** An invoice 10 days overdue raises "Payment overdue 10 days" and the dealer-freeze alert.
+  - **Configuration.** Only the administrator can open the rules. An unknown role or setting is refused. Switching the rule off clears its alerts.
+- Totals: **88 API + 4 contract tests passing**. Typecheck clean.
+- Browser run (local, [SAMPLE] data):
+  1. The checks found three real overdue approvals in the demo data.
+  2. Widening "Stock nearing expiry" to 730 days raised alerts for six lots, which reached the stores head. The stores head acknowledged one with a note.
+  3. Setting the rule back to 30 days resolved all six.
+
+### Not built yet (part 2)
+- **E-mail, SMS and WhatsApp delivery**, and **scheduled e-mailed reports**: the channel and provider are open in D11. The rule and recipient model is channel-ready.
+- **Reminders to dealers themselves** (payment reminders by WhatsApp): needs the D11 channel and dealer consent.
+- **Low-stock / reorder alerts**: items have no reorder levels yet. They will be added with stock controls (D05, parked).

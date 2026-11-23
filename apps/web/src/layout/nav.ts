@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, Notebook, Books, ChartLine, CalendarX, ListNumbers, PresentationChart, FileCsv, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, Notebook, Books, ChartLine, CalendarX, ListNumbers, PresentationChart, FileCsv, BellRinging, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -10,6 +10,7 @@ export const NAV: NavGroup[] = [
     { to: '/approvals', label: 'Approvals', icon: CheckSquareOffset },
     { to: '/dashboard/executive', label: 'Executive Dashboard', icon: PresentationChart, perm: 'mis.executive:view' },
     { to: '/reports', label: 'Reports', icon: FileCsv },
+    { to: '/alerts', label: 'Alerts', icon: BellRinging },
   ] },
   { label: 'Sales', items: [
     { to: '/sales/leads', label: 'Leads', icon: Funnel, perm: 'crm.lead:view' },
@@ -103,6 +104,7 @@ export const NAV: NavGroup[] = [
     { to: '/admin/policies', label: 'Approval Policies', icon: FlowArrow, perm: 'wf.policy:view' },
     { to: '/admin/authority-limits', label: 'Authority Limits', icon: Scales, perm: 'iam.authority_limit:view' },
     { to: '/admin/number-series', label: 'Number Series', icon: Hash, perm: 'sys.number_series:view' },
+    { to: '/admin/alert-rules', label: 'Alert Rules', icon: Siren, perm: 'sys.alert:configure' },
     { to: '/admin/settings', label: 'Settings', icon: SlidersHorizontal, perm: 'sys.settings:view' },
     { to: '/admin/audit', label: 'Audit Log', icon: ClockCounterClockwise, perm: 'sys.audit:view' },
   ] },
