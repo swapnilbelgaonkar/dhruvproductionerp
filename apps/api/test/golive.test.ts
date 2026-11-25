@@ -268,3 +268,36 @@ OFFICE,${rep},2,${uniq('Rep')} Person,Nashik,Nashik,Office,${parts[0]} ${parts[2
     expect((await db.query(`select blood_group, education, designation from org.employees where id = $1`, [e.id])).rows[0]).toEqual({ blood_group: 'A+', education: 'BCom', designation: 'Senior Accounts Executive' });
   });
 });
+
+describe('Trading with dealers and vendors whose KYC is pending', () => {
+  afterAll(async () => { await db.query(`update sys.settings set value = 'false' where key = 'parties.allowPendingKyc'`); });
+  it('lets a Draft dealer or vendor be used while the switch is on, with a warning, and never a rejected one', async () => {
+    const { dealerEligibility } = await import('../src/modules/dealers/routes');
+    const { vendorEligibility } = await import('../src/modules/vendors/routes');
+    const { loadDealers } = await import('../src/db/load-dealers');
+    const { loadVendors } = await import('../src/db/load-vendors');
+    const dn = uniq('[TEST] Pending Dealer '); const vn = uniq('[TEST] Pending Vendor ');
+    await loadDealers(db, `sr_no,company,address,pincode,state,mobile_no,e_mail,gstin_uin,pan_no\n1,${dn},Market Yard,422003,Maharashtra,,,,\n`, { userId: null, label: 'test' });
+    await loadVendors(db, `group,name,address,state,pin_code,mobile_number,mail_id,gstin\nPacking Material Creditors,${vn},MIDC,Maharashtra,422010,,,\n`, { userId: null, label: 'test' });
+    const dealer = (await db.query(`select id from mdm.parties where legal_name = $1`, [dn])).rows[0].id;
+    const vendor = (await db.query(`select id from mdm.parties where legal_name = $1`, [vn])).rows[0].id;
+    const today = new Date().toISOString().slice(0, 10);
+    // switched off (the go-live setting): pending parties are refused
+    expect((await dealerEligibility(db, dealer, [], today)).reasons).toEqual(['Dealer is Draft']);
+    expect((await vendorEligibility(db, vendor, [], today)).reasons).toEqual(['Vendor is Draft', 'Bank account not verified']);
+    const ops = await userAgent([{ code: 'SALES_OPS' }]);
+    expect((await ops.get('/api/v1/dealers?usable=1&limit=100').expect(200)).body.data.map((x: { id: string }) => x.id)).not.toContain(dealer);
+    // switched on: usable, with a warning; ordering does not need the bank account yet
+    await db.query(`update sys.settings set value = 'true' where key = 'parties.allowPendingKyc'`);
+    expect(await dealerEligibility(db, dealer, [], today)).toEqual({ eligible: true, reasons: [], warnings: ['Dealer KYC pending (Draft)'] });
+    expect(await vendorEligibility(db, vendor, [], today)).toEqual({ eligible: true, reasons: [], warnings: ['Vendor KYC pending (Draft)', 'Bank account not verified'] });
+    expect((await ops.get(`/api/v1/dealers?usable=1&q=${encodeURIComponent(dn)}`).expect(200)).body.data.map((x: { id: string }) => x.id)).toEqual([dealer]);
+    // a rejected party stays out
+    await db.query(`select set_config('app.transition', 'on', false)`);
+    const c = await db.connect();
+    try { await c.query(`select set_config('app.transition', 'on', false)`); await c.query(`update mdm.dealer_profiles set status = 'Rejected' where party_id = $1`, [dealer]); } finally { c.release(); }
+    expect((await dealerEligibility(db, dealer, [], today)).reasons).toEqual(['Dealer is Rejected']);
+    const admin = await userAgent([{ code: 'EXEC_ADMIN' }]);
+    expect((await admin.get('/api/v1/golive').expect(200)).body.checks.find((x: { key: string }) => x.key === 'pendingKyc')).toMatchObject({ status: 'todo' });
+  });
+});

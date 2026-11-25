@@ -55,6 +55,7 @@ export async function buildQuote(dbx: Db | Tx, req: Request, d: Omit<QuoteInput,
   const shipTo = addr.find((a) => a.id === d.shipToId);
   if (!billTo || !['REGISTERED', 'BILLING'].includes(billTo.kind)) throw Errors.rule('INVALID_ADDRESS', 'Bill-to must be the dealer’s registered or billing address.');
   if (!shipTo) throw Errors.rule('INVALID_ADDRESS', 'Ship-to must be one of the dealer’s active addresses.');
+  if (!shipTo.state_code) throw Errors.rule('ADDRESS_NO_STATE', 'The ship-to address has no state, so GST cannot be worked out. Complete the dealer’s address first.');
   const interState = le.state_code !== shipTo.state_code;
 
   const warnings: string[] = [];
@@ -87,6 +88,7 @@ export async function buildQuote(dbx: Db | Tx, req: Request, d: Omit<QuoteInput,
       listRate: Number(price.rate), schemeDiscountPct: schemePct, extraDiscountPct: l.extraDiscountPct, gstRate, calc: c });
   }
   const eligibility = await dealerEligibility(dbx, d.partyId, [...licenceTypes], quoteDate);
+  warnings.push(...(eligibility.warnings ?? []));
   if (!eligibility.eligible) {
     if (strict) throw Errors.rule('DEALER_NOT_ELIGIBLE', `${dealer.legal_name} cannot be sold these products: ${eligibility.reasons.join('; ')}.`, eligibility);
     warnings.push(...eligibility.reasons);

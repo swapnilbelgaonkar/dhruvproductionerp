@@ -8,7 +8,7 @@ import { nextMasterCode } from '../../lib/numbering';
 import { getSetting } from '../../lib/settings';
 import { requirePermission } from '../../middleware/auth';
 import { actorOf, can, territoryScope } from '../../middleware/context';
-import { checklist, duplicates, identityChecks, kycDetailChecks, kycChecks, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
+import { checklist, duplicates, identityChecks, kycDetailChecks, usableStatuses, kycChecks, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
 import { registerSubjectHandler, submitForApproval, type ApprovalRequestRow } from '../workflow/engine';
 
 const P = (a: string) => `mdm.dealer:${a}`;
@@ -87,6 +87,8 @@ export function dealerRoutes(db: Db) {
     if (q) { args.push(`%${q}%`); where.push(`(p.code ilike $${args.length} or p.legal_name ilike $${args.length} or p.trade_name ilike $${args.length} or p.gstin ilike $${args.length} or p.mobile like $${args.length})`); }
     const status = str(req.query.status);
     if (status) { args.push(status); where.push(`dp.status = $${args.length}`); }
+    // usable=1: the dealers documents may be raised for (Active, and KYC-pending ones while parties.allowPendingKyc is on)
+    if (req.query.usable === '1') { args.push(await usableStatuses(db)); where.push(`dp.status = any($${args.length}::text[])`); }
     const rows = await db.query(
       `select p.id, p.code, p.legal_name as "legalName", p.trade_name as "tradeName", p.constitution, p.gstin, p.mobile,
               dp.dealer_category as "dealerCategory", dp.status, dp.credit_limit as "creditLimit", dp.credit_days as "creditDays",
@@ -240,7 +242,9 @@ export async function dealerEligibility(dbx: Db | Tx, partyId: string, licenceTy
   const d = (await dbx.query(`select status from mdm.dealer_profiles where party_id = $1`, [partyId])).rows[0];
   if (!d) return { eligible: false, reasons: ['Not a dealer'] };
   const reasons: string[] = [];
-  if (d.status !== 'Active') reasons.push(`Dealer is ${d.status}`);
+  const warnings: string[] = [];
+  if (!(await usableStatuses(dbx)).includes(d.status)) reasons.push(`Dealer is ${d.status}`);
+  else if (d.status !== 'Active') warnings.push(`Dealer KYC pending (${d.status})`);
   const lic = (await dbx.query(`select licence_type, valid_to, verification from mdm.party_licences where party_id = $1 and status = 'Active'`, [partyId])).rows;
   for (const t of licenceTypes) {
     const l = lic.find((x) => x.licence_type === t);
@@ -248,5 +252,5 @@ export async function dealerEligibility(dbx: Db | Tx, partyId: string, licenceTy
     else if (new Date(l.valid_to).toISOString().slice(0, 10) < onDate) reasons.push(`${t.toLowerCase()} licence expired`);
     else if (l.verification !== 'Verified') reasons.push(`${t.toLowerCase()} licence not verified`);
   }
-  return { eligible: reasons.length === 0, reasons };
+  return { eligible: reasons.length === 0, reasons, warnings };
 }

@@ -55,6 +55,12 @@ export async function identityChecks(dbx: Db | Tx, p: { id: string; gst_register
   add('dup', `No other ${opts.noun} with the same GSTIN or PAN`, dups.length === 0, dups.length ? dups.map((d) => `${d.code} (${d.matches.join(', ')})`).join('; ') : undefined);
 }
 
+/** Statuses a dealer or vendor may have and still be traded with: Active, plus Draft/Submitted while parties.allowPendingKyc is on. */
+export async function usableStatuses(dbx: Db | Tx): Promise<string[]> {
+  const r = (await dbx.query(`select value from sys.settings where key = 'parties.allowPendingKyc'`)).rows[0];
+  return r?.value === true ? ['Active', 'Draft', 'Submitted'] : ['Active'];
+}
+
 /** Fields an imported Draft may lack: identity details and a complete registered address (enforced on submission). */
 export async function kycDetailChecks(dbx: Db | Tx, p: { id: string; constitution: string | null; pan: string | null; contact_person: string | null; mobile: string | null }, add: AddCheck) {
   const missing = [!p.constitution && 'constitution', !p.pan && 'PAN', !p.contact_person && 'contact person', !p.mobile && 'mobile number'].filter(Boolean);

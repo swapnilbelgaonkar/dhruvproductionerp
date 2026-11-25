@@ -15,5 +15,7 @@ export default async function setup() {
   await c2.query(`update sys.settings set value = 'false' where key = 'mfg.lineClearance.required'`);
   // two-factor ships switched off until go-live (0031); the sign-in suites test it switched on
   await c2.query(`update sys.settings set value = 'true' where key = 'auth.mfa.enforced'`);
+  // the suites test the strict rule (approved dealers and vendors only); the KYC-pending switch has its own test
+  await c2.query(`update sys.settings set value = 'false' where key = 'parties.allowPendingKyc'`);
   await c2.end();
 }

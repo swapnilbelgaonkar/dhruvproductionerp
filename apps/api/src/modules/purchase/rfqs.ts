@@ -11,6 +11,7 @@ import { requirePermission } from '../../middleware/auth';
 import { actorOf, can, inLegalEntityScope, legalEntityScope } from '../../middleware/context';
 import { todayIST } from '../sales/quotations';
 import { vendorEligibility } from '../vendors/routes';
+import { usableStatuses } from '../parties/shared';
 import { createPurchaseOrder } from './orders';
 
 const SUBJECT = 'purchase.rfq';
@@ -131,7 +132,7 @@ export function rfqRoutes(db: Db) {
     for (const v of d.vendorIds) {
       const vp = (await tx.query(`select p.code, vp.status, (select count(*)::int from mdm.vendor_items vi where vi.party_id = p.id and vi.status = 'Active' and vi.item_id = any($2::uuid[])) as approved
                                     from mdm.parties p join mdm.vendor_profiles vp on vp.party_id = p.id where p.id = $1`, [v, d.lines.map((l) => l.itemId)])).rows[0];
-      if (vp?.status !== 'Active') throw Errors.rule('VENDOR_NOT_ACTIVE', 'Only active vendors can be invited.');
+      if (!vp || !(await usableStatuses(tx)).includes(vp.status)) throw Errors.rule('VENDOR_NOT_ACTIVE', 'Only active vendors (or, while allowed, vendors with KYC pending) can be invited.');
       if (!vp.approved) throw Errors.rule('VENDOR_NOT_APPROVED', `${vp.code} is not approved for any of these items.`);
     }
     return lines;

@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { usableStatuses } from '../parties/shared';
 import { z } from 'zod';
 import {
   activityCompleteSchema, activitySchema, bantSchema, leadDisqualifySchema, leadSchema, leadTransferSchema, OPEN_STAGES, opportunitySchema,
@@ -285,6 +286,7 @@ export function crmRoutes(db: Db) {
       const me = await myEmployee(tx, req);
       const p = (await tx.query(`select p.id, p.legal_name, dp.territory_id, dp.status from mdm.parties p join mdm.dealer_profiles dp on dp.party_id = p.id where p.id = $1`, [d.partyId])).rows[0];
       if (!p) throw Errors.rule('REFERENCE_INVALID', 'Choose a registered dealer.');
+      if (!p.territory_id) throw Errors.rule('DEALER_NO_TERRITORY', `${p.legal_name} has no territory yet; set it on the dealer first.`);
       if (!(await inTerritoryScope(tx, req, 'crm.opportunity:create', p.territory_id))) throw Errors.forbidden('crm.opportunity:create in this territory');
       const code = await nextMasterCode(tx, 'OPP_CODE');
       const o = (await tx.query(
@@ -337,7 +339,7 @@ export function crmRoutes(db: Db) {
       if (s.stage === 'WON') {
         if (!o.partyId) throw Errors.rule('DEALER_REQUIRED', 'Link the registered dealer before marking the opportunity won. Register them first if they are new.');
         const st = (await tx.query(`select status from mdm.dealer_profiles where party_id = $1`, [o.partyId])).rows[0];
-        if (st?.status !== 'Active') throw Errors.rule('DEALER_NOT_ACTIVE', `The linked dealer is ${st?.status ?? 'not registered'}; an opportunity is won only with an active dealer.`);
+        if (!st || !(await usableStatuses(tx)).includes(st.status)) throw Errors.rule('DEALER_NOT_ACTIVE', `The linked dealer is ${st?.status ?? 'not registered'}; an opportunity is won only with an active dealer.`);
       }
       const probs = await getSetting<Record<string, number>>(tx, 'crm.stageProbability', {});
       const closed = s.stage === 'WON' || s.stage === 'LOST';

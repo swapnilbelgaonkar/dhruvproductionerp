@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { usableStatuses } from '../parties/shared';
 import { z } from 'zod';
 import { reasonSchema, requisitionSchema } from '@dhruv/contracts';
 import { allowTransition, withTx, type Actor, type Db, type Tx } from '../../db/pool';
@@ -92,7 +93,7 @@ export function requisitionRoutes(db: Db) {
       if (l.requiredBy && l.requiredBy < today) throw Errors.rule('INVALID_DATE', `Line ${n}: the required-by date cannot be in the past.`);
       if (l.suggestedVendorId) {
         const v = (await tx.query(`select status from mdm.vendor_profiles where party_id = $1`, [l.suggestedVendorId])).rows[0];
-        if (v?.status !== 'Active') throw Errors.rule('REFERENCE_NOT_ACTIVE', `Line ${n}: the suggested vendor must be an active vendor.`);
+        if (!v || !(await usableStatuses(tx)).includes(v.status)) throw Errors.rule('REFERENCE_NOT_ACTIVE', `Line ${n}: the suggested vendor must be an active vendor.`);
       }
       lines.push({ ...l, lineNo: n, uom: item.base_uom as string });
     }

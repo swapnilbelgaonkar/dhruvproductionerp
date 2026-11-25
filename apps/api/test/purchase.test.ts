@@ -59,7 +59,7 @@ describe('Vendor onboarding (BRD §3.2, MDM-011/016)', () => {
     await approve(f.fh, appr).expect(200);
     d = (await f.pe.get(`/api/v1/vendors/${v.id}`).expect(200)).body;
     expect(d.status).toBe('Active');
-    expect(await vendorEligibility(db, v.id, [f.rm], todayIST())).toEqual({ eligible: true, reasons: [] });
+    expect(await vendorEligibility(db, v.id, [f.rm], todayIST())).toEqual({ eligible: true, reasons: [], warnings: [] });
     expect((await vendorEligibility(db, v.id, [f.pm], todayIST())).reasons).toEqual(['Not approved for 1 of the items']);
 
     // a changed bank account must be verified again before the vendor can be paid or ordered from

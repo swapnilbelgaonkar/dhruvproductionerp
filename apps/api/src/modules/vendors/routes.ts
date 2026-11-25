@@ -10,7 +10,7 @@ import { nextMasterCode } from '../../lib/numbering';
 import { getSetting } from '../../lib/settings';
 import { requirePermission } from '../../middleware/auth';
 import { actorOf, can } from '../../middleware/context';
-import { assertPartyDoc, checklist, duplicates, identityChecks, kycChecks, kycDetailChecks, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
+import { assertPartyDoc, checklist, duplicates, identityChecks, kycChecks, kycDetailChecks, usableStatuses, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
 import { registerSubjectHandler, submitForApproval } from '../workflow/engine';
 
 const P = (a: string) => `mdm.vendor:${a}`;
@@ -60,9 +60,14 @@ export async function vendorEligibility(dbx: Db | Tx, partyId: string, itemIds: 
   const v = (await dbx.query(`select status, licence_types from mdm.vendor_profiles where party_id = $1`, [partyId])).rows[0];
   if (!v) return { eligible: false, reasons: ['Not a vendor'] };
   const reasons: string[] = [];
-  if (v.status !== 'Active') reasons.push(`Vendor is ${v.status}`);
+  const warnings: string[] = [];
+  const usable = await usableStatuses(dbx);
+  const pending = v.status !== 'Active' && usable.includes(v.status);
+  if (!usable.includes(v.status)) reasons.push(`Vendor is ${v.status}`);
+  else if (pending) warnings.push(`Vendor KYC pending (${v.status})`);
   const bank = (await dbx.query(`select verification from mdm.party_bank_accounts where party_id = $1 and status = 'Active'`, [partyId])).rows[0];
-  if (bank?.verification !== 'Verified') reasons.push('Bank account not verified');
+  // a KYC-pending vendor can be ordered from; paying still needs a verified bank account (checked when the payment is submitted)
+  if (bank?.verification !== 'Verified') (pending ? warnings : reasons).push('Bank account not verified');
   const lic = (await dbx.query(`select licence_type, valid_to, verification from mdm.party_licences where party_id = $1 and status = 'Active'`, [partyId])).rows;
   for (const t of v.licence_types as string[]) {
     const l = lic.find((x) => x.licence_type === t);
@@ -73,9 +78,9 @@ export async function vendorEligibility(dbx: Db | Tx, partyId: string, itemIds: 
   if (itemIds.length) {
     const ok = new Set((await dbx.query(`select item_id from mdm.vendor_items where party_id = $1 and status = 'Active' and item_id = any($2::uuid[])`, [partyId, itemIds])).rows.map((x) => x.item_id));
     const missing = itemIds.filter((i) => !ok.has(i));
-    if (missing.length) reasons.push(`Not approved for ${missing.length} of the items`);
+    if (missing.length) (pending ? warnings : reasons).push(`Not approved for ${missing.length} of the items`);
   }
-  return { eligible: reasons.length === 0, reasons };
+  return { eligible: reasons.length === 0, reasons, warnings };
 }
 
 export function vendorRoutes(db: Db, cfg: Config) {
@@ -106,6 +111,7 @@ export function vendorRoutes(db: Db, cfg: Config) {
     if (q) { args.push(`%${q}%`); where.push(`(p.code ilike $${args.length} or p.legal_name ilike $${args.length} or p.trade_name ilike $${args.length} or p.gstin ilike $${args.length} or p.mobile like $${args.length})`); }
     const status = str(req.query.status);
     if (status) { args.push(status); where.push(`vp.status = $${args.length}`); }
+    if (req.query.usable === '1') { args.push(await usableStatuses(db)); where.push(`vp.status = any($${args.length}::text[])`); }
     const item = str(req.query.itemId);
     if (item) { args.push(item); where.push(`exists (select 1 from mdm.vendor_items vi where vi.party_id = p.id and vi.item_id = $${args.length} and vi.status = 'Active')`); }
     const rows = await db.query(

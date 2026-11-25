@@ -232,7 +232,7 @@ interface Cmp { id: string; docNo: string; partyId: string | null; partyName: st
   loggedBy: string; createdAt: string; closedBy: string | null; closedAt: string | null; recallId: string | null }
 export function ComplaintsPage() {
   const { can } = useAuth();
-  const dealers = useQuery({ queryKey: ['dealers-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/dealers?status=Active&limit=100').catch(() => ({ data: [], total: 0 })) });
+  const dealers = useQuery({ queryKey: ['dealers-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/dealers?usable=1&limit=100').catch(() => ({ data: [], total: 0 })) });
   return <Register<Cmp> title="Complaints" subtitle="Dealer and farmer complaints, traced to the lot from the box label, investigated by QA and linked to CAPA and recall." path="/qa/complaints" queryKey="qa-complaints"
     rowHref={(r) => `/qa/complaints/${r.id}`} createLabel="Log complaint" canCreate={can('qa.complaint:create')} empty="No complaints."
     columns={[{ h: 'Complaint', c: (r) => <span className="font-semibold num">{r.docNo}</span> }, { h: 'Dealer', c: (r) => r.partyName ?? '—' }, { h: 'Product / lot', c: (r) => [r.itemCode, r.lotNo].filter(Boolean).join(' · ') || '—' },

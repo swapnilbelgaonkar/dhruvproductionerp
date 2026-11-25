@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { usableStatuses } from '../parties/shared';
 import type { Db } from '../../db/pool';
 import { Errors } from '../../lib/errors';
 import { asyncHandler } from '../../lib/http';
@@ -475,8 +476,8 @@ export function reportRoutes(db: Db) {
       case 'territories': return q(`select t.id as value, repeat('  ', greatest(nlevel(t.path) - 1, 0)) || t.name as label from org.territories t where t.status = 'Active' order by t.path`);
       case 'categories': return q(`select id as value, name as label from mdm.product_categories where status = 'Active' order by name`);
       case 'items': return q(`select id as value, code || ' ' || name as label from mdm.items where status = 'Active' order by code limit 500`);
-      case 'dealers': return q(`select p.id as value, p.legal_name as label from mdm.dealer_profiles d join mdm.parties p on p.id = d.party_id where d.status = 'Active' order by 2`);
-      case 'vendors': return q(`select p.id as value, p.legal_name as label from mdm.vendor_profiles v join mdm.parties p on p.id = v.party_id where v.status = 'Active' order by 2`);
+      case 'dealers': return q(`select p.id as value, p.legal_name as label from mdm.dealer_profiles d join mdm.parties p on p.id = d.party_id where d.status = any($1::text[]) order by 2`, [await usableStatuses(db)]);
+      case 'vendors': return q(`select p.id as value, p.legal_name as label from mdm.vendor_profiles v join mdm.parties p on p.id = v.party_id where v.status = any($1::text[]) order by 2`, [await usableStatuses(db)]);
       case 'transporters': return q(`select id as value, name as label from logistics.transporters where status = 'Active' order by name`);
     }
   }

@@ -56,7 +56,7 @@ function ReceiptDialog({ partyId, onClose }: { partyId: string | null; onClose: 
   const nav = useNavigate();
   const toast = useToast();
   const entities = useQuery({ queryKey: ['legal-entities-active'], queryFn: () => api<Page<{ id: string; code: string; name: string }>>('/legal-entities?status=Active&limit=100') });
-  const dealers = useQuery({ queryKey: ['dealers-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/dealers?status=Active&limit=100') });
+  const dealers = useQuery({ queryKey: ['dealers-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/dealers?usable=1&limit=100') });
   const [f, setF] = useState({ legalEntityId: '', partyId: partyId ?? '', receiptDate: today(), mode: 'NEFT', reference: '', instrumentDate: '', draweeBank: '', depositAccount: '', amount: '', remarks: '' });
   const [how, setHow] = useState<'auto' | 'choose' | 'none'>('auto');
   const [split, setSplit] = useState<Record<string, string>>({});

@@ -159,7 +159,7 @@ export function AuditsPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['qa-audits'], queryFn: () => api<{ data: Audit[] }>('/qa/audits') });
-  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<{ data: { id: string; code: string; legalName: string }[] }>('/vendors?status=Active&limit=100').catch(() => ({ data: [] })) });
+  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<{ data: { id: string; code: string; legalName: string }[] }>('/vendors?usable=1&limit=100').catch(() => ({ data: [] })) });
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ auditType: 'INTERNAL', title: '', scope: '', partyId: '', auditor: '', plannedDate: plusDays(7) });
   const [error, setError] = useState<unknown>(null);

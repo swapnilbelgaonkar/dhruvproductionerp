@@ -57,7 +57,7 @@ function PaymentDialog({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   const qc = useQueryClient();
   const entities = useQuery({ queryKey: ['legal-entities-active'], queryFn: () => api<Page<{ id: string; code: string; name: string }>>('/legal-entities?status=Active&limit=100') });
-  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/vendors?status=Active&limit=100') });
+  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/vendors?usable=1&limit=100') });
   const trs = useQuery({ queryKey: ['transporters'], queryFn: () => api<{ data: { id: string; code: string; name: string; status: string }[] }>('/shipments/transporters').catch(() => ({ data: [] })) });
   const [f, setF] = useState({ legalEntityId: '', payeeType: 'VENDOR', payeeId: '', paymentDate: today(), mode: 'NEFT', fromAccount: '', tdsSection: '', tdsAmount: '', tdsReason: '', remarks: '' });
   const [override, setOverride] = useState(false);

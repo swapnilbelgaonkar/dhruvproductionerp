@@ -73,6 +73,7 @@ export async function buildPo(tx: Db | Tx, req: Request, d: PoInput, poDate: str
   const interState = vendorState !== wh.state_code;
   const warnings: string[] = [];
   const elig = await vendorEligibility(tx, d.partyId, d.lines.map((l) => l.itemId), poDate);
+  warnings.push(...(elig.warnings ?? []));
   if (!elig.eligible) {
     if (strict) throw Errors.rule('VENDOR_NOT_ELIGIBLE', `${v.legal_name} cannot be ordered from: ${elig.reasons.join('; ')}.`, elig);
     warnings.push(...elig.reasons);

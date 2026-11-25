@@ -68,6 +68,11 @@ export function goliveRoutes(db: Db, cfg: Config) {
         (select count(*) from sales.price_lists where status = 'Active')::int as prices`);
     add({ key: 'masters', area: 'Data', title: 'Masters loaded and approved', status: masters.dealers && masters.vendors && masters.items && masters.prices ? 'ok' : 'todo',
       detail: `${masters.items} active items, ${masters.dealers} dealers, ${masters.vendors} vendors, ${masters.employees} employees, ${masters.prices} price lists`, fix: 'Administration → Import, then the normal approvals' });
+    const pendingOk = (await getSetting<boolean>(db, 'parties.allowPendingKyc', false)) === true;
+    const pend = await one(`select (select count(*) from mdm.dealer_profiles where status in ('Draft','Submitted'))::int as dealers, (select count(*) from mdm.vendor_profiles where status in ('Draft','Submitted'))::int as vendors`);
+    add({ key: 'pendingKyc', area: 'Data', title: 'Only approved dealers and vendors can be traded with', status: pendingOk ? 'todo' : 'ok',
+      detail: pendingOk ? `Switched on: ${pend.dealers} dealers and ${pend.vendors} vendors with KYC pending can be used in documents` : 'Dealers and vendors must be approved before documents are raised',
+      fix: 'Complete their onboarding, then Administration → Settings → parties.allowPendingKyc = false' });
     const tds = await one(`select count(*) filter (where status = 'Active')::int as active from fin.tds_sections`);
     add({ key: 'tds', area: 'Data', title: 'TDS sections with rates', status: tds.active ? 'ok' : 'todo', detail: `${tds.active} sections active`, fix: 'Finance → TDS' });
     const gst = await one(`select count(*)::int as n from mdm.tax_rates`).catch(() => ({ n: 0 }));

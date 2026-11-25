@@ -74,7 +74,7 @@ export function RequisitionFormPage() {
     queryFn: () => api<Page<{ id: string; code: string; name: string; type: string }>>(`/warehouses?status=Active&limit=100&legalEntityId=${h.legalEntityId}`) });
   const departments = useQuery({ queryKey: ['departments'], queryFn: () => api<{ data: { id: string; code: string; name: string; status: string }[] }>('/departments').catch(() => ({ data: [] })) });
   const items = useQuery({ queryKey: ['items-active'], queryFn: () => api<Page<{ id: string; code: string; name: string; itemType: string; baseUom: string }>>('/items?status=Active&limit=100') });
-  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/vendors?status=Active&limit=100').catch(() => ({ data: [], total: 0 })) });
+  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/vendors?usable=1&limit=100').catch(() => ({ data: [], total: 0 })) });
 
   useEffect(() => {
     if (loaded || !existing.data) return;

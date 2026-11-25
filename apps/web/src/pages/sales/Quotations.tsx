@@ -101,7 +101,7 @@ export function SalesDocFormPage({ kind }: { kind: DocKind }) {
   const defaults = useQuery({ queryKey: [kind, 'defaults'], queryFn: () => api<{ paymentTerms: string; deliveryTerms: string; validityDays?: number; today: string }>(`${cfg.api}/defaults`) });
   const [dealerSearch, setDealerSearch] = useState('');
   const dq = useDebounced(dealerSearch, 300);
-  const dealers = useQuery({ queryKey: ['dealers-active', dq], queryFn: () => api<Page<{ id: string; code: string; legalName: string; territory: string }>>(`/dealers?status=Active&limit=50&q=${encodeURIComponent(dq)}`) });
+  const dealers = useQuery({ queryKey: ['dealers-active', dq], queryFn: () => api<Page<{ id: string; code: string; legalName: string; territory: string }>>(`/dealers?usable=1&limit=50&q=${encodeURIComponent(dq)}`) });
   const entities = useQuery({ queryKey: ['legal-entities-active'], queryFn: () => api<Page<{ id: string; code: string; name: string; status: string }>>('/legal-entities?status=Active&limit=100') });
 
   const [h, setH] = useState({ partyId: params.get('partyId') ?? '', legalEntityId: '', billToId: '', shipToId: '', quoteDate: '', contactPerson: '', paymentTerms: '', deliveryTerms: '', notes: '',

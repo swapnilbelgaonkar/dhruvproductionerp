@@ -77,7 +77,7 @@ export function PurchaseOrderFormPage() {
   const existing = useQuery({ queryKey: ['purchase-order', id], enabled: editing, queryFn: () => api<PoDetail>(`/purchase-orders/${id}`) });
   const defaults = useQuery({ queryKey: ['po-defaults'], queryFn: () => api<{ deliveryTerms: string; acceptanceDays: number; today: string }>('/purchase-orders/defaults') });
   const entities = useQuery({ queryKey: ['legal-entities-active'], queryFn: () => api<Page<{ id: string; code: string; name: string }>>('/legal-entities?status=Active&limit=100') });
-  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string; paymentTermsDays: number }>>('/vendors?status=Active&limit=100') });
+  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string; paymentTermsDays: number }>>('/vendors?usable=1&limit=100') });
   const [h, setH] = useState({ partyId: '', legalEntityId: '', warehouseId: '', deliveryDate: '', paymentTermsDays: '30', deliveryTerms: '', notes: '', emergency: false });
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [loaded, setLoaded] = useState(false);

@@ -99,7 +99,7 @@ describe('Dealer onboarding (BRD §3.1, MP §6, DLR-001…015)', () => {
     expect(active.body.status).toBe('Active');
     expect(active.body.allowedActions).not.toContain('edit');
     const elig = await dealerEligibility(db, d.id, ['FERTILIZER', 'PESTICIDE'], inDays(0));
-    expect(elig).toEqual({ eligible: true, reasons: [] });
+    expect(elig).toEqual({ eligible: true, reasons: [], warnings: [] });
     const noBio = await dealerEligibility(db, d.id, ['BIOSTIMULANT'], inDays(0));
     expect(noBio.reasons).toContain('No biostimulant licence');
     const later = await dealerEligibility(db, d.id, ['FERTILIZER'], inDays(500));

@@ -64,7 +64,7 @@ export function RfqFormPage() {
   const existing = useQuery({ queryKey: ['rfq', id], enabled: editing, queryFn: () => api<RfqDetail>(`/rfqs/${id}`) });
   const entities = useQuery({ queryKey: ['legal-entities-active'], queryFn: () => api<Page<{ id: string; code: string; name: string }>>('/legal-entities?status=Active&limit=100') });
   const items = useQuery({ queryKey: ['items-active'], queryFn: () => api<Page<{ id: string; code: string; name: string; itemType: string; baseUom: string }>>('/items?status=Active&limit=100') });
-  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string; rating: string | null; itemCount: number }>>('/vendors?status=Active&limit=100') });
+  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string; rating: string | null; itemCount: number }>>('/vendors?usable=1&limit=100') });
   const [h, setH] = useState({ legalEntityId: '', warehouseId: '', responseDue: '', notes: '' });
   const [lines, setLines] = useState<DraftLine[]>([blank()]);
   const [invited, setInvited] = useState<string[]>([]);

@@ -132,8 +132,8 @@ function JournalDialog({ le, onClose }: { le: string; onClose: () => void }) {
   const nav = useNavigate();
   const toast = useToast();
   const accts = useAccounts();
-  const dealers = useQuery({ queryKey: ['dealers-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/dealers?status=Active&limit=100').catch(() => ({ data: [], total: 0 })) });
-  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/vendors?status=Active&limit=100').catch(() => ({ data: [], total: 0 })) });
+  const dealers = useQuery({ queryKey: ['dealers-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/dealers?usable=1&limit=100').catch(() => ({ data: [], total: 0 })) });
+  const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/vendors?usable=1&limit=100').catch(() => ({ data: [], total: 0 })) });
   const parties = [...(dealers.data?.data ?? []), ...(vendors.data?.data ?? [])];
   const [date, setDate] = useState(today());
   const [narration, setNarration] = useState('');

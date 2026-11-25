@@ -480,7 +480,7 @@ function CloseDialog({ opp, stage, onClose }: { opp: Opp; stage: 'WON' | 'LOST';
 }
 
 function useActiveDealers() {
-  return useQuery({ queryKey: ['dealers-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/dealers?limit=100&status=Active') });
+  return useQuery({ queryKey: ['dealers-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/dealers?limit=100&usable=1') });
 }
 
 function NewDealerOpportunityDialog({ onClose }: { onClose: () => void }) {
