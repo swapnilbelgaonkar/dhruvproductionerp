@@ -177,7 +177,7 @@ export function EmployeeDetailPage() {
           {(deact || e.allowedActions.includes('activate')) && <Button variant={deact ? 'danger' : 'primary'} onClick={() => setToggle(true)}>{deact ? 'Deactivate' : 'Activate'}</Button>}
         </>} />
       <div className="space-y-6">
-        <Card title="Details"><KeyValues items={[['Employee code', e.empCode], ['Sr. no. in staff list', e.serialNo], ['Designation', e.designation], ['Team', e.team], ['Headquarters', e.headquarters],
+        <Card title="Details"><KeyValues items={[['Employee name', e.fullName], ['Employee code', e.empCode], ['Sr. no. in staff list', e.serialNo], ['Designation', e.designation], ['Team', e.team], ['Headquarters', e.headquarters],
           ['District', e.district], ['Area', e.area], ['Email', e.email], ['Mobile', e.mobile], ['Department', e.departmentName], ['Sales tier', e.salesTier],
           ['Reports to', e.managerId ? <Link className="text-primary" to={`/masters/employees/${e.managerId}`}>{e.managerName}</Link> : '—'],
           ['Reporting to (as listed)', e.reportingTo], ['Territory', e.territoryName], ['User account', e.userEmail ?? 'None — no sign-in yet']]} /></Card>
