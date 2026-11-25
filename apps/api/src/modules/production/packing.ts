@@ -171,7 +171,7 @@ export function publicVerifyRoutes(db: Db, cfg: Config) {
          from inv.boxes b join inv.lots l on l.id = b.lot_id join mdm.items i on i.id = l.item_id join mdm.item_packs ip on ip.id = b.item_pack_id where b.serial = $1`, [req.params.serial])).rows[0];
     const sig = str(req.query.s) ?? '';
     if (!b || sig !== b.signature || sig !== boxSignature(cfg, b.serial, b.lot_no)) { res.json({ genuine: false }); return; }
-    res.json({ genuine: true, serial: b.serial, product: b.item_name, pack: `${Number(b.pack_size)} ${b.pack_uom} ${b.container}`, units: b.units, lotNo: b.lot_no,
+    res.json({ genuine: true, serial: b.serial, product: b.item_name, pack: `${Number(b.pack_size)} ${b.pack_uom}${b.container ? ` ${b.container}` : ''}`, units: b.units, lotNo: b.lot_no,
       mfgDate: b.mfg_date, expiryDate: b.expiry_date, released: b.qc_status === 'Released', status: b.status });
   }));
   return r;

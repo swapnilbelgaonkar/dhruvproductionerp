@@ -130,3 +130,41 @@ describe('Go-live: bulk import, opening balances, readiness and two-step verific
     await again.a.post('/api/v1/auth/mfa/verify').set('x-csrf-token', again.r.csrfToken).send({ recoveryCode: fresh[0] }).expect(200);
   });
 });
+
+describe('Company product list loader', () => {
+  it('reads pack sizes and category names the way the brochure writes them', async () => {
+    const { parsePacking } = await import('../src/modules/golive/imports');
+    const { categoryCode } = await import('../src/db/load-products');
+    expect(parsePacking('100gm, 250gm, 500gm & 1Kg')).toEqual({ packs: [{ code: '100G', size: 100, uom: 'G', base: 'KG' }, { code: '250G', size: 250, uom: 'G', base: 'KG' },
+      { code: '500G', size: 500, uom: 'G', base: 'KG' }, { code: '1KG', size: 1, uom: 'KG', base: 'KG' }] });
+    expect(parsePacking('250ml, 1Ltr & 5Ltr')).toMatchObject({ packs: [{ code: '250ML', uom: 'ML', base: 'L' }, { code: '1L', uom: 'L' }, { code: '5L', uom: 'L' }] });
+    expect(parsePacking('1600ml')).toMatchObject({ packs: [{ code: '1600ML', size: 1600 }] });
+    expect(parsePacking('a few bottles')).toEqual({ error: expect.stringContaining('not understood') });
+    const taken = new Set<string>();
+    expect(categoryCode('Chelated Micronutrient Fertilizers', taken)).toBe('CHELATED');
+    expect(categoryCode('CIB Reg. Insecticide Series', taken)).toBe('CIB-INSECTICIDE');
+    expect(categoryCode('100% Water Soluble Mixture Fertilizers', taken)).toBe('100-WATER-SOLUBLE');
+    expect(categoryCode('Chelated Micronutrient Fertilizers', taken)).toBe('CHELATED-2');
+  });
+
+  it('loads every column of a product row into a Draft item, leaving what the list does not give empty', async () => {
+    const { loadProducts } = await import('../src/db/load-products');
+    const name = uniq('[TEST] NEOFERT Zn-EDTA ');
+    const sr = String(900 + Math.floor(Math.random() * 99));
+    const csv = `Sr No,Category,Product Name,Active Ingredient / Type,Composition / Technical Content,Key Benefits / Uses,Advisory Dosage,Packing Available,FCO Grade (as marked in brochure),Brochure Page
+${sr},[TEST] Chelated Micronutrient Fertilizers,${name},"Zinc (Zn) 12%, EDTA chelated",Zn 12%,Reduces zinc deficiency.,Foliar: 0.5-1 g/L water,"100gm, 250gm & 1Kg",Not marked,7`;
+    await db.query(`delete from mdm.item_packs where item_id in (select id from mdm.items where code = $1)`, [`FG-${sr}`]);
+    await db.query(`delete from mdm.items where code = $1`, [`FG-${sr}`]);
+    const r = await loadProducts(db, csv, { userId: null, label: 'test' });
+    expect(r).toMatchObject({ ok: true, rows: 1 });
+    const it = (await db.query(`select i.*, c.name as cat from mdm.items i join mdm.product_categories c on c.id = i.category_id where i.code = $1`, [`FG-${sr}`])).rows[0];
+    expect(it).toMatchObject({ name, cat: '[TEST] Chelated Micronutrient Fertilizers', item_type: 'FG', status: 'Draft', base_uom: 'KG', active_ingredient: 'Zinc (Zn) 12%, EDTA chelated',
+      composition: 'Zn 12%', key_benefits: 'Reduces zinc deficiency.', advisory_dosage: 'Foliar: 0.5-1 g/L water', fco_grade: null, brochure_page: 7, hsn_id: null, shelf_life_days: null });
+    const packs = (await db.query(`select pack_code, container, units_per_box from mdm.item_packs where item_id = $1 order by pack_code`, [it.id])).rows;
+    expect(packs).toEqual([{ pack_code: '100G', container: null, units_per_box: 1 }, { pack_code: '1KG', container: null, units_per_box: 1 }, { pack_code: '250G', container: null, units_per_box: 1 }]);
+    // an incomplete product cannot be submitted for approval
+    const mdo = await userAgent([{ code: 'MASTER_DATA_OWNER' }]);
+    const sub = await mdo.post(`/api/v1/items/${it.id}/submit`, { version: it.version }).expect(422);
+    expect(sub.body.error.details.map((d: { field: string }) => d.field)).toEqual(expect.arrayContaining(['hsnId', 'shelfLifeDays']));
+  });
+});

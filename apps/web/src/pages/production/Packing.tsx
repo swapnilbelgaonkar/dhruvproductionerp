@@ -34,7 +34,7 @@ export function PackingRunsPage() {
               <tr key={r.id} className="border-b border-line last:border-0">
                 <td className="px-5 py-3"><Link className="font-semibold text-primary num" to={`/production/packing/${r.id}`}>{r.docNo}</Link></td>
                 <td className="px-3 py-3"><Link className="text-primary" to={`/stores/lots/${r.lotId}`}>{r.lotNo}</Link> <span className="text-ink-2">{r.itemCode}</span></td>
-                <td className="px-3 py-3">{fmtNum(n(r.packSize))} {r.packUom} {r.container}</td><td className="px-3 py-3 text-right num">{r.packsFilled} / {r.packsRejected}</td>
+                <td className="px-3 py-3">{fmtNum(n(r.packSize))} {r.packUom} {r.container ?? ''}</td><td className="px-3 py-3 text-right num">{r.packsFilled} / {r.packsRejected}</td>
                 <td className="px-3 py-3 text-right num">{r.boxCount}</td><td className="px-3 py-3 text-right num">{fmtINR(r.pmCost)}</td><td className="px-3 py-3">{r.postedBy}, {fmtDateTime(r.postedAt)}</td>
               </tr>))}</tbody>
           </table></div>
@@ -78,7 +78,7 @@ function PackingDialog({ lotId, onClose }: { lotId: string | null; onClose: () =
         <Field label="Lot to pack" htmlFor="pk-lot" required><Select id="pk-lot" value={f.lotId} onChange={(e) => setF({ ...f, lotId: e.target.value, itemPackId: '' })}><option value="">Select…</option>
           {(lots.data?.data ?? []).map((l) => <option key={l.id} value={l.id}>{l.lotNo} — {l.itemCode} · {fmtNum(n(l.onHand) - n(l.packed))} {l.uom} to pack · QC {l.qcStatus}</option>)}</Select></Field>
         <Field label="Pack" htmlFor="pk-pack" required><Select id="pk-pack" value={f.itemPackId} disabled={!lot} onChange={(e) => setF({ ...f, itemPackId: e.target.value })}><option value="">Select…</option>
-          {(lot?.packs ?? []).map((p) => <option key={p.id} value={p.id}>{fmtNum(p.packSize)} {p.packUom} {p.container} · {p.unitsPerBox} per box</option>)}</Select></Field>
+          {(lot?.packs ?? []).map((p) => <option key={p.id} value={p.id}>{fmtNum(p.packSize)} {p.packUom} {p.container ?? ''} · {p.unitsPerBox} per box</option>)}</Select></Field>
         <Field label="Packs filled" htmlFor="pk-filled" required hint={pack ? `${Math.ceil(filled / pack.unitsPerBox) || 0} boxes · ${fmtNum(left)} ${lot?.uom} left in the lot` : undefined}>
           <Input id="pk-filled" type="number" min="1" step="1" value={f.packsFilled} onChange={(e) => setF({ ...f, packsFilled: e.target.value })} /></Field>
         <div className="grid grid-cols-2 gap-3">
@@ -119,7 +119,7 @@ export function PackingRunDetailPage() {
   return (
     <>
       <PageHeader title={r.docNo} crumbs={<Link to="/production/packing" className="hover:text-primary">Packing</Link>}
-        subtitle={`${r.itemCode} — ${r.itemName} · lot ${r.lotNo} · ${fmtNum(n(r.packSize))} ${r.packUom} ${r.container}`}
+        subtitle={`${r.itemCode} — ${r.itemName} · lot ${r.lotNo} · ${fmtNum(n(r.packSize))} ${r.packUom} ${r.container ?? ''}`}
         actions={<Button icon={<Printer size={18} />} onClick={() => window.open(`/production/packing/${id}/labels`, '_blank')}>Print box labels</Button>} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card title="Run">
@@ -157,7 +157,7 @@ export function PackingLabelsPage() {
           <div className="h-28 w-28 shrink-0" dangerouslySetInnerHTML={{ __html: l.svg }} aria-label={`QR code for ${l.serial}`} />
           <div className="min-w-0">
             <p className="text-[14px] font-bold">{r.itemName}</p>
-            <p>{l.units} × {fmtNum(n(r.packSize))} {r.packUom} {r.container}</p>
+            <p>{l.units} × {fmtNum(n(r.packSize))} {r.packUom} {r.container ?? ''}</p>
             <p>Batch / lot <b>{r.lotNo}</b></p><p>Mfg {fmtDate(r.mfgDate)} · Exp {fmtDate(r.expiryDate)}</p>
             <p className="mt-1 font-mono text-[11px]">{l.serial}</p><p className="text-[10px]">Scan to check it is genuine</p>
           </div>

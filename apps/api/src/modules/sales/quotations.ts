@@ -70,7 +70,7 @@ export async function buildQuote(dbx: Db | Tx, req: Request, d: Omit<QuoteInput,
          from mdm.item_packs p join mdm.items i on i.id = p.item_id left join mdm.hsn_codes h on h.id = i.hsn_id
          left join mdm.product_categories c on c.id = i.category_id where p.id = $1`, [l.itemPackId])).rows[0];
     if (!p || p.status !== 'Active' || p.item_status !== 'Active' || p.item_type !== 'FG') throw Errors.rule('ITEM_NOT_SALEABLE', `Line ${lineNo}: choose an active finished-good pack.`);
-    const label = `${Number(p.pack_size)} ${p.pack_uom} ${p.container}`;
+    const label = `${Number(p.pack_size)} ${p.pack_uom}${p.container ? ` ${p.container}` : ''}`;
     const fixed = locked?.rates.get(p.id);
     if (locked && !fixed) throw Errors.rule('LINES_LOCKED', `Line ${lineNo}: ${p.code} is not on the quotation.`);
     const price = fixed ? { price_list_id: locked!.priceListId, rate: fixed.listRate, slabs: [] } : await priceFor(dbx, dealer.price_group, p.id, quoteDate);

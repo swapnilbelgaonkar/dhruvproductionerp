@@ -151,16 +151,19 @@ export function mdmRoutes(db: Db) {
 
   // ------------------------------------------------------------------ items (maker-checker lifecycle)
   const itemCols = { code: 'code', name: 'name', itemType: 'item_type', categoryId: 'category_id', baseUom: 'base_uom', hsnId: 'hsn_id', formulation: 'formulation',
-    shelfLifeDays: 'shelf_life_days', storageClass: 'storage_class', lotControlled: 'lot_controlled', serialControlled: 'serial_controlled', hazardous: 'hazardous' };
+    shelfLifeDays: 'shelf_life_days', storageClass: 'storage_class', lotControlled: 'lot_controlled', serialControlled: 'serial_controlled', hazardous: 'hazardous',
+    activeIngredient: 'active_ingredient', composition: 'composition', keyBenefits: 'key_benefits', advisoryDosage: 'advisory_dosage', fcoGrade: 'fco_grade', brochurePage: 'brochure_page' };
   r.use('/items', lifecycleRoutes(db, {
     resource: 'mdm.item', table: 'mdm.items', label: 'Item', schema: itemSchema, scopeColumn: null, columns: itemCols,
     select: `t.id, t.code, t.name, t.item_type as "itemType", t.category_id as "categoryId", c.name as "categoryName", c.licence_required as "licenceRequired",
              t.base_uom as "baseUom", t.hsn_id as "hsnId", h.code as "hsnCode", t.formulation, t.shelf_life_days as "shelfLifeDays", t.storage_class as "storageClass",
              t.lot_controlled as "lotControlled", t.serial_controlled as "serialControlled", t.hazardous, t.status, t.version,
+             t.active_ingredient as "activeIngredient", t.composition, t.key_benefits as "keyBenefits", t.advisory_dosage as "advisoryDosage", t.fco_grade as "fcoGrade", t.brochure_page as "brochurePage",
              t.created_at as "createdAt", t.updated_at as "updatedAt",
              (select count(*) from mdm.item_packs p where p.item_id = t.id and p.status = 'Active') as "packCount"`,
     from: `from mdm.items t left join mdm.product_categories c on c.id = t.category_id left join mdm.hsn_codes h on h.id = t.hsn_id`,
     validateWrite: async (tx, d) => {
+      if (!d.baseUom) return;                // may be completed later, before submission
       const u = (await tx.query(`select status from mdm.uom where code = $1`, [d.baseUom])).rows[0];
       if (!u || u.status !== 'Active') throw Errors.rule('REFERENCE_INVALID', 'Base unit is unknown or inactive.');
     },
@@ -168,6 +171,7 @@ export function mdmRoutes(db: Db) {
       await activeRef(tx, `select status from mdm.product_categories where id = $1`, row.category_id, 'Category');
       await activeRef(tx, `select status from mdm.hsn_codes where id = $1`, row.hsn_id, 'HSN code');
       const missing: { field: string; message: string }[] = [];
+      if (!row.base_uom) missing.push({ field: 'baseUom', message: 'Base unit is required' });
       if (['FG', 'RM', 'PM'].includes(row.item_type as string)) {
         if (!row.hsn_id) missing.push({ field: 'hsnId', message: 'HSN is required for stock items' });
         if (!row.category_id) missing.push({ field: 'categoryId', message: 'Category is required' });

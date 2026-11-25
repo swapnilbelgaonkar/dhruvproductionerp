@@ -128,29 +128,41 @@ const KINDS: Record<string, Kind> = {
     save: async (c, r) => { await c.tx.query(`insert into logistics.transporters (code, name, gstin, pan, contact, phone, created_by, updated_by) values ($1,$2,$3,$4,$5,$6,$7,$7)`,
       [r.code, r.name, r.gstin || null, r.pan || null, r.contact || null, r.phone || null, c.actor.userId]); } },
 
-  items: { label: 'Items with a pack size (created as Draft)', perm: 'sys.import:masters',
-    columns: [{ key: 'code', required: true, note: '', example: 'FG-ZN-EDTA-12' }, { key: 'name', required: true, note: '', example: 'Zinc EDTA 12%' },
-      { key: 'item_type', required: true, note: 'FG RM PM SEMI LAB SERVICE', example: 'FG' }, { key: 'category_code', note: '', example: 'MICRONUTRIENT' },
-      { key: 'base_uom', required: true, note: 'Existing unit', example: 'L' }, { key: 'hsn_code', note: 'Existing HSN', example: '31059090' }, { key: 'shelf_life_days', note: '', example: '730' },
-      { key: 'pack_code', note: 'Optional pack: code', example: '1L' }, { key: 'pack_size', note: '', example: '1' }, { key: 'pack_uom', note: '', example: 'L' },
-      { key: 'container', note: '', example: 'Bottle' }, { key: 'units_per_box', note: '', example: '12' }],
+  items: { label: 'Items and products (created as Draft)', perm: 'sys.import:masters',
+    columns: [{ key: 'code', required: true, note: '', example: 'FG-001' }, { key: 'name', required: true, note: '', example: 'NEOFERT Zn-EDTA 12%' },
+      { key: 'item_type', required: true, note: 'FG RM PM SEMI LAB SERVICE', example: 'FG' }, { key: 'category_code', note: 'Existing category', example: 'CHELATED-MICRONUTRIENT' },
+      { key: 'base_uom', note: 'Existing unit; if empty, taken from the packing (g/kg → KG, ml/L → L)', example: 'KG' }, { key: 'hsn_code', note: 'Existing HSN', example: '' },
+      { key: 'shelf_life_days', note: '', example: '' }, { key: 'active_ingredient', note: '', example: 'Zinc (Zn) 12%, EDTA chelated' }, { key: 'composition', note: '', example: 'Zn 12%' },
+      { key: 'key_benefits', note: '', example: 'Reduces zinc deficiency' }, { key: 'advisory_dosage', note: '', example: 'Foliar: 0.5-1 g/L water' },
+      { key: 'fco_grade', note: 'As marked in the brochure', example: 'Yes' }, { key: 'brochure_page', note: '', example: '7' },
+      { key: 'packing', note: 'Pack sizes, e.g. "100gm, 250gm, 500gm & 1Kg" — one pack each', example: '100gm, 250gm, 500gm, 1Kg' },
+      { key: 'pack_code', note: 'Or a single pack: code', example: '' }, { key: 'pack_size', note: '', example: '' }, { key: 'pack_uom', note: '', example: '' },
+      { key: 'container', note: '', example: '' }, { key: 'units_per_box', note: '', example: '' }],
     check: async (c, r) => {
-      need(c, r, 'code', 'name', 'item_type', 'base_uom'); oneOf(c, r, 'item_type', ['FG', 'RM', 'PM', 'SEMI', 'LAB', 'SERVICE']);
+      need(c, r, 'code', 'name', 'item_type'); oneOf(c, r, 'item_type', ['FG', 'RM', 'PM', 'SEMI', 'LAB', 'SERVICE']);
       await dup(c, r, 'code', `select 1 from mdm.items where code = $1`, 'Item');
       await ref(c, r, 'base_uom', `select code from mdm.uom where code = $1`, 'unit');
       const cat = await ref(c, r, 'category_code', `select id from mdm.product_categories where code = $1`, 'category');
       const hsn = await ref(c, r, 'hsn_code', `select id from mdm.hsn_codes where code = $1`, 'HSN code');
-      num(c, r, 'shelf_life_days', { min: 1, int: true });
-      if (r.pack_code) { need(c, r, 'pack_size', 'pack_uom', 'container'); pattern(c, r, 'pack_code', /^[A-Z0-9-]{1,20}$/, 'Capitals, digits or -'); num(c, r, 'pack_size', { min: 0.0001 }); num(c, r, 'units_per_box', { min: 1, int: true });
+      num(c, r, 'shelf_life_days', { min: 1, int: true }); num(c, r, 'brochure_page', { min: 1, int: true });
+      const packs = r.packing ? parsePacking(r.packing) : null;
+      if (packs && 'error' in packs) c.errors.push({ row: c.n, field: 'packing', message: packs.error });
+      if (r.pack_code) { need(c, r, 'pack_size', 'pack_uom'); pattern(c, r, 'pack_code', /^[A-Z0-9-]{1,20}$/, 'Capitals, digits or -'); num(c, r, 'pack_size', { min: 0.0001 }); num(c, r, 'units_per_box', { min: 1, int: true });
         await ref(c, r, 'pack_uom', `select code from mdm.uom where code = $1`, 'unit'); }
-      return { cat: cat?.id ?? null, hsn: hsn?.id ?? null };
+      const list = packs && !('error' in packs) ? packs.packs : [];
+      const base = r.base_uom || (list.length && new Set(list.map((p) => p.base)).size === 1 ? list[0]!.base : null);
+      return { cat: cat?.id ?? null, hsn: hsn?.id ?? null, packs: list, base };
     },
     save: async (c, r, x) => {
-      const { cat, hsn } = x as { cat: string | null; hsn: string | null };
-      const id = (await c.tx.query(`insert into mdm.items (code, name, item_type, category_id, base_uom, hsn_id, shelf_life_days, created_by, updated_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$8) returning id`,
-        [r.code, r.name, r.item_type!.toUpperCase(), cat, r.base_uom, hsn, r.shelf_life_days ? Number(r.shelf_life_days) : null, c.actor.userId])).rows[0].id;
+      const { cat, hsn, packs, base } = x as { cat: string | null; hsn: string | null; packs: { code: string; size: number; uom: string }[]; base: string | null };
+      const t = (v?: string) => (v ? v : null);
+      const id = (await c.tx.query(`insert into mdm.items (code, name, item_type, category_id, base_uom, hsn_id, shelf_life_days, active_ingredient, composition, key_benefits, advisory_dosage, fco_grade, brochure_page, created_by, updated_by)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14) returning id`,
+        [r.code, r.name, r.item_type!.toUpperCase(), cat, base, hsn, r.shelf_life_days ? Number(r.shelf_life_days) : null, t(r.active_ingredient), t(r.composition), t(r.key_benefits),
+          t(r.advisory_dosage), t(r.fco_grade), r.brochure_page ? Number(r.brochure_page) : null, c.actor.userId])).rows[0].id;
+      for (const p of packs) await c.tx.query(`insert into mdm.item_packs (item_id, pack_code, pack_size, pack_uom, created_by) values ($1,$2,$3,$4,$5)`, [id, p.code, p.size, p.uom, c.actor.userId]);
       if (r.pack_code) await c.tx.query(`insert into mdm.item_packs (item_id, pack_code, pack_size, pack_uom, container, units_per_box, created_by) values ($1,$2,$3,$4,$5,$6,$7)`,
-        [id, r.pack_code, Number(r.pack_size), r.pack_uom, r.container, r.units_per_box ? Number(r.units_per_box) : 1, c.actor.userId]);
+        [id, r.pack_code, Number(r.pack_size), r.pack_uom, r.container || null, r.units_per_box ? Number(r.units_per_box) : 1, c.actor.userId]);
     } },
 
   dealers: { label: 'Dealers (created as Draft for KYC and approval)', perm: 'sys.import:masters',
@@ -297,11 +309,28 @@ const KINDS: Record<string, Kind> = {
 
 export const IMPORT_KINDS = Object.keys(KINDS);
 
+/** "100gm, 250gm & 500gm" / "1Kg" / "250ml, 1Ltr & 5Ltr" → packs with codes like 100G, 1KG, 250ML, 1L and the base unit they imply. */
+export function parsePacking(text: string): { packs: { code: string; size: number; uom: string; base: string }[] } | { error: string } {
+  const UNIT: Record<string, { uom: string; base: string; code: string }> = { g: { uom: 'G', base: 'KG', code: 'G' }, gm: { uom: 'G', base: 'KG', code: 'G' }, gms: { uom: 'G', base: 'KG', code: 'G' },
+    kg: { uom: 'KG', base: 'KG', code: 'KG' }, ml: { uom: 'ML', base: 'L', code: 'ML' }, l: { uom: 'L', base: 'L', code: 'L' }, ltr: { uom: 'L', base: 'L', code: 'L' }, litre: { uom: 'L', base: 'L', code: 'L' } };
+  const parts = text.split(/,|&|\band\b/i).map((x) => x.trim()).filter(Boolean);
+  const packs: { code: string; size: number; uom: string; base: string }[] = [];
+  for (const part of parts) {
+    const m = /^([0-9]+(?:\.[0-9]+)?)\s*([a-z]+)$/i.exec(part);
+    const u = m ? UNIT[m[2]!.toLowerCase()] : undefined;
+    if (!m || !u) return { error: `Pack size "${part}" not understood (use g, gm, kg, ml, L or Ltr)` };
+    const size = Number(m[1]);
+    const code = `${String(size).replace('.', '-')}${u.code}`;
+    if (!packs.some((p) => p.code === code)) packs.push({ code, size, uom: u.uom, base: u.base });
+  }
+  return { packs };
+}
+
 type Result = { ok: boolean; rows: number; errors: Err[]; summary: Record<string, unknown> | null };
 /** Thrown to roll the checking transaction back (lookups may have taken number-series values). */
 class DryRun extends Error { constructor(public result: Result) { super('dry run'); } }
 
-async function run(db: Db, actor: Actor, kind: string, rows: Row[], commit: boolean): Promise<Result> {
+export async function run(db: Db, actor: Actor, kind: string, rows: Row[], commit: boolean): Promise<Result> {
   const k = KINDS[kind]!;
   return withTx(db, async (tx): Promise<Result> => {
     const cutover = await getSetting<string | null>(tx, 'golive.cutoverDate', null);

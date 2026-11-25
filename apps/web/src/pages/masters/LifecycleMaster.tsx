@@ -98,10 +98,16 @@ export const MASTERS: Record<string, MasterConfig> = {
       { name: 'name', label: 'Name', kind: 'text', required: true },
       { name: 'itemType', label: 'Type', kind: 'select', options: ITEM_TYPES, required: true, hint: 'FG finished good · RM raw material · PM packaging' },
       { name: 'categoryId', label: 'Product category', kind: 'ref', ref: 'category', hint: 'Decides which dealer licence is needed' },
-      { name: 'baseUom', label: 'Base unit', kind: 'ref', ref: 'uom', required: true },
+      { name: 'baseUom', label: 'Base unit', kind: 'ref', ref: 'uom', hint: 'Required before submitting for approval' },
       { name: 'hsnId', label: 'HSN code', kind: 'ref', ref: 'hsn' },
       { name: 'shelfLifeDays', label: 'Shelf life (days)', kind: 'number', hint: 'Required for FG and RM' },
       { name: 'storageClass', label: 'Storage class', kind: 'text', hint: 'e.g. Cool & dry, Flammable' },
+      { name: 'activeIngredient', label: 'Active ingredient / type', kind: 'textarea' },
+      { name: 'composition', label: 'Composition / technical content', kind: 'textarea' },
+      { name: 'keyBenefits', label: 'Key benefits / uses', kind: 'textarea' },
+      { name: 'advisoryDosage', label: 'Advisory dosage', kind: 'textarea' },
+      { name: 'fcoGrade', label: 'FCO grade (as marked in the brochure)', kind: 'text', hint: 'e.g. Yes, CIB' },
+      { name: 'brochurePage', label: 'Brochure page', kind: 'number' },
       { name: 'formulation', label: 'Formulation / technical description', kind: 'textarea' },
       { name: 'lotControlled', label: 'Lot / batch controlled', kind: 'checkbox', defaultValue: true },
       { name: 'serialControlled', label: 'Box serial (QR) controlled', kind: 'checkbox' },
@@ -118,7 +124,9 @@ export const MASTERS: Record<string, MasterConfig> = {
     ],
     details: (r) => [['Code', r.code], ['Name', r.name], ['Type', r.itemType], ['Category', r.categoryName ? `${r.categoryName} (licence: ${r.licenceRequired})` : '—'], ['Base unit', r.baseUom],
       ['HSN', r.hsnCode], ['Shelf life', r.shelfLifeDays ? `${r.shelfLifeDays} days` : '—'], ['Storage class', r.storageClass],
-      ['Controls', [r.lotControlled && 'Lot', r.serialControlled && 'Box serial', r.hazardous && 'Hazardous'].filter(Boolean).join(' · ') || '—'], ['Formulation', r.formulation]],
+      ['Controls', [r.lotControlled && 'Lot', r.serialControlled && 'Box serial', r.hazardous && 'Hazardous'].filter(Boolean).join(' · ') || '—'],
+      ['Active ingredient / type', r.activeIngredient], ['Composition', r.composition], ['Key benefits / uses', r.keyBenefits], ['Advisory dosage', r.advisoryDosage],
+      ['FCO grade', r.fcoGrade], ['Brochure page', r.brochurePage], ['Formulation', r.formulation]],
   },
   priceLists: {
     key: 'price-lists', entityType: 'sales.price_list', api: '/price-lists', base: '/sales/price-lists', title: 'Price Lists', singular: 'Price list', perm: 'sales.price_list',
@@ -186,7 +194,7 @@ function GstRegistrations({ leId, editable }: { leId: string; editable: boolean 
   );
 }
 
-interface Pack { id: string; packCode: string; packSize: string; packUom: string; container: string; unitsPerBox: number; gtin: string | null; status: string }
+interface Pack { id: string; packCode: string; packSize: string; packUom: string; container: string | null; unitsPerBox: number; gtin: string | null; status: string }
 
 function ItemPacks({ itemId, packs, editable }: { itemId: string; packs: Pack[]; editable: boolean }) {
   const qc = useQueryClient();
@@ -206,7 +214,7 @@ function ItemPacks({ itemId, packs, editable }: { itemId: string; packs: Pack[];
         <ul className="divide-y divide-line">{packs.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 py-3">
             <span className="w-28 font-semibold">{p.packCode}</span>
-            <span className="flex-1 text-ink-2 num">{Number(p.packSize)} {p.packUom} {p.container} · {p.unitsPerBox} per box{p.gtin ? ` · GTIN ${p.gtin}` : ''}</span>
+            <span className="flex-1 text-ink-2 num">{Number(p.packSize)} {p.packUom}{p.container ? ` ${p.container}` : ''} · {p.unitsPerBox} per box{p.gtin ? ` · GTIN ${p.gtin}` : ''}</span>
             <StatusBadge status={p.status} />
             {editable && p.status === 'Active' && <Button size="sm" variant="ghost" onClick={() => setRemove(p)}>Remove</Button>}
           </li>))}</ul>
@@ -216,7 +224,7 @@ function ItemPacks({ itemId, packs, editable }: { itemId: string; packs: Pack[];
         <ErrorBanner error={add.error} />
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Pack code" htmlFor="pcode" required error={err('packCode')} hint="e.g. 1KG, 25KG"><Input id="pcode" className="uppercase" {...f.register('packCode', { setValueAs: (v: string) => v?.toUpperCase() })} /></Field>
-          <Field label="Container" htmlFor="pcont" required error={err('container')} hint="Pouch, Bag, Bucket, Drum…"><Input id="pcont" {...f.register('container')} /></Field>
+          <Field label="Container" htmlFor="pcont" error={err('container')} hint="Pouch, Bag, Bucket, Drum…"><Input id="pcont" {...f.register('container')} /></Field>
           <Field label="Pack size" htmlFor="psize" required error={err('packSize')}><Input id="psize" type="number" step="any" {...f.register('packSize', num)} /></Field>
           <Field label="Unit" htmlFor="puom" required error={err('packUom')}><RefSelect id="puom" kind="uom" value={f.watch('packUom') as string} {...f.register('packUom')} /></Field>
           <Field label="Units per box" htmlFor="pbox" required error={err('unitsPerBox')}><Input id="pbox" type="number" {...f.register('unitsPerBox', num)} /></Field>

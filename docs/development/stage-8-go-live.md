@@ -71,3 +71,11 @@ Keep a sealed offline copy of `APP_ENCRYPTION_KEY`: without it, encrypted bank a
 ## 6. Still to come after go-live
 - Live GST connection through the chosen GSP (D27); bank host-to-host (bank); SMS/WhatsApp providers (D11).
 - Zod 4 and React Router 7 upgrades (security advisories above).
+
+## 7. Company product list (loaded 25 Nov 2026)
+- Source: `docs/source/products/Dhruv_Products_List_Categorywise.xlsx` (and the same rows as `dhruv-products-category-wise.csv`).
+- Loader: `pnpm --filter @dhruv/api exec tsx --env-file=.env src/db/load-products.ts` — runs through the bulk importer's checks; use it on the production database after the install.
+- Mapping: Category → product category (11 new; licence requirement NONE until D08); Product Name → item name; Active Ingredient / Type, Composition / Technical Content, Key Benefits / Uses, Advisory Dosage, FCO Grade, Brochure Page → the new item fields; Packing Available → one pack per size (base unit KG or L from the pack units). Codes FG-001…FG-067 follow the Sr No.
+- Left empty to fill before approval: HSN, GST rate, shelf life, cost, storage class, container and units per box, and for the six neem insecticides (FG-049…FG-054) the packing and base unit, which the brochure does not give. "Not mentioned in brochure" and "Not marked" are stored as empty.
+- All 67 are Draft: complete them and submit for approval before they can be priced, quoted or stocked.
+- On the demo database the [SAMPLE] items were removed together with every demo transaction that used them (orders, stock, production, QC, dispatch, invoices, payments, journals). Users, dealers, vendors, settings and the approval history were kept; open approvals for removed documents were cancelled.

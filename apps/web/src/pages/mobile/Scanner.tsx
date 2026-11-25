@@ -230,7 +230,7 @@ export function MobileLookupPage() {
       {res && (
         <div className="card mt-3 p-4">
           <p className={`mb-3 rounded-lg p-3 text-[17px] font-bold ${good ? 'bg-success-bg text-success-text' : 'bg-warning-bg text-warning-text'}`}>{res.verdict}</p>
-          {res.box && <>{row('Box', <span className="num">{res.box.serial}</span>)}{row('Product', `${res.box.itemCode} — ${res.box.itemName}`)}{row('Contents', `${res.box.units} × ${fmtNum(res.box.packSize)} ${res.box.packUom} ${res.box.container}`)}
+          {res.box && <>{row('Box', <span className="num">{res.box.serial}</span>)}{row('Product', `${res.box.itemCode} — ${res.box.itemName}`)}{row('Contents', `${res.box.units} × ${fmtNum(res.box.packSize)} ${res.box.packUom} ${res.box.container ?? ''}`)}
             {row('Lot', res.box.lotNo)}{row('QC status', res.box.qcStatus)}{row('Expiry', fmtDate(res.box.expiryDate))}{row('Packed', `${res.box.packingRun}, ${fmtDateTime(res.box.packedAt)}`)}{res.box.shipmentNo && row('Shipment', res.box.shipmentNo)}</>}
           {res.lot && <>{row('Lot', res.lot.lotNo)}{row('Product', `${res.lot.itemCode} — ${res.lot.itemName}`)}{row('QC status', res.lot.qcStatus)}{row('Expiry', fmtDate(res.lot.expiryDate))}
             {res.lot.vendorLotNo && row('Supplier lot', res.lot.vendorLotNo)}{row('Boxes ready to ship', res.lot.boxesReady)}</>}

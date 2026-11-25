@@ -12,7 +12,7 @@ interface Slab { minQty: number | string; discountPct: number | string }
 interface PriceRow { id: string; itemPackId: string; itemCode: string; itemName: string; packCode: string; packSize: string; packUom: string; container: string; rate: string; slabs: Slab[] }
 interface SaleablePack { id: string; itemCode: string; itemName: string; packCode: string; packSize: string; packUom: string; container: string }
 
-export const packLabel = (p: { packSize: string | number; packUom: string; container: string }) => `${Number(p.packSize)} ${p.packUom} ${p.container}`;
+export const packLabel = (p: { packSize: string | number; packUom: string; container: string | null }) => `${Number(p.packSize)} ${p.packUom}${p.container ? ` ${p.container}` : ''}`;
 
 /** Prices and volume slabs of a price list; editable while the list is Draft or Rejected. */
 export function PriceListItems({ listId, editable }: { listId: string; editable: boolean }) {

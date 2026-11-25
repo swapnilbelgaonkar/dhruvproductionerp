@@ -132,13 +132,15 @@ export const taxRateSchema = z.object({
 export const productCategorySchema = z.object({ code, name: trimmed(120), licenceRequired: z.enum(LICENCE_TYPES) });
 export const itemSchema = z.object({
   code, name: trimmed(150), itemType: z.enum(ITEM_TYPES), categoryId: uuid.optional().nullable(),
-  baseUom: z.string().min(1, 'Required'), hsnId: uuid.optional().nullable(), formulation: optionalText(500),
+  baseUom: z.string().min(1).optional().nullable().transform((v) => v || null), hsnId: uuid.optional().nullable(), formulation: optionalText(500),
+  activeIngredient: optionalText(500), composition: optionalText(1000), keyBenefits: optionalText(2000), advisoryDosage: optionalText(1000),
+  fcoGrade: optionalText(40), brochurePage: z.coerce.number().int().positive().optional().nullable(),
   shelfLifeDays: z.coerce.number().int().positive().optional().nullable(), storageClass: optionalText(60),
   lotControlled: z.boolean().default(true), serialControlled: z.boolean().default(false), hazardous: z.boolean().default(false),
 });
 export const itemPackSchema = z.object({
   packCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{1,20}$/, 'Letters, digits, hyphen'),
-  packSize: z.number().positive(), packUom: z.string().min(1), container: trimmed(40),
+  packSize: z.number().positive(), packUom: z.string().min(1), container: optionalText(40),
   unitsPerBox: z.number().int().positive().default(1), gtin: z.string().regex(/^[0-9]{8,14}$/, '8–14 digits').optional().nullable(),
 });
 
