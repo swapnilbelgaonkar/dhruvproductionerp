@@ -54,7 +54,7 @@ export function parseEmployeeRow(r: Record<string, string>) {
 
 /**
  * Links employees to the manager named in "Reporting To" (first name in the cell): an exact match of the full name, else the one
- * employee with the same first and last name ("Vaibhav Pund" → "Vaibhav Vijay Pund"). Anything else stays for a person to set.
+ * employee with the same first and last name ("Ravi Kumar" → "Ravi Shankar Kumar"). Anything else stays for a person to set.
  */
 export async function linkManagers(client: pg.PoolClient) {
   const all = (await client.query(`select id, emp_code, full_name, manager_id, reporting_to from org.employees where status = 'Active'`)).rows as
