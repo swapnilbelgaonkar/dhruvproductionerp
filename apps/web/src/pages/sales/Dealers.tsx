@@ -19,7 +19,7 @@ import { useAuth } from '../../lib/auth';
 import { fmtDate, fmtDateTime, fmtINR } from '../../lib/format';
 
 
-interface DealerRow { id: string; code: string; legalName: string; tradeName: string | null; constitution: string; gstin: string | null; territory: string; salesOwner: string; status: string; creditLimit: string; licenceTypes: string[]; nextLicenceExpiry: string | null }
+interface DealerRow { id: string; code: string; legalName: string; tradeName: string | null; constitution: string | null; gstin: string | null; territory: string | null; salesOwner: string | null; status: string; creditLimit: string; licenceTypes: string[]; nextLicenceExpiry: string | null }
 
 export function DealersPage() {
   const { can } = useAuth();
@@ -34,7 +34,7 @@ export function DealersPage() {
         columns={[
           { key: 'code', header: 'Code', render: (r) => <span className="font-semibold num">{r.code}</span> },
           { key: 'name', header: 'Dealer', render: (r) => <span><span className="block font-medium">{r.legalName}</span><span className="text-[13px] text-ink-2">{r.gstin ?? 'Not GST registered'}</span></span> },
-          { key: 'terr', header: 'Territory / owner', render: (r) => <span><span className="block">{r.territory}</span><span className="text-[13px] text-ink-2">{r.salesOwner}</span></span> },
+          { key: 'terr', header: 'Territory / owner', render: (r) => <span><span className="block">{r.territory ?? <span className="text-warning-text">Not set</span>}</span><span className="text-[13px] text-ink-2">{r.salesOwner}</span></span> },
           { key: 'credit', header: 'Credit limit', render: (r) => <span className="num">{fmtINR(r.creditLimit)}</span> },
           { key: 'lic', header: 'Licence expiry', render: (r) => {
             if (!r.nextLicenceExpiry) return r.licenceTypes.length ? <span className="text-warning-text">Missing</span> : '—';
@@ -63,7 +63,8 @@ export function DealerFormPage() {
   const f = useForm<DealerForm>({
     resolver: zodResolver(z.preprocess((o) => Object.fromEntries(Object.entries(o as Record<string, unknown>).map(([k, v]) => [k, v === '' ? null : v])), dealerSchema)),
     defaultValues: { gstRegistered: true, licenceTypes: [], creditDays: 0, creditLimit: 0, dealerCategory: 'DEALER', constitution: 'PROPRIETORSHIP', priceGroup: 'STANDARD' },
-    values: existing.data ? { ...existing.data, gstin: existing.data.gstin ?? '', email: existing.data.email ?? '', tradeName: existing.data.tradeName ?? '', creditLimit: Number(existing.data.creditLimit), annualTarget: existing.data.annualTarget === null || existing.data.annualTarget === undefined ? null : Number(existing.data.annualTarget) } as DealerForm : undefined,
+    values: existing.data ? { ...existing.data, gstin: existing.data.gstin ?? '', email: existing.data.email ?? '', tradeName: existing.data.tradeName ?? '', constitution: existing.data.constitution ?? '', pan: existing.data.pan ?? '', contactPerson: existing.data.contactPerson ?? '',
+      mobile: existing.data.mobile ?? '', phoneNumbers: existing.data.phoneNumbers ?? '', dealerCategory: existing.data.dealerCategory ?? '', territoryId: existing.data.territoryId ?? '', salesOwnerId: existing.data.salesOwnerId ?? '', creditLimit: Number(existing.data.creditLimit), annualTarget: existing.data.annualTarget === null || existing.data.annualTarget === undefined ? null : Number(existing.data.annualTarget) } as DealerForm : undefined,
   });
   if (id && existing.isLoading) return <Skeleton className="h-96" />;
   const gstRegistered = f.watch('gstRegistered');
@@ -96,24 +97,25 @@ export function DealerFormPage() {
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="Legal business name" htmlFor="legalName" required error={err('legalName')} hint="As per GST and PAN"><Input id="legalName" {...f.register('legalName')} /></Field>
             <Field label="Trade name" htmlFor="tradeName" error={err('tradeName')}><Input id="tradeName" {...f.register('tradeName')} /></Field>
-            <Field label="Constitution" htmlFor="constitution" required error={err('constitution')}><Select id="constitution" {...f.register('constitution')}>{CONSTITUTIONS.map((c) => <option key={c} value={c}>{CONSTITUTION_LABEL[c]}</option>)}</Select></Field>
-            <Field label="Dealer category" htmlFor="dealerCategory" required><Select id="dealerCategory" {...f.register('dealerCategory')}>{DEALER_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
-            <Field label="Proprietor / director (contact person)" htmlFor="contactPerson" required error={err('contactPerson')} hint="Full legal name as per PAN"><Input id="contactPerson" {...f.register('contactPerson')} /></Field>
-            <Field label="Mobile" htmlFor="mobile" required error={err('mobile')} hint="Used for WhatsApp dispatch alerts"><Input id="mobile" inputMode="numeric" maxLength={10} {...f.register('mobile', { onBlur: checkDup })} /></Field>
+            <Field label="Constitution" htmlFor="constitution" error={err('constitution')} hint="Needed before submission"><Select id="constitution" {...f.register('constitution')}><option value="">Not yet known</option>{CONSTITUTIONS.map((c) => <option key={c} value={c}>{CONSTITUTION_LABEL[c]}</option>)}</Select></Field>
+            <Field label="Dealer category" htmlFor="dealerCategory" hint="Needed before submission"><Select id="dealerCategory" {...f.register('dealerCategory')}><option value="">Not yet known</option>{DEALER_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
+            <Field label="Proprietor / director (contact person)" htmlFor="contactPerson" error={err('contactPerson')} hint="Full legal name as per PAN · needed before submission"><Input id="contactPerson" {...f.register('contactPerson')} /></Field>
+            <Field label="Mobile" htmlFor="mobile" error={err('mobile')} hint="Used for WhatsApp alerts · needed before submission"><Input id="mobile" inputMode="numeric" maxLength={10} {...f.register('mobile', { onBlur: checkDup })} /></Field>
+            <Field label="Other phone numbers" htmlFor="phoneNumbers" error={err('phoneNumbers')} hint="Landlines or more mobiles, as written"><Input id="phoneNumbers" {...f.register('phoneNumbers')} /></Field>
             <Field label="Email" htmlFor="email" error={err('email')}><Input id="email" type="email" {...f.register('email')} /></Field>
           </div>
         </Card>
         <Card title="2. Tax identity">
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="PAN" htmlFor="pan" required error={err('pan')}><Input id="pan" className="uppercase num" maxLength={10} {...f.register('pan', { setValueAs: (v: string) => v?.toUpperCase(), onBlur: checkDup })} /></Field>
+            <Field label="PAN" htmlFor="pan" error={err('pan')} hint="Needed before submission"><Input id="pan" className="uppercase num" maxLength={10} {...f.register('pan', { setValueAs: (v: string) => v?.toUpperCase(), onBlur: checkDup })} /></Field>
             <label className="flex items-center gap-3 self-end py-3"><input type="checkbox" className="h-5 w-5 accent-[#5B38F5]" {...f.register('gstRegistered')} />Registered under GST</label>
             {gstRegistered && <Field label="GSTIN" htmlFor="gstin" required error={err('gstin')} hint="15 characters; characters 3–12 must equal the PAN. Upload the certificate on the next step, on the same line."><Input id="gstin" className="uppercase num" maxLength={15} {...f.register('gstin', { setValueAs: (v: string) => v?.toUpperCase(), onBlur: checkDup })} /></Field>}
           </div>
         </Card>
         <Card title="3. Territory & licences">
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Territory" htmlFor="territoryId" required error={err('territoryId')}><Select id="territoryId" {...f.register('territoryId')}><option value="">Select…</option>{terrs.data?.data.filter((t) => t.status === 'Active').map((t) => <option key={t.id} value={t.id}>{'· '.repeat(t.level - 1)}{t.name} ({t.levelName})</option>)}</Select></Field>
-            <Field label="Sales owner" htmlFor="salesOwnerId" required error={err('salesOwnerId')}><Select id="salesOwnerId" {...f.register('salesOwnerId')}><option value="">Select…</option>{owners.data?.data.filter((e) => e.salesTier).map((e) => <option key={e.id} value={e.id}>{e.fullName} ({e.salesTier})</option>)}</Select></Field>
+            <Field label="Territory" htmlFor="territoryId" error={err('territoryId')} hint="Needed before submission"><Select id="territoryId" {...f.register('territoryId')}><option value="">Select…</option>{terrs.data?.data.filter((t) => t.status === 'Active').map((t) => <option key={t.id} value={t.id}>{'· '.repeat(t.level - 1)}{t.name} ({t.levelName})</option>)}</Select></Field>
+            <Field label="Sales owner" htmlFor="salesOwnerId" error={err('salesOwnerId')} hint="Needed before submission"><Select id="salesOwnerId" {...f.register('salesOwnerId')}><option value="">Select…</option>{owners.data?.data.filter((e) => e.salesTier).map((e) => <option key={e.id} value={e.id}>{e.fullName} ({e.salesTier})</option>)}</Select></Field>
             <fieldset className="md:col-span-2"><legend className="label">Products the dealer will buy — each needs the matching licence</legend>
               <div className="flex flex-wrap gap-4">{DEALER_LICENCE_TYPES.map((t) => <label key={t} className="flex items-center gap-2"><input type="checkbox" value={t} className="h-5 w-5 accent-[#5B38F5]" {...f.register('licenceTypes')} />{LICENCE_LABEL[t]}</label>)}</div>
             </fieldset>
@@ -136,8 +138,8 @@ export function DealerFormPage() {
 
 // ---------------------------------------------------------------- detail
 interface Dealer {
-  id: string; code: string; legalName: string; tradeName: string | null; constitution: string; pan: string; gstRegistered: boolean; gstin: string | null;
-  contactPerson: string; mobile: string; email: string | null; dealerCategory: string; territory: string; salesOwner: string; licenceTypes: string[];
+  id: string; code: string; legalName: string; tradeName: string | null; constitution: string | null; pan: string | null; gstRegistered: boolean; gstin: string | null;
+  contactPerson: string | null; mobile: string | null; phoneNumbers: string | null; email: string | null; dealerCategory: string | null; territory: string | null; salesOwner: string | null; licenceTypes: string[];
   priceGroup: string; creditDays: number; creditLimit: string; annualTarget: string | null; targetFy: string | null; status: string; statusReason: string | null;
   activatedAt: string | null; version: number;
   addresses: PartyAddress[]; licences: PartyLicence[]; signatories: PartySignatory[]; approvals: ApprovalRef[]; readiness: Readiness | null;
@@ -175,8 +177,8 @@ export function DealerDetailPage() {
       <div className="grid gap-6 2xl:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           <Card title="Business & tax identity">
-            <KeyValues items={[['Legal name', d.legalName], ['Trade name', d.tradeName], ['Constitution', CONSTITUTION_LABEL[d.constitution]], ['Contact person', d.contactPerson],
-              ['Mobile', d.mobile], ['Email', d.email], ['PAN', d.pan], ['Dealer category', d.dealerCategory], ['Activated', fmtDateTime(d.activatedAt)]]} />
+            <KeyValues items={[['Legal name', d.legalName], ['Trade name', d.tradeName], ['Constitution', d.constitution ? CONSTITUTION_LABEL[d.constitution] : null], ['Contact person', d.contactPerson],
+              ['Mobile', d.mobile], ['Other phone numbers', d.phoneNumbers], ['Email', d.email], ['PAN', d.pan], ['Dealer category', d.dealerCategory], ['Activated', fmtDateTime(d.activatedAt)]]} />
             <div className="mt-5">{d.gstRegistered ? <GstinRow partyId={d.id} gstin={d.gstin} canUpload={d.canAddLicence} /> : <p className="text-ink-2">Not registered under GST.</p>}</div>
           </Card>
           <Card title="Commercial terms">

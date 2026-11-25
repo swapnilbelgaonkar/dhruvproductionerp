@@ -55,6 +55,15 @@ export async function identityChecks(dbx: Db | Tx, p: { id: string; gst_register
   add('dup', `No other ${opts.noun} with the same GSTIN or PAN`, dups.length === 0, dups.length ? dups.map((d) => `${d.code} (${d.matches.join(', ')})`).join('; ') : undefined);
 }
 
+/** Fields an imported Draft may lack: identity details and a complete registered address (enforced on submission). */
+export async function kycDetailChecks(dbx: Db | Tx, p: { id: string; constitution: string | null; pan: string | null; contact_person: string | null; mobile: string | null }, add: AddCheck) {
+  const missing = [!p.constitution && 'constitution', !p.pan && 'PAN', !p.contact_person && 'contact person', !p.mobile && 'mobile number'].filter(Boolean);
+  add('kyc.details', 'Constitution, PAN, contact person and mobile', !missing.length, missing.length ? `Missing: ${missing.join(', ')}` : undefined);
+  const reg = (await dbx.query(`select line1, city, district, state_code, pincode from mdm.party_addresses where party_id = $1 and kind = 'REGISTERED' and status = 'Active' limit 1`, [p.id])).rows[0];
+  const gaps = reg ? [!reg.line1 && 'address line', !reg.city && 'city', !reg.district && 'district', !reg.state_code && 'state', !reg.pincode && 'PIN code'].filter(Boolean) : [];
+  if (reg) add('addr.complete', 'Registered address complete', !gaps.length, gaps.length ? `Missing: ${gaps.join(', ')}` : undefined);
+}
+
 /** Each needed licence present with its certificate, not expired and not rejected. */
 export async function licenceChecks(dbx: Db | Tx, partyId: string, types: string[], add: AddCheck) {
   const lic = (await dbx.query(`select licence_type, valid_to, verification from mdm.party_licences where party_id = $1 and status = 'Active'`, [partyId])).rows;

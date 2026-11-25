@@ -8,7 +8,7 @@ import { nextMasterCode } from '../../lib/numbering';
 import { getSetting } from '../../lib/settings';
 import { requirePermission } from '../../middleware/auth';
 import { actorOf, can, territoryScope } from '../../middleware/context';
-import { checklist, duplicates, identityChecks, kycChecks, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
+import { checklist, duplicates, identityChecks, kycDetailChecks, kycChecks, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
 import { registerSubjectHandler, submitForApproval, type ApprovalRequestRow } from '../workflow/engine';
 
 const P = (a: string) => `mdm.dealer:${a}`;
@@ -47,6 +47,10 @@ async function setStatus(tx: Tx, partyId: string, status: string, actor: Actor, 
 export async function readiness(dbx: Db | Tx, partyId: string) {
   const p = (await dbx.query(`select p.*, dp.* from mdm.parties p join mdm.dealer_profiles dp on dp.party_id = p.id where p.id = $1`, [partyId])).rows[0];
   const { checks, add } = checklist();
+  await kycDetailChecks(dbx, { ...p, id: partyId }, add);
+  add('profile', 'Dealer category, territory and sales owner', !!p.dealer_category && !!p.territory_id && !!p.sales_owner_id,
+    [!p.dealer_category && 'category', !p.territory_id && 'territory', !p.sales_owner_id && 'sales owner'].filter(Boolean).length
+      ? `Missing: ${[!p.dealer_category && 'category', !p.territory_id && 'territory', !p.sales_owner_id && 'sales owner'].filter(Boolean).join(', ')}` : undefined);
   await identityChecks(dbx, { ...p, id: partyId }, add, { billing: true, shipping: true, noun: 'dealer' });
   const refs = (await dbx.query(
     `select (select status from org.territories where id = $1) as territory, (select status from org.employees where id = $2) as owner`, [p.territory_id, p.sales_owner_id])).rows[0];
@@ -90,7 +94,7 @@ export function dealerRoutes(db: Db) {
               (select min(valid_to) from mdm.party_licences l where l.party_id = p.id and l.status = 'Active') as "nextLicenceExpiry",
               count(*) over() as total
          from mdm.parties p join mdm.dealer_profiles dp on dp.party_id = p.id
-         join org.territories t on t.id = dp.territory_id join org.employees e on e.id = dp.sales_owner_id
+         left join org.territories t on t.id = dp.territory_id left join org.employees e on e.id = dp.sales_owner_id
         where ${where.join(' and ')} order by p.code desc limit ${limit} offset ${offset}`, args);
     res.json({ data: rows.rows.map((x) => { const { total: _t, ...rest } = x; return rest; }), total: rows.rows[0]?.total ?? 0 });
   }));
@@ -102,7 +106,7 @@ export function dealerRoutes(db: Db) {
   r.get('/:id', requirePermission(P('view')), asyncHandler(async (req, res) => {
     const d = await loadDealer(db, req, req.params.id!);
     const parts = await partyDetailParts(db, d.party_id, 'mdm.dealer');
-    const refs = await db.query(`select t.name as territory, e.full_name as owner from org.territories t, org.employees e where t.id = $1 and e.id = $2`, [d.territory_id, d.sales_owner_id]);
+    const refs = await db.query(`select (select name from org.territories where id = $1) as territory, (select full_name from org.employees where id = $2) as owner`, [d.territory_id, d.sales_owner_id]);
     const status = d.dealer_status as string;
     const actions: string[] = [];
     if (EDITABLE.includes(status) && can(req, P('edit_draft'))) actions.push('edit');
@@ -111,7 +115,7 @@ export function dealerRoutes(db: Db) {
     if (status === 'Suspended' && can(req, P('suspend'))) actions.push('reactivate');
     res.json({
       id: d.party_id, code: d.code, legalName: d.legal_name, tradeName: d.trade_name, constitution: d.constitution, pan: d.pan,
-      gstRegistered: d.gst_registered, gstin: d.gstin, contactPerson: d.contact_person, mobile: d.mobile, email: d.email,
+      gstRegistered: d.gst_registered, gstin: d.gstin, contactPerson: d.contact_person, mobile: d.mobile, phoneNumbers: d.phone_numbers, email: d.email,
       dealerCategory: d.dealer_category, territoryId: d.territory_id, territory: refs.rows[0]?.territory, salesOwnerId: d.sales_owner_id, salesOwner: refs.rows[0]?.owner,
       licenceTypes: d.licence_types, priceGroup: d.price_group, creditDays: d.credit_days, creditLimit: d.credit_limit, annualTarget: d.annual_target, targetFy: d.target_fy,
       status, statusReason: d.status_reason, activatedAt: d.activated_at, version: d.version, updatedAt: d.updated_at,
@@ -124,12 +128,18 @@ export function dealerRoutes(db: Db) {
     });
   }));
 
-  async function checkRefs(tx: Tx, req: Request, d: { territoryId: string; salesOwnerId: string }) {
-    const t = (await tx.query(`select status from org.territories where id = $1`, [d.territoryId])).rows[0];
-    if (!t || t.status !== 'Active') throw Errors.rule('REFERENCE_NOT_ACTIVE', 'Choose an active territory.');
-    const e = (await tx.query(`select status from org.employees where id = $1`, [d.salesOwnerId])).rows[0];
-    if (!e || e.status !== 'Active') throw Errors.rule('REFERENCE_NOT_ACTIVE', 'Choose an active sales owner.');
+  async function checkRefs(tx: Tx, req: Request, d: { territoryId?: string | null; salesOwnerId?: string | null }) {
+    if (d.territoryId) {
+      const t = (await tx.query(`select status from org.territories where id = $1`, [d.territoryId])).rows[0];
+      if (!t || t.status !== 'Active') throw Errors.rule('REFERENCE_NOT_ACTIVE', 'Choose an active territory.');
+    }
+    if (d.salesOwnerId) {
+      const e = (await tx.query(`select status from org.employees where id = $1`, [d.salesOwnerId])).rows[0];
+      if (!e || e.status !== 'Active') throw Errors.rule('REFERENCE_NOT_ACTIVE', 'Choose an active sales owner.');
+    }
     const ids = await territoryScope(tx, req, P('create'));
+    // a territory-scoped user only records dealers inside their territory; leaving it empty is for unscoped users
+    if (ids !== null && !d.territoryId) throw Errors.validation([{ field: 'territoryId', message: 'Choose the territory' }]);
     if (ids !== null) {
       const ok = await tx.query(`select 1 from org.territories dt join org.territories ut on dt.path <@ ut.path where dt.id = $1 and ut.id = any($2::uuid[])`, [d.territoryId, ids]);
       if (!ok.rowCount) throw Errors.forbidden(`${P('create')} in this territory`);
@@ -145,13 +155,13 @@ export function dealerRoutes(db: Db) {
       if (dups.length) throw Errors.conflict('DUPLICATE_PARTY', `A dealer with the same ${dups[0]!.matches.join(' and ')} already exists: ${dups[0]!.code}.`, dups);
       const code = await nextMasterCode(tx, 'DEALER_CODE');
       const p = (await tx.query(
-        `insert into mdm.parties (code, legal_name, trade_name, constitution, pan, gst_registered, gstin, contact_person, mobile, email, created_by, updated_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) returning id`,
-        [code, d.legalName, d.tradeName, d.constitution, d.pan, d.gstRegistered, d.gstRegistered ? d.gstin : null, d.contactPerson, d.mobile, d.email ?? null, actor.userId])).rows[0];
+        `insert into mdm.parties (code, legal_name, trade_name, constitution, pan, gst_registered, gstin, contact_person, mobile, email, phone_numbers, created_by, updated_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12) returning id`,
+        [code, d.legalName, d.tradeName, d.constitution ?? null, d.pan ?? null, d.gstRegistered, d.gstRegistered ? d.gstin : null, d.contactPerson ?? null, d.mobile ?? null, d.email ?? null, d.phoneNumbers ?? null, actor.userId])).rows[0];
       await tx.query(
         `insert into mdm.dealer_profiles (party_id, dealer_category, territory_id, sales_owner_id, licence_types, price_group, credit_days, credit_limit, annual_target, target_fy, created_by, updated_by)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`,
-        [p.id, d.dealerCategory, d.territoryId, d.salesOwnerId, d.licenceTypes, d.priceGroup, d.creditDays, d.creditLimit, d.annualTarget ?? null, d.targetFy ?? null, actor.userId]);
+        [p.id, d.dealerCategory ?? null, d.territoryId ?? null, d.salesOwnerId ?? null, d.licenceTypes, d.priceGroup, d.creditDays, d.creditLimit, d.annualTarget ?? null, d.targetFy ?? null, actor.userId]);
       await audit(tx, actor, { action: 'mdm.dealer.created', entityType: 'mdm.party', entityId: p.id, after: { code, ...d } });
       return { id: p.id, code };
     });
@@ -169,13 +179,13 @@ export function dealerRoutes(db: Db) {
       const dups = (await duplicates(tx, d, before.party_id)).filter((x) => x.matches.includes('GSTIN') || x.matches.includes('PAN'));
       if (dups.length) throw Errors.conflict('DUPLICATE_PARTY', `A dealer with the same ${dups[0]!.matches.join(' and ')} already exists: ${dups[0]!.code}.`, dups);
       const p = (await tx.query(
-        `update mdm.parties set legal_name=$2, trade_name=$3, constitution=$4, pan=$5, gst_registered=$6, gstin=$7, contact_person=$8, mobile=$9, email=$10, updated_by=$11
-          where id = $1 returning legal_name, trade_name, constitution, pan, gst_registered, gstin, contact_person, mobile, email`,
-        [before.party_id, d.legalName, d.tradeName, d.constitution, d.pan, d.gstRegistered, d.gstRegistered ? d.gstin : null, d.contactPerson, d.mobile, d.email ?? null, actor.userId])).rows[0];
+        `update mdm.parties set legal_name=$2, trade_name=$3, constitution=$4, pan=$5, gst_registered=$6, gstin=$7, contact_person=$8, mobile=$9, email=$10, phone_numbers=$11, updated_by=$12
+          where id = $1 returning legal_name, trade_name, constitution, pan, gst_registered, gstin, contact_person, mobile, email, phone_numbers`,
+        [before.party_id, d.legalName, d.tradeName, d.constitution ?? null, d.pan ?? null, d.gstRegistered, d.gstRegistered ? d.gstin : null, d.contactPerson ?? null, d.mobile ?? null, d.email ?? null, d.phoneNumbers ?? null, actor.userId])).rows[0];
       const dp = (await tx.query(
         `update mdm.dealer_profiles set dealer_category=$2, territory_id=$3, sales_owner_id=$4, licence_types=$5, price_group=$6, credit_days=$7, credit_limit=$8,
            annual_target=$9, target_fy=$10, updated_by=$11 where party_id = $1 returning dealer_category, territory_id, sales_owner_id, licence_types, price_group, credit_days, credit_limit, annual_target, target_fy`,
-        [before.party_id, d.dealerCategory, d.territoryId, d.salesOwnerId, d.licenceTypes, d.priceGroup, d.creditDays, d.creditLimit, d.annualTarget ?? null, d.targetFy ?? null, actor.userId])).rows[0];
+        [before.party_id, d.dealerCategory ?? null, d.territoryId ?? null, d.salesOwnerId ?? null, d.licenceTypes, d.priceGroup, d.creditDays, d.creditLimit, d.annualTarget ?? null, d.targetFy ?? null, actor.userId])).rows[0];
       const df = diff(before, { ...before, ...p, ...dp });
       await audit(tx, actor, { action: 'mdm.dealer.updated', entityType: 'mdm.party', entityId: before.party_id, before: df.before, after: df.after });
     });

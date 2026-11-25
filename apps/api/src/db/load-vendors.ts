@@ -28,8 +28,8 @@ export const GST_STATE: Record<string, string> = {
   puducherry: '34', 'andaman and nicobar islands': '35', telangana: '36', 'andhra pradesh': '37', ladakh: '38',
 };
 const CATEGORY: Record<string, string> = { 'packing material creditors': 'PACKAGING', 'factory other creditors': 'OTHER' };
-const NA = /^(n\/?a|na|nil|none|-|—)$/i;
-const val = (v?: string) => (v && !NA.test(v.trim()) ? v.trim() : '');
+export const NA = /^(n\/?a|na|nil|none|-|—)$/i;
+export const val = (v?: string) => (v && !NA.test(v.trim()) ? v.trim() : '');
 
 export function parseVendorRow(r: Record<string, string>) {
   const notes: string[] = [];

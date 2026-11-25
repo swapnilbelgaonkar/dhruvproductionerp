@@ -213,3 +213,24 @@ describe('Vendor list loader', () => {
     expect(sub.body.error.details.map((c: { key: string }) => c.key)).toEqual(expect.arrayContaining(['kyc.details', 'addr.complete']));
   });
 });
+
+describe('Dealer list loader', () => {
+  it('reads the dealer columns, takes PAN from the GSTIN when the PAN cell is empty, and keeps a shared GSTIN on the first branch only', async () => {
+    const { parseDealerRow, loadDealers } = await import('../src/db/load-dealers');
+    expect(parseDealerRow({ company: 'Sample  Krushi Kendra', address: 'Main Road, Taluka X, 425001', pincode: '', state: 'Maharashtra', mobile_no: 'N/A', e_mail: 'Info@Example.com', gstin_uin: '27ABCDE1234F1Z5', pan_no: '' }))
+      .toMatchObject({ name: 'Sample Krushi Kendra', stateCode: '27', pincode: '425001', mobile: null, email: 'info@example.com', gstin: '27ABCDE1234F1Z5', pan: 'ABCDE1234F', notes: [] });
+    expect(parseDealerRow({ company: 'Y', pan_no: 'ZZZZZ9999Z', gstin_uin: '27ABCDE1234F1Z5', state: 'Madhya Pradesh' }).notes)
+      .toEqual(['PAN ZZZZZ9999Z is not the one in GSTIN 27ABCDE1234F1Z5', 'GSTIN state 27 differs from the address state 23']);
+    const a = uniq('[TEST] Agro Branch A '); const b = uniq('[TEST] Agro Branch B ');
+    const g = `27${String.fromCharCode(65 + Math.floor(Math.random() * 26))}BCDE${String(Math.floor(1000 + Math.random() * 8999))}F1Z5`;
+    const csv = `sr_no,company,address,pincode,state,mobile_no,e_mail,gstin_uin,pan_no\n1,${a},Market Yard,422003,Maharashtra,9000000006,,${g},\n2,${b},Panchavati,422003,Maharashtra,,,${g},\n`;
+    const r = await loadDealers(db, csv, { userId: null, label: 'test' });
+    expect(r.created.map((x) => x.notes.length)).toEqual([0, 1]);
+    const rows = (await db.query(`select p.legal_name, p.gstin, p.pan, d.status, d.territory_id, d.dealer_category from mdm.parties p join mdm.dealer_profiles d on d.party_id = p.id where p.legal_name = any($1) order by p.legal_name`, [[a, b]])).rows;
+    expect(rows).toEqual([{ legal_name: a, gstin: g, pan: g.slice(2, 12), status: 'Draft', territory_id: null, dealer_category: null }, { legal_name: b, gstin: null, pan: g.slice(2, 12), status: 'Draft', territory_id: null, dealer_category: null }]);
+    const ops = await userAgent([{ code: 'SALES_OPS' }]);
+    const id = (await db.query(`select id from mdm.parties where legal_name = $1`, [a])).rows[0].id;
+    const sub = await ops.post(`/api/v1/dealers/${id}/submit`, {}).expect(422);
+    expect(sub.body.error.details.map((c: { key: string }) => c.key)).toEqual(expect.arrayContaining(['kyc.details', 'profile', 'addr.complete']));
+  });
+});

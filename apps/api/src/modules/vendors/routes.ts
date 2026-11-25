@@ -10,7 +10,7 @@ import { nextMasterCode } from '../../lib/numbering';
 import { getSetting } from '../../lib/settings';
 import { requirePermission } from '../../middleware/auth';
 import { actorOf, can } from '../../middleware/context';
-import { assertPartyDoc, checklist, duplicates, identityChecks, kycChecks, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
+import { assertPartyDoc, checklist, duplicates, identityChecks, kycChecks, kycDetailChecks, licenceChecks, partyChildRoutes, partyDetailParts } from '../parties/shared';
 import { registerSubjectHandler, submitForApproval } from '../workflow/engine';
 
 const P = (a: string) => `mdm.vendor:${a}`;
@@ -40,11 +40,7 @@ async function setStatus(tx: Tx, partyId: string, status: string, actor: Actor, 
 export async function vendorReadiness(dbx: Db | Tx, partyId: string) {
   const p = await loadVendor(dbx, partyId);
   const { checks, add } = checklist();
-  const missing = [!p.constitution && 'constitution', !p.pan && 'PAN', !p.contact_person && 'contact person', !p.mobile && 'mobile number'].filter(Boolean);
-  add('kyc.details', 'Constitution, PAN, contact person and mobile', !missing.length, missing.length ? `Missing: ${missing.join(', ')}` : undefined);
-  const reg = (await dbx.query(`select line1, city, district, state_code, pincode from mdm.party_addresses where party_id = $1 and kind = 'REGISTERED' and status = 'Active' limit 1`, [partyId])).rows[0];
-  const gaps = reg ? [!reg.line1 && 'address line', !reg.city && 'city', !reg.district && 'district', !reg.state_code && 'state', !reg.pincode && 'PIN code'].filter(Boolean) : [];
-  if (reg) add('addr.complete', 'Registered address complete', !gaps.length, gaps.length ? `Missing: ${gaps.join(', ')}` : undefined);
+  await kycDetailChecks(dbx, { ...p, id: partyId }, add);
   await identityChecks(dbx, { ...p, id: partyId }, add, { billing: false, shipping: false, noun: 'vendor' });
   const bank = (await dbx.query(`select verification from mdm.party_bank_accounts where party_id = $1 and status = 'Active'`, [partyId])).rows[0];
   add('bank', 'Bank account with cancelled cheque', !!bank && bank.verification !== 'Rejected', bank?.verification === 'Rejected' ? 'Rejected by finance — replace it' : undefined);

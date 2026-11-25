@@ -163,18 +163,20 @@ export const ID_TYPES = ['PAN', 'AADHAAR', 'PASSPORT', 'VOTER_ID', 'DRIVING_LICE
 const mobile = z.string().trim().regex(/^[6-9][0-9]{9}$/, '10-digit Indian mobile number');
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date required');
 
+// KYC fields, category, territory and sales owner may be empty on a Draft dealer; the onboarding checklist requires them before submission.
 export const dealerSchema = z.object({
-  legalName: trimmed(150), tradeName: optionalText(150), constitution: z.enum(CONSTITUTIONS),
-  pan: panSchema, gstRegistered: z.boolean(), gstin: gstinSchema.optional().nullable(),
-  contactPerson: trimmed(100), mobile, email: z.string().trim().toLowerCase().email().optional().nullable(),
-  dealerCategory: z.enum(DEALER_CATEGORIES), territoryId: uuid, salesOwnerId: uuid,
+  legalName: trimmed(150), tradeName: optionalText(150), constitution: z.enum(CONSTITUTIONS).optional().nullable(),
+  pan: panSchema.optional().nullable(), gstRegistered: z.boolean(), gstin: gstinSchema.optional().nullable(),
+  contactPerson: optionalText(100), mobile: mobile.optional().nullable().or(z.literal('').transform(() => null)), phoneNumbers: optionalText(200),
+  email: z.string().trim().toLowerCase().email().optional().nullable().or(z.literal('').transform(() => null)),
+  dealerCategory: z.enum(DEALER_CATEGORIES).optional().nullable(), territoryId: uuid.optional().nullable(), salesOwnerId: uuid.optional().nullable(),
   licenceTypes: z.array(z.enum(DEALER_LICENCE_TYPES)).default([]),
   priceGroup: z.string().trim().min(1).max(30).default('STANDARD'),
   creditDays: z.number().int().min(0).max(365), creditLimit: z.number().min(0),
   annualTarget: z.number().min(0).optional().nullable(), targetFy: z.string().regex(/^\d{4}-\d{2}$/, 'e.g. 2026-27').optional().nullable(),
 }).superRefine((d, ctx) => {
   if (d.gstRegistered && !d.gstin) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN is required for a GST-registered dealer' });
-  if (d.gstin && d.gstin.slice(2, 12) !== d.pan) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN characters 3–12 must equal the PAN' });
+  if (d.gstin && d.pan && d.gstin.slice(2, 12) !== d.pan) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN characters 3–12 must equal the PAN' });
   if (d.creditLimit > 0 && d.creditDays === 0) ctx.addIssue({ code: 'custom', path: ['creditDays'], message: 'Credit days are needed when a credit limit is given' });
 });
 export const addressSchema = z.object({
