@@ -1,3 +1,4 @@
+import { getIntegration } from '../integrations/registry';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { allowTransition, withTx, type Actor, type Db, type Tx } from '../../db/pool';
@@ -285,7 +286,9 @@ export function shipmentRoutes(db: Db) {
       if (!picks.length) throw Errors.rule('NOTHING_PICKED', 'Nothing has been scanned for this shipment.');
       const value = ls.reduce((a, l) => a + Number(l.pickedPacks) * Number(l.lineTotal) / Number(l.orderedPacks), 0);
       const threshold = Number((await tx.query(`select value from sys.settings where key = 'logistics.ewb.thresholdValue'`)).rows[0]?.value ?? 50000);
-      if (value > threshold && !d.ewbNo) throw Errors.rule('EWB_REQUIRED', `The consignment value ${Math.round(value)} is above ₹${threshold}: enter the e-way bill number.`);
+      // with the e-way bill integration on, it is generated from the invoice right after dispatch (before the vehicle leaves); otherwise it is typed here
+      const ewbLater = (await getIntegration(tx, 'EWAYBILL')).mode !== 'OFF';
+      if (value > threshold && !d.ewbNo && !ewbLater) throw Errors.rule('EWB_REQUIRED', `The consignment value ${Math.round(value)} is above ₹${threshold}: enter the e-way bill number.`);
       if (d.ewbValidUntil && d.ewbValidUntil < todayIST()) throw Errors.rule('EWB_EXPIRED', 'The e-way bill has expired.');
       for (const p of picks) {
         const lot = (await tx.query(`select lot_no, qc_status, item_id from inv.lots where id = $1 for update`, [p.lotId])).rows[0];
@@ -322,6 +325,12 @@ export function shipmentRoutes(db: Db) {
       const s = await load(tx, req, req.params.id!, true);
       if (s.status !== 'Dispatched') throw Errors.state(`Only a dispatched shipment can be delivered (this one is ${s.status}).`);
       if (d.receivedOn > todayIST()) throw Errors.rule('INVALID_DATE', 'The delivery date cannot be in the future.');
+      if ((await getIntegration(tx, 'EWAYBILL')).mode !== 'OFF') {
+        const inv = (await tx.query(`select grand_total from sales.invoices where shipment_id = $1 and status = 'Posted'`, [s.id])).rows[0];
+        const threshold = Number(await getSetting(tx, 'logistics.ewb.thresholdValue', 50000));
+        const ewb = (await tx.query(`select ewb_no from logistics.shipments where id = $1`, [s.id])).rows[0]?.ewb_no;
+        if (inv && Number(inv.grand_total) > threshold && !ewb) throw Errors.rule('EWB_MISSING', `The consignment was above ₹${threshold} and has no e-way bill. Generate it (or record it) before closing the delivery.`);
+      }
       const ls = await lines(tx, s.id);
       let short = false;
       for (const x of d.lines) {

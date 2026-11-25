@@ -11,6 +11,7 @@ import { actorOf, can, legalEntityScope } from '../../middleware/context';
 import { registerSubjectHandler, submitForApproval, withdrawOpenRequests } from '../workflow/engine';
 import { amountInWords, calcLine, calcTotals, toPaise, toRupees, type LineOut } from './calc';
 import { todayIST } from './quotations';
+import { assertGstAllowsCancel, einvoiceForPrint } from '../integrations/gst';
 
 /**
  * Sales invoicing (BRD p.18; MP §16; FIN-001…FIN-006, FIN-014, LOG-012).
@@ -208,7 +209,7 @@ export function salesInvoiceRoutes(db: Db) {
     if (inv.status === 'Posted' && can(req, 'sales.return:receive')) allowed.push('return');
     res.json({ ...inv, lines: lines.map((l) => ({ ...l, creditedQty: Number(done.find((d) => d.id === l.id)?.qty ?? 0), creditedTaxable: Number(done.find((d) => d.id === l.id)?.taxable ?? 0) })),
       billTo: addresses.find((a) => a.id === inv.billToId) ?? null, shipTo: addresses.find((a) => a.id === inv.shipToId) ?? null, creditNotes: notes, returns, hsnSummary: hsn,
-      amountInWords: amountInWords(Number(inv.grandTotal)), bankDetails: await getSetting(db, 'company.bankDetails', ''), cancelWindowHours: windowH, allowedActions: allowed });
+      amountInWords: amountInWords(Number(inv.grandTotal)), einvoice: await einvoiceForPrint(db, 'INV', inv.id), bankDetails: await getSetting(db, 'company.bankDetails', ''), cancelWindowHours: windowH, allowedActions: allowed });
   }));
 
   r.post('/', requirePermission(P('create')), asyncHandler(async (req, res) => {
@@ -227,7 +228,7 @@ export function salesInvoiceRoutes(db: Db) {
   r.post('/:id/cancel', requirePermission(P('cancel')), asyncHandler(async (req, res) => {
     const { reason } = parse(z.object({ reason: text(500) }), req.body);
     await withTx(db, async (tx) => {
-      const inv = (await tx.query(`select id, status, amount_settled, created_at, legal_entity_id from sales.invoices where id = $1 for update`, [req.params.id])).rows[0];
+      const inv = (await tx.query(`select id, status, amount_settled, created_at, legal_entity_id, seller_gstin, invoice_date from sales.invoices where id = $1 for update`, [req.params.id])).rows[0];
       const scope = legalEntityScope(req, P('cancel'));
       if (!inv || (scope && !scope.includes(inv.legal_entity_id))) throw Errors.notFound('Invoice');
       if (inv.status !== 'Posted') throw Errors.state('This invoice is already cancelled.');
@@ -236,6 +237,7 @@ export function salesInvoiceRoutes(db: Db) {
       if (Number(inv.amount_settled) !== 0) throw Errors.rule('INVOICE_SETTLED', 'Something is already settled against this invoice; issue a credit note instead.');
       if ((await tx.query(`select 1 from sales.credit_notes where invoice_id = $1 and status not in ('Cancelled','Rejected')`, [inv.id])).rowCount) throw Errors.rule('HAS_CREDIT_NOTES', 'Cancel its credit notes first.');
       if ((await tx.query(`select 1 from sales.customer_returns where invoice_id = $1`, [inv.id])).rowCount) throw Errors.rule('HAS_RETURNS', 'Goods were returned against this invoice; issue a credit note instead.');
+      await assertGstAllowsCancel(tx, 'INV', inv.id, inv.seller_gstin, inv.invoice_date);
       await setStatus(tx, actorOf(req), 'invoices', 'sales.invoice', inv.id, 'Cancelled', reason);
     });
     res.json({ ok: true });

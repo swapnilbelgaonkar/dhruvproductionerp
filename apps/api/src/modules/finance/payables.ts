@@ -10,6 +10,7 @@ import { requirePermission } from '../../middleware/auth';
 import { actorOf, can, legalEntityScope } from '../../middleware/context';
 import { todayIST } from '../sales/quotations';
 import { registerSubjectHandler, submitForApproval, withdrawOpenRequests } from '../workflow/engine';
+import { computeTds } from './tds';
 
 /**
  * Payables (BRD p.19; MP §17.4–17.6; FIN-009…FIN-012).
@@ -159,6 +160,22 @@ export function freightBillRoutes(db: Db) {
 }
 
 // ================================================================ payments (FIN-009, FIN-010)
+/** The bank transfer has gone: record the UTR, settle the bills and mark the payment paid (from the payment screen or the bank's reply file). */
+export async function releasePayment(tx: Tx, actor: Actor, id: string, reference: string, paidOn: string) {
+  const x = (await tx.query(`select id, status from fin.payments where id = $1 for update`, [id])).rows[0];
+  if (x?.status !== 'Approved') throw Errors.state('Only an approved payment can be released.');
+  if (paidOn > todayIST()) throw Errors.rule('INVALID_DATE', 'The payment date cannot be in the future.');
+  for (const l of (await tx.query(`select supplier_invoice_id, freight_bill_id, amount from fin.payment_lines where payment_id = $1`, [id])).rows) {
+    if (l.supplier_invoice_id) await tx.query(`update purchase.supplier_invoices set amount_settled = amount_settled + $2 where id = $1`, [l.supplier_invoice_id, Number(l.amount)]);
+    else await tx.query(`update logistics.freight_bills set amount_settled = amount_settled + $2 where id = $1`, [l.freight_bill_id, Number(l.amount)]);
+  }
+  await tx.query(`update fin.payments set reference = $2, paid_on = $3 where id = $1`, [id, reference, paidOn]);
+  await allowTransition(tx);
+  await tx.query(`update fin.payments set status = 'Paid', updated_by = $2 where id = $1`, [id, actor.userId]);
+  await audit(tx, actor, { action: 'fin.payment.status', entityType: 'fin.payment', entityId: id, after: { status: 'Paid', reference } });
+  await emit(tx, 'fin.payment', id, 'fin.payment.paid');
+}
+
 export function paymentRoutes(db: Db) {
   const SUBJECT = 'fin.payment';
   const P = (a: string) => `finance.payment:${a}`;
@@ -178,9 +195,10 @@ export function paymentRoutes(db: Db) {
   const sel = `select p.id, p.doc_no as "docNo", p.legal_entity_id as "legalEntityId", le.name as "legalEntityName", p.payee_type as "payeeType", p.party_id as "partyId", p.transporter_id as "transporterId",
       coalesce(pt.legal_name, t.name) as "payeeName", coalesce(pt.code, t.code) as "payeeCode", p.payment_date as "paymentDate", p.mode, p.from_account as "fromAccount", p.amount,
       p.tds_section as "tdsSection", p.tds_amount as "tdsAmount", p.net_amount as "netAmount", p.reference, p.status, p.status_reason as "statusReason", p.paid_on as "paidOn", p.remarks,
-      p.created_at as "createdAt", cu.full_name as "createdBy", p.version
+      p.created_at as "createdAt", cu.full_name as "createdBy", p.version, p.tds_rate as "tdsRate", p.tds_base as "tdsBase", p.tds_basis as "tdsBasis",
+      p.batch_id as "batchId", pb.doc_no as "batchNo", pb.status as "batchStatus", p.tds_challan_id as "tdsChallanId"
     from fin.payments p join org.legal_entities le on le.id = p.legal_entity_id left join mdm.parties pt on pt.id = p.party_id left join logistics.transporters t on t.id = p.transporter_id
-    left join iam.users cu on cu.id = p.created_by`;
+    left join iam.users cu on cu.id = p.created_by left join fin.payment_batches pb on pb.id = p.batch_id`;
 
   async function load(dbx: Db | Tx, req: Request, id: string, lock = false) {
     const args: unknown[] = [id];
@@ -225,7 +243,7 @@ export function paymentRoutes(db: Db) {
 
   r.post('/', requirePermission(P('create')), asyncHandler(async (req, res) => {
     const d = parse(z.object({ legalEntityId: z.string().uuid(), payeeType: z.enum(['VENDOR', 'TRANSPORTER']), payeeId: z.string().uuid(), paymentDate: day,
-      mode: z.enum(['NEFT', 'RTGS', 'IMPS', 'UPI', 'CHEQUE']), fromAccount: opt(80), tdsSection: z.enum(['194C', '194Q', '194J', '194H', '194I']).optional().nullable(), tdsAmount: z.number().min(0).default(0),
+      mode: z.enum(['NEFT', 'RTGS', 'IMPS', 'UPI', 'CHEQUE']), fromAccount: opt(80), tdsSection: z.string().regex(/^[0-9]{3}[A-Z]{0,2}$/).optional().nullable(), tdsAmount: z.number().min(0).optional(), tdsReason: opt(300),
       remarks: opt(500), lines: z.array(z.object({ docId: z.string().uuid(), amount: z.number().positive() })).min(1).max(100) })
       .refine((x) => !x.tdsAmount || !!x.tdsSection, { message: 'Give the TDS section', path: ['tdsSection'] }), req.body);
     const out = await withTx(db, async (tx) => {
@@ -237,19 +255,29 @@ export function paymentRoutes(db: Db) {
         if (l.amount > doc.outstanding + 0.004) throw Errors.rule('OVERPAYMENT', `${doc.docNo}: only ₹${doc.outstanding} is still payable.`);
       }
       const amount = r2(d.lines.reduce((a, l) => a + l.amount, 0));
-      if (d.tdsAmount >= amount) throw Errors.rule('TDS_TOO_HIGH', 'TDS cannot be the whole payment.');
+      // TDS: worked out from the TDS master unless the accountant enters it (then it is recorded as a manual figure)
+      const auto = await computeTds(tx, { payeeType: d.payeeType, payeeId: d.payeeId, date: d.paymentDate, lines: d.lines });
+      const manual = d.tdsAmount !== undefined || !!d.tdsSection;
+      const tds = manual ? { section: d.tdsSection ?? null, amount: d.tdsAmount ?? 0, rate: null as number | null, base: null as number | null, basis: 'MANUAL' as const }
+        : { section: auto.amount > 0 ? auto.section : null, amount: auto.amount, rate: auto.amount > 0 ? auto.rate : null, base: auto.amount > 0 ? auto.base : null, basis: auto.basis };
+      if (manual && auto.basis === 'AUTO' && Math.abs(auto.amount - tds.amount) >= 1 && !d.tdsReason) {
+        throw Errors.rule('TDS_DIFFERS', `The TDS master gives ₹${auto.amount} (${auto.reason}). Give the reason for deducting ₹${tds.amount} instead.`, { computed: auto });
+      }
+      if (tds.section && !(await tx.query(`select 1 from fin.tds_sections where code = $1`, [tds.section])).rowCount) throw Errors.rule('UNKNOWN_TDS_SECTION', `No TDS section ${tds.section}.`);
+      if (tds.amount >= amount) throw Errors.rule('TDS_TOO_HIGH', 'TDS cannot be the whole payment.');
       const docNo = await nextDocNo(tx, 'PAYMENT');
-      const p = (await tx.query(`insert into fin.payments (doc_no, legal_entity_id, payee_type, party_id, transporter_id, payment_date, mode, from_account, amount, tds_section, tds_amount, net_amount, remarks, created_by, updated_by)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14) returning id`,
+      const p = (await tx.query(`insert into fin.payments (doc_no, legal_entity_id, payee_type, party_id, transporter_id, payment_date, mode, from_account, amount, tds_section, tds_amount, net_amount, remarks, created_by, updated_by,
+            tds_rate, tds_base, tds_basis)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$17) returning id`,
         [docNo, d.legalEntityId, d.payeeType, d.payeeType === 'VENDOR' ? d.payeeId : null, d.payeeType === 'TRANSPORTER' ? d.payeeId : null, d.paymentDate, d.mode, d.fromAccount, amount,
-          d.tdsSection ?? null, d.tdsAmount, r2(amount - d.tdsAmount), d.remarks, req.auth!.user.id])).rows[0];
+          tds.section, tds.amount, r2(amount - tds.amount), [d.remarks, manual && d.tdsReason ? `TDS: ${d.tdsReason}` : null].filter(Boolean).join(' · ') || null, req.auth!.user.id, tds.rate, tds.base, tds.basis])).rows[0];
       for (const l of d.lines) {
         const doc = docs.find((x) => x.id === l.docId)!;
         await tx.query(`insert into fin.payment_lines (payment_id, supplier_invoice_id, freight_bill_id, amount) values ($1,$2,$3,$4)`,
           [p.id, doc.kind === 'SUPPLIER_INVOICE' ? doc.id : null, doc.kind === 'FREIGHT_BILL' ? doc.id : null, l.amount]);
       }
       await audit(tx, actorOf(req), { action: `${SUBJECT}.drafted`, entityType: SUBJECT, entityId: p.id, after: { docNo, ...d } });
-      return { id: p.id as string, docNo, amount, netAmount: r2(amount - d.tdsAmount) };
+      return { id: p.id as string, docNo, amount, tdsAmount: tds.amount, netAmount: r2(amount - tds.amount), tds: auto };
     });
     res.status(201).json(out);
   }));
@@ -282,14 +310,8 @@ export function paymentRoutes(db: Db) {
     const d = parse(z.object({ reference: text(40), paidOn: day }), req.body);
     await withTx(db, async (tx) => {
       const x = await load(tx, req, req.params.id!, true);
-      if (x.status !== 'Approved') throw Errors.state('Only an approved payment can be released.');
-      if (d.paidOn > todayIST()) throw Errors.rule('INVALID_DATE', 'The payment date cannot be in the future.');
-      for (const l of (await tx.query(`select supplier_invoice_id, freight_bill_id, amount from fin.payment_lines where payment_id = $1`, [x.id])).rows) {
-        if (l.supplier_invoice_id) await tx.query(`update purchase.supplier_invoices set amount_settled = amount_settled + $2 where id = $1`, [l.supplier_invoice_id, Number(l.amount)]);
-        else await tx.query(`update logistics.freight_bills set amount_settled = amount_settled + $2 where id = $1`, [l.freight_bill_id, Number(l.amount)]);
-      }
-      await tx.query(`update fin.payments set reference = $2, paid_on = $3 where id = $1`, [x.id, d.reference, d.paidOn]);
-      await setStatus(tx, actorOf(req), x.id, 'Paid');
+      if (x.batchId && x.batchStatus === 'Generated') throw Errors.rule('IN_BANK_FILE', 'This payment is in a bank file; it is released by the bank’s reply file.');
+      await releasePayment(tx, actorOf(req), x.id, d.reference, d.paidOn);
     });
     res.json({ ok: true });
   }));

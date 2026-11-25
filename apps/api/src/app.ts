@@ -51,6 +51,10 @@ import { ledgerRoutes } from './modules/finance/ledger';
 import { executiveRoutes } from './modules/mis/executive';
 import { reportRoutes } from './modules/mis/reports';
 import { alertRoutes } from './modules/alerts/alerts';
+import { integrationRoutes } from './modules/integrations/registry';
+import { gstIntegrationRoutes } from './modules/integrations/gst';
+import { bankRoutes } from './modules/integrations/bank';
+import { tdsRoutes } from './modules/finance/tds';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
   const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
@@ -129,6 +133,10 @@ export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalD
   v1.use('/dashboard', executiveRoutes(db));
   v1.use('/reports', reportRoutes(db));
   v1.use('/alerts', alertRoutes(db));
+  v1.use('/integrations', integrationRoutes(db));
+  v1.use('/gst', gstIntegrationRoutes(db));
+  v1.use('/tds', tdsRoutes(db));
+  v1.use('/bank', bankRoutes(db, cfg));
   v1.use('/', mdmRoutes(db));
   v1.use('/', orgRoutes(db));
   app.use('/api/v1', v1);

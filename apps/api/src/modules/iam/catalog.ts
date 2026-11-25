@@ -81,6 +81,17 @@ export const PERMISSIONS = [
   ...P('Finance', 'finance.coa', ['manage'], 'the chart of accounts'),
   ...P('Finance', 'finance.gst', ['view'], 'GST summaries (GSTR-1 and GSTR-3B working)'),
   ...P('Management', 'mis.executive', ['view'], 'the executive dashboard (company-wide KPIs)'),
+  ...P('Administration', 'sys.integration', ['view', 'configure'], 'integrations (e-invoice, e-way bill, GST returns, bank files, e-mail, SMS, WhatsApp) and their modes'),
+  ...P('Administration', 'sys.message', ['view'], 'the outgoing e-mail, SMS and WhatsApp messages'),
+  ...P('Administration', 'sys.import', ['masters', 'opening'], 'bulk import of masters, and of opening balances at go-live'),
+  ...P('Administration', 'sys.golive', ['view'], 'the go-live readiness checklist'),
+  ...P('Finance', 'gst.einvoice', ['generate', 'cancel'], 'e-invoices (IRN) for invoices and credit notes'),
+  ...P('Logistics', 'gst.ewaybill', ['generate'], 'e-way bills for dispatched shipments (generate, record and cancel)'),
+  ...P('Finance', 'gst.return', ['prepare', 'file'], 'GSTR-1 and GSTR-3B files (file = record the ARN after filing on the portal)'),
+  ...P('Finance', 'finance.tds', ['view', 'configure', 'deposit'], 'TDS sections and rates, deposits by challan and the quarterly return file'),
+  ...P('Finance', 'finance.bank_account', ['manage'], 'the company bank accounts used for payment files'),
+  ...P('Finance', 'finance.payment_batch', ['view', 'create', 'close'], 'bank payment files and the bank’s reply (close = release the payments with their UTRs)'),
+  ...P('Management', 'mis.schedule', ['manage'], 'scheduled e-mailed reports'),
 ];
 
 const ALL = PERMISSIONS.map((p) => p.code);
@@ -147,14 +158,17 @@ const PAY_SEE = ['finance.payment:view', 'finance.payable:view', 'logistics.frei
 /** General ledger (Stage 6 part 5): accounts draft manual journals; the finance head posts them, keeps the chart of accounts and locks periods. */
 const GL_ACC = ['finance.gl:view', 'finance.gl:journal', 'finance.gst:view'];
 const GL_HEAD = [...GL_ACC, 'finance.gl:post', 'finance.gl:lock', 'finance.coa:manage'];
+/** Stage 7 part 4: statutory files, TDS and bank files sit with accounts; the finance head files, cancels and configures. */
+const STAT_ACC = ['gst.einvoice:generate', 'gst.return:prepare', 'finance.tds:view', 'finance.tds:deposit', 'finance.payment_batch:view', 'finance.payment_batch:create', 'finance.payment_batch:close', 'mis.schedule:manage'];
+const STAT_HEAD = [...STAT_ACC, 'gst.einvoice:cancel', 'gst.return:file', 'finance.tds:configure', 'finance.bank_account:manage', 'sys.import:opening'];
 const LOGISTICS_EXTRA: Record<string, string[]> = {
-  LOGISTICS_EXEC: [...SHIP_RUN, 'sales.invoice:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'],
-  LOGISTICS_HEAD: [...SHIP_RUN, 'logistics.transporter:manage', 'sales.invoice:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'],
+  LOGISTICS_EXEC: [...SHIP_RUN, 'gst.ewaybill:generate', 'sales.invoice:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'],
+  LOGISTICS_HEAD: [...SHIP_RUN, 'gst.ewaybill:generate', 'logistics.transporter:manage', 'sales.invoice:view', 'logistics.freight_bill:view', 'logistics.freight_bill:create'],
   PURCHASE_HEAD: ['finance.payable:view', 'finance.payment:view'],
   STOREKEEPER: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN], STORES_HEAD: ['logistics.shipment:view', 'logistics.shipment:pick', ...RETURN_IN],
   SCANNER_OPERATOR: ['logistics.shipment:view', 'logistics.shipment:pick', 'mfg.packing:view'],
-  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING, ...PAYING, ...GL_ACC], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel', ...PAYING, ...GL_HEAD, 'mis.executive:view'],
-  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view', ...PAY_SEE, 'finance.gl:view', 'finance.gst:view', 'mis.executive:view'],
+  SALES_OPS: ['logistics.shipment:view', ...BILL_SEE], ACCOUNTS_EXEC: ['logistics.shipment:view', ...BILLING, ...PAYING, ...GL_ACC, ...STAT_ACC], FINANCE_HEAD: ['logistics.shipment:view', ...BILLING, 'finance.receipt:cancel', ...PAYING, ...GL_HEAD, ...STAT_HEAD, 'mis.executive:view'],
+  CREDIT_CONTROLLER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view'], MANAGEMENT_VIEWER: ['logistics.shipment:view', ...BILL_SEE, 'finance.receipt:view', ...PAY_SEE, 'finance.gl:view', 'finance.gst:view', 'mis.executive:view', 'mis.schedule:manage'],
   PLANT_HEAD: ['mis.executive:view'],
   QA_HEAD: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide', 'mis.executive:view'], QA_MANAGER: ['logistics.shipment:view', 'sales.invoice:view', 'sales.return:view', 'sales.return:decide'],
 };
@@ -188,7 +202,8 @@ export const ROLES: RoleDef[] = [
     description: 'Approves policies, authority limits and privileged role grants (BRD Admins 01/02).',
     permissions: [...VIEW, 'iam.authority_limit:configure', 'sys.settings:configure', 'sys.number_series:configure', 'wf.policy:configure',
       'wf.policy:simulate', 'wf.approval:view_all', 'sys.dashboard:view_admin', 'sys.audit:verify', 'mdm.dealer:suspend', 'mdm.dealer:view_sensitive',
-      'finance.gl:view', 'finance.gl:unlock', 'mis.executive:view', 'sys.alert:view_all', 'sys.alert:configure'] },
+      'finance.gl:view', 'finance.gl:unlock', 'mis.executive:view', 'sys.alert:view_all', 'sys.alert:configure',
+      'sys.integration:configure', 'sys.golive:view', 'sys.import:masters', 'mis.schedule:manage'] },
   { code: 'SECURITY_ADMIN', name: 'Security Administrator', department: 'IT', privileged: true, requiresMfa: true,
     description: 'Users, roles, sessions and audit forensics (BRD Admin 03). Role grants of privileged roles need executive approval.',
     permissions: ['iam.user:view', 'iam.user:create', 'iam.user:edit', 'iam.user:deactivate', 'iam.role:view', 'iam.role:configure',
@@ -196,7 +211,7 @@ export const ROLES: RoleDef[] = [
       'sys.audit:verify', 'sys.dashboard:view_admin', ...ORG_VIEW] },
   { code: 'MASTER_DATA_OWNER', name: 'Master Data Owner', department: 'Administration',
     description: 'Creates and maintains organisation masters; submits them for approval.',
-    permissions: [...ORG_VIEW, ...ALL.filter((c) => MASTER(c) && /:(create|edit|edit_draft|submit|deactivate)$/.test(c)), 'mdm.uom:configure'] },
+    permissions: [...ORG_VIEW, ...ALL.filter((c) => MASTER(c) && /:(create|edit|edit_draft|submit|deactivate)$/.test(c)), 'mdm.uom:configure', 'sys.import:masters'] },
   { code: 'MASTER_DATA_APPROVER', name: 'Master Data Approver', department: 'Administration',
     description: 'Approves organisation masters before activation (maker-checker).',
     permissions: [...ORG_VIEW, ...ALL.filter((c) => MASTER(c) && c.endsWith(':approve'))] },

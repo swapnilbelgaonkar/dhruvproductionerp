@@ -38,7 +38,7 @@ async function prepare(): Promise<void> {
       const loaded = (await client.query(`select to_regclass('public.demo_snapshot') is not null as t`)).rows[0].t
         ? (await client.query(`select id from public.demo_snapshot limit 1`)).rows[0]?.id : null;
       if (loaded !== snapshotId) {
-        await client.query(`drop schema if exists sys, iam, org, wf, mdm, sales, purchase, inv, qc, mfg, qa, logistics, fin cascade;
+        await client.query(`drop schema if exists sys, iam, org, wf, mdm, sales, purchase, inv, qc, mfg, qa, logistics, fin, gst cascade;
                             drop table if exists public.schema_migrations, public.demo_snapshot`);
         fresh = true;
         console.log('demo data replaced by snapshot', snapshotId);

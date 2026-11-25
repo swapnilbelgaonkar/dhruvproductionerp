@@ -6,7 +6,7 @@ export const TEST_DB = process.env.DATABASE_URL_TEST ?? 'postgres://dhruv:dhruv_
 export default async function setup() {
   const c = new pg.Client({ connectionString: TEST_DB });
   await c.connect();
-  await c.query(`drop schema if exists sys, iam, org, wf, mdm, sales, purchase, inv, qc, mfg, qa, logistics, fin cascade; drop table if exists public.schema_migrations;`);
+  await c.query(`drop schema if exists sys, iam, org, wf, mdm, sales, purchase, inv, qc, mfg, qa, logistics, fin, gst cascade; drop table if exists public.schema_migrations;`);
   await c.end();
   await migrate(TEST_DB, () => undefined);
   // line clearance (QA-017) is exercised in qa-system.test.ts; other suites start batches without it

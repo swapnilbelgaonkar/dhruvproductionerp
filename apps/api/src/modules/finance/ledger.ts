@@ -170,6 +170,12 @@ export async function syncLedger(db: Db): Promise<{ posted: number; failed: { re
         x.payee_type === 'VENDOR' ? { key: 'AP_TRADE', debit: Number(x.amount), partyId: x.party_id } : { key: 'AP_TRANSPORT', debit: Number(x.amount), transporterId: x.transporter_id },
         { key: 'BANK', credit: Number(x.net_amount) }, { key: 'TDS_PAYABLE', credit: Number(x.tds_amount) }] }));
   }
+  // TDS deposited with the government by challan
+  for (const x of await rows(`select x.* from fin.tds_challans x where x.status = 'Deposited' and ${none('fin.tds_challan', 'deposited')}`)) {
+    await run(x.doc_no, (tx) => postJournal(tx, { le: x.legal_entity_id, date: new Date(x.deposited_on).toISOString().slice(0, 10), sourceType: 'fin.tds_challan', sourceId: x.id, sourceEvent: 'deposited', sourceRef: x.doc_no,
+      narration: `TDS ${x.section} for ${x.period} deposited, challan ${x.bsr_code}/${x.challan_serial}`, lines: [
+        { key: 'TDS_PAYABLE', debit: Number(x.tds_amount) }, { key: 'TDS_INTEREST', debit: Number(x.interest) }, { key: 'BANK', credit: Number(x.total) }] }));
+  }
   // ---------------------------------------------------------------- stock movements valued into inventory
   const groups = await rows(`select w.legal_entity_id as le, ${ist('sl.posted_at')} as d, sl.source_type, sl.source_id, sl.txn_type, array_agg(sl.id order by sl.id) as ids
       from inv.stock_ledger sl join org.warehouses w on w.id = sl.warehouse_id where not exists (select 1 from fin.stock_postings sp where sp.stock_ledger_id = sl.id)
