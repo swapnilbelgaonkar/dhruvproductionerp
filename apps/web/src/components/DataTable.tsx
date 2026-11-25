@@ -9,12 +9,12 @@ import { EmptyState, ErrorBanner, Select, Skeleton } from './ui';
 export interface Column<T> { key: string; header: string; render: (row: T) => ReactNode; className?: string }
 
 /** Server-paginated, searchable register (doc 06 §3, UI-002). */
-export function DataTable<T extends { id?: string }>({ queryKey, path, columns, rowHref, filters, statusOptions, empty, searchPlaceholder = 'Search code or name', searchable = true }: {
+export function DataTable<T extends { id?: string }>({ queryKey, path, columns, rowHref, filters, statusOptions, defaultStatus = '', empty, searchPlaceholder = 'Search code or name', searchable = true }: {
   queryKey: string; path: string; columns: Column<T>[]; rowHref?: (row: T) => string; filters?: Record<string, unknown>;
-  statusOptions?: string[]; empty: { title: string; text: string; action?: ReactNode }; searchPlaceholder?: string; searchable?: boolean;
+  statusOptions?: string[]; /** status filter selected when the list opens */ defaultStatus?: string; empty: { title: string; text: string; action?: ReactNode }; searchPlaceholder?: string; searchable?: boolean;
 }) {
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(defaultStatus);
   const [offset, setOffset] = useState(0);
   const limit = 25;
   const nav = useNavigate();

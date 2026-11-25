@@ -91,6 +91,9 @@ async function seedDemoUsers(tx: pg.PoolClient, password: string) {
   const taluka = await node(district, 'TK-NIPHAD', '[SAMPLE] Niphad Taluka', 7);
   const pw = await hash(password);
   const person = async (code: string, name: string, tier: string | null, manager: string | null, territory: string, email: string, roles: string[]) => {
+    // demo staff removed by the company (made Inactive) are not brought back or given roles again
+    const gone = (await tx.query<{ id: string }>(`select id from org.employees where emp_code = $1 and status = 'Inactive'`, [code])).rows[0];
+    if (gone) return gone.id;
     const e = (await tx.query<{ id: string }>(`insert into org.employees (emp_code, full_name, sales_tier, manager_id, territory_id) values ($1,$2,$3,$4,$5)
       on conflict (emp_code) do update set full_name = excluded.full_name returning id`, [code, name, tier, manager, territory])).rows[0]!.id;
     const u = (await tx.query<{ id: string }>(`insert into iam.users (email, full_name, password_hash, must_change_password, employee_id) values ($1,$2,$3,false,$4)

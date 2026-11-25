@@ -143,7 +143,7 @@ export function EmployeesPage() {
   return (
     <>
       <PageHeader title="Employees" subtitle="People, their reporting line and sales tier. The reporting line drives approval routing (D01). An employee signs in only once a user account is created for them." actions={create} />
-      <DataTable<Emp> queryKey="employees" path="/employees" rowHref={(r) => `/masters/employees/${r.id}`} statusOptions={['Active', 'Inactive']} searchPlaceholder="Search code or name"
+      <DataTable<Emp> queryKey="employees" path="/employees" rowHref={(r) => `/masters/employees/${r.id}`} statusOptions={['Active', 'Inactive']} defaultStatus="Active" searchPlaceholder="Search code or name"
         empty={{ title: 'No employees yet', text: 'Add employees, then link them to user accounts.', action: create }}
         columns={[
           { key: 'code', header: 'Code', render: (r) => <span className="font-semibold">{r.empCode}</span> },
