@@ -8,6 +8,7 @@ import { getSetting } from '../../lib/settings';
 import { requirePermission } from '../../middleware/auth';
 import { actorOf, can } from '../../middleware/context';
 import { todayIST } from '../sales/quotations';
+import { fanOutAlert } from '../integrations/messaging';
 
 /**
  * Alerts and escalations (NOT-001…NOT-006, WF-008). Each rule turns a business condition into one open alert per subject.
@@ -17,7 +18,7 @@ import { todayIST } from '../sales/quotations';
  *  - condition gone (paid, calibrated, approved, delivered…): the alert resolves itself.
  * Rules, thresholds and routing are configured by the administrator; the scan runs hourly in the worker and on demand.
  */
-interface Rule { code: string; name: string; params: Record<string, number>; recipient_roles: string[]; escalate_after_hours: number | null; escalate_roles: string[]; escalate_to_manager: boolean; enabled: boolean }
+interface Rule { code: string; name: string; params: Record<string, number>; recipient_roles: string[]; escalate_after_hours: number | null; escalate_roles: string[]; escalate_to_manager: boolean; enabled: boolean; channels: string[] }
 interface Candidate { key: string; subjectType: string; subjectId: string | null; ref: string; severity: 'warning' | 'critical'; title: string; body: string; link: string; owners: string[] }
 type Finder = (tx: Tx, r: Rule) => Promise<Candidate[]>;
 
@@ -110,7 +111,8 @@ async function managersOf(tx: Tx, userIds: string[]) {
   return (await tx.query(`select distinct mu.id from iam.users u join org.employees e on e.id = u.employee_id join iam.users mu on mu.employee_id = e.manager_id and mu.status = 'Active'
       where u.id = any($1)`, [userIds])).rows.map((x) => x.id as string);
 }
-async function notify(tx: Tx, users: string[], a: { id: string; title: string; body: string; link: string | null }, suffix: string, prefix = '') {
+async function notify(tx: Tx, rule: Rule, users: string[], a: { id: string; title: string; body: string; link: string | null }, suffix: string, prefix = '') {
+  await fanOutAlert(tx, rule, [...new Set(users)], a, suffix, prefix);
   for (const u of new Set(users)) {
     await tx.query(`insert into sys.notifications (user_id, kind, title, body, link, dedupe_key) values ($1,'warning',$2,$3,$4,$5) on conflict (user_id, dedupe_key) do nothing`,
       [u, `${prefix}${a.title}`, a.body, a.link, `alert:${a.id}:${suffix}`]);
@@ -122,7 +124,7 @@ export interface ScanResult { raised: number; worsened: number; resolved: number
 /** Evaluates every enabled rule; each rule in its own transaction so one failure does not stop the others. */
 export async function scanAlerts(db: Db): Promise<ScanResult> {
   const out: ScanResult = { raised: 0, worsened: 0, resolved: 0, escalated: 0, failed: [] };
-  const rules = (await db.query(`select code, name, params, recipient_roles, escalate_after_hours, escalate_roles, escalate_to_manager, enabled from sys.alert_rules order by code`)).rows as Rule[];
+  const rules = (await db.query(`select code, name, params, recipient_roles, escalate_after_hours, escalate_roles, escalate_to_manager, enabled, channels from sys.alert_rules order by code`)).rows as Rule[];
   for (const rule of rules) {
     const find = FINDERS[rule.code];
     if (!find) continue;
@@ -137,12 +139,12 @@ export async function scanAlerts(db: Db): Promise<ScanResult> {
             const users = [...new Set([...c.owners, ...roleUsers])];
             const a = (await tx.query(`insert into sys.alerts (rule_code, subject_key, subject_type, subject_id, subject_ref, severity, title, body, link, notified_user_ids)
                 values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id`, [rule.code, c.key, c.subjectType, c.subjectId, c.ref, c.severity, c.title, c.body, c.link, users])).rows[0];
-            await notify(tx, users, { id: a.id, title: c.title, body: c.body, link: c.link }, 'raised');
+            await notify(tx, rule, users, { id: a.id, title: c.title, body: c.body, link: c.link }, 'raised');
             out.raised++;
           } else if (ex.severity === 'warning' && c.severity === 'critical') {
             const users = [...new Set([...ids(ex.notified_user_ids), ...c.owners, ...roleUsers])];
             await tx.query(`update sys.alerts set severity = 'critical', title = $2, body = $3, last_seen_at = now(), notified_user_ids = $4 where id = $1`, [ex.id, c.title, c.body, users]);
-            await notify(tx, users, { id: ex.id, title: c.title, body: c.body, link: c.link }, 'critical');
+            await notify(tx, rule, users, { id: ex.id, title: c.title, body: c.body, link: c.link }, 'critical');
             out.worsened++;
           } else {
             await tx.query(`update sys.alerts set title = $2, body = $3, last_seen_at = now() where id = $1`, [ex.id, c.title, c.body]);
@@ -161,7 +163,7 @@ export async function scanAlerts(db: Db): Promise<ScanResult> {
               const users = [...new Set([...mgrs, ...escRole])];
               if (!users.length) continue;
               await tx.query(`update sys.alerts set escalated_at = now(), escalated_user_ids = $2 where id = $1`, [a.id, users]);
-              await notify(tx, users, a, 'escalated', 'Escalated: ');
+              await notify(tx, rule, users, a, 'escalated', 'Escalated: ');
               out.escalated++;
             }
           }

@@ -12,6 +12,24 @@ export const CSRF_COOKIE = 'dcsrf';
 /** Routes a partially-authenticated session may still use (MFA / password-change gates). */
 const GATE_ALLOW = ['/api/v1/me', '/api/v1/auth/logout', '/api/v1/auth/mfa/verify', '/api/v1/auth/mfa/enrol', '/api/v1/auth/mfa/enrol/confirm', '/api/v1/auth/password/change'];
 
+/** Roles and permission grants of a user (also used to run scheduled reports as their owner). */
+export async function grantsFor(db: Db, userId: string) {
+  const g = await db.query<{ code: string; name: string; requires_mfa: boolean; scope: Scope; permission_code: string | null }>(
+    `select r.code, r.name, r.requires_mfa, ur.scope, rp.permission_code
+       from iam.user_roles ur join iam.roles r on r.id = ur.role_id
+       left join iam.role_permissions rp on rp.role_id = r.id
+      where ur.user_id = $1 and ur.status = 'Active'`, [userId]);
+  const grants = new Map<string, Scope[]>();
+  const roles = new Map<string, string>();
+  let mfaRequiredByRole = false;
+  for (const r of g.rows) {
+    roles.set(r.code, r.name);
+    if (r.requires_mfa) mfaRequiredByRole = true;
+    if (r.permission_code) grants.set(r.permission_code, [...(grants.get(r.permission_code) ?? []), r.scope]);
+  }
+  return { grants, roles, mfaRequiredByRole };
+}
+
 export function loadSession(db: Db) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
@@ -29,19 +47,7 @@ export function loadSession(db: Db) {
       const idleMinutes = await getSetting<number>(db, 'auth.session.idleMinutes', 30);
       await db.query(`update iam.sessions set last_seen_at = now(), idle_expires_at = least(absolute_expires_at, now() + make_interval(mins => $2)) where id = $1`, [id, idleMinutes]);
 
-      const g = await db.query<{ code: string; name: string; requires_mfa: boolean; scope: Scope; permission_code: string | null }>(
-        `select r.code, r.name, r.requires_mfa, ur.scope, rp.permission_code
-           from iam.user_roles ur join iam.roles r on r.id = ur.role_id
-           left join iam.role_permissions rp on rp.role_id = r.id
-          where ur.user_id = $1 and ur.status = 'Active'`, [row.user_id]);
-      const grants = new Map<string, Scope[]>();
-      const roles = new Map<string, string>();
-      let mfaRequiredByRole = false;
-      for (const r of g.rows) {
-        roles.set(r.code, r.name);
-        if (r.requires_mfa) mfaRequiredByRole = true;
-        if (r.permission_code) grants.set(r.permission_code, [...(grants.get(r.permission_code) ?? []), r.scope]);
-      }
+      const { grants, roles, mfaRequiredByRole } = await grantsFor(db, row.user_id);
       // pre-go-live switch: with two-factor off, nobody is asked to enrol or verify
       const mfaOn = (await getSetting<boolean>(db, 'auth.mfa.enforced', true)) !== false;
       req.auth = {

@@ -423,6 +423,44 @@ const csvCell = (v: unknown) => {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+async function runReport(db: Db, req: Request, x: Report) {
+  const f: F = {};
+  for (const flt of x.filters ?? []) {
+    const v = typeof req.query[flt.key] === 'string' ? (req.query[flt.key] as string).trim() : '';
+    if (v) {
+      if (flt.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw Errors.validation({ [flt.key]: 'YYYY-MM-DD' });
+      if (flt.type === 'number' && !Number.isFinite(Number(v))) throw Errors.validation({ [flt.key]: 'A number' });
+      if (flt.options && !flt.source && !flt.options.some((o) => o.value === v)) throw Errors.validation({ [flt.key]: 'Not an allowed value' });
+      f[flt.key] = v;
+    } else if (flt.default) f[flt.key] = typeof flt.default === 'function' ? flt.default() : flt.default;
+  }
+  const args: unknown[] = [];
+  const p = (v: unknown) => { args.push(v); return `$${args.length}`; };
+  const le = (col: string) => { const s = legalEntityScope(req, x.perm); return s ? `${col} = any(${p(s)}::uuid[])` : 'true'; };
+  const terr = (col: string) => territorySql(db, req, x.perm, col, args);
+  const data = await x.run!({ db, req, f, args, p, le, terr });
+  const columns = x.columns ?? [];
+  const totals: Record<string, number> = {};
+  for (const col of columns.filter((k) => k.total)) totals[col.key] = Math.round(data.reduce((a, row) => a + Number(row[col.key] ?? 0), 0) * 10000) / 10000;
+  return { columns, rows: data, totals, filters: f, count: data.length, truncated: data.length >= 5000 };
+}
+
+
+function toCsv(out: Awaited<ReturnType<typeof runReport>>) {
+  const lines = [out.columns.map((k) => csvCell(k.label)).join(',')];
+  for (const row of out.rows) lines.push(out.columns.map((k) => csvCell(row[k.key])).join(','));
+  if (Object.keys(out.totals).length) lines.push(out.columns.map((k, i) => (i === 0 ? 'Total' : k.key in out.totals ? csvCell(out.totals[k.key]) : '')).join(','));
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
+}
+
+/** Runs a report for a request (a signed-in user, or a scheduled run acting as its owner) and returns it as CSV. */
+export async function reportCsv(db: Db, req: Request, id: string) {
+  const x = REPORTS.find((y) => y.id === id);
+  if (!x || !can(req, x.perm) || !x.run) throw Errors.notFound('Report');
+  const out = await runReport(db, req, x);
+  return { title: x.title, csv: toCsv(out), count: out.count, fileName: `${x.id}-${todayIST()}.csv` };
+}
+
 export function reportRoutes(db: Db) {
   const r = Router();
   const byId = (id: string) => REPORTS.find((x) => x.id === id);
@@ -458,45 +496,18 @@ export function reportRoutes(db: Db) {
     res.json(d);
   }));
 
-  async function runReport(req: Request, x: Report) {
-    const f: F = {};
-    for (const flt of x.filters ?? []) {
-      const v = typeof req.query[flt.key] === 'string' ? (req.query[flt.key] as string).trim() : '';
-      if (v) {
-        if (flt.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw Errors.validation({ [flt.key]: 'YYYY-MM-DD' });
-        if (flt.type === 'number' && !Number.isFinite(Number(v))) throw Errors.validation({ [flt.key]: 'A number' });
-        if (flt.options && !flt.source && !flt.options.some((o) => o.value === v)) throw Errors.validation({ [flt.key]: 'Not an allowed value' });
-        f[flt.key] = v;
-      } else if (flt.default) f[flt.key] = typeof flt.default === 'function' ? flt.default() : flt.default;
-    }
-    const args: unknown[] = [];
-    const p = (v: unknown) => { args.push(v); return `$${args.length}`; };
-    const le = (col: string) => { const s = legalEntityScope(req, x.perm); return s ? `${col} = any(${p(s)}::uuid[])` : 'true'; };
-    const terr = (col: string) => territorySql(db, req, x.perm, col, args);
-    const data = await x.run!({ db, req, f, args, p, le, terr });
-    const columns = x.columns ?? [];
-    const totals: Record<string, number> = {};
-    for (const col of columns.filter((k) => k.total)) totals[col.key] = Math.round(data.reduce((a, row) => a + Number(row[col.key] ?? 0), 0) * 10000) / 10000;
-    return { columns, rows: data, totals, filters: f, count: data.length, truncated: data.length >= 5000 };
-  }
-
   r.get('/:id/run', asyncHandler(async (req, res) => {
     const x = byId(req.params.id!);
     if (!x || !can(req, x.perm) || !x.run) throw Errors.notFound('Report');
-    res.json(await runReport(req, x));
+    res.json(await runReport(db, req, x));
   }));
 
   // CSV for Excel: UTF-8 with BOM so ₹ and Indian names open correctly
   r.get('/:id/export', asyncHandler(async (req, res) => {
     const x = byId(req.params.id!);
     if (!x || !can(req, x.perm) || !x.run) throw Errors.notFound('Report');
-    const out = await runReport(req, x);
-    const lines = [out.columns.map((k) => csvCell(k.label)).join(',')];
-    for (const row of out.rows) lines.push(out.columns.map((k) => csvCell(row[k.key])).join(','));
-    if (Object.keys(out.totals).length) lines.push(out.columns.map((k, i) => (i === 0 ? 'Total' : k.key in out.totals ? csvCell(out.totals[k.key]) : '')).join(','));
-    res.setHeader('content-type', 'text/csv; charset=utf-8');
-    res.setHeader('content-disposition', `attachment; filename="${x.id}-${todayIST()}.csv"`);
-    res.send(`﻿${lines.join('\r\n')}\r\n`);
+    const out = await runReport(db, req, x);
+    res.send(toCsv(out));
   }));
   return r;
 }

@@ -2,6 +2,7 @@ import type { Db, Tx } from '../../db/pool';
 import { expireQuotations } from '../sales/quotations';
 import { lapseUnacknowledged } from '../purchase/orders';
 import { scanAlerts } from '../alerts/alerts';
+import { runDueSchedules, scanDealerReminders, sendQueued } from '../integrations/messaging';
 
 interface OutboxRow { id: string; aggregate_type: string; aggregate_id: string; event_type: string; payload: Record<string, unknown> }
 type Note = { userId: string; kind: 'action' | 'info' | 'success' | 'warning'; title: string; body: string; link: string };
@@ -86,18 +87,19 @@ export async function relayOutbox(db: Db, batch = 100): Promise<number> {
 
 /** The hourly checks: licence expiry alerts, quotation expiry, unacknowledged purchase orders, and the alert rules with their escalations. */
 export function runScheduledScans(db: Db) {
-  return Promise.all([scanLicenceExpiry(db), expireQuotations(db), lapseUnacknowledged(db), scanAlerts(db)]);
+  return Promise.all([scanLicenceExpiry(db), expireQuotations(db), lapseUnacknowledged(db), scanAlerts(db), scanDealerReminders(db), runDueSchedules(db)]).then(async (r) => { await sendQueued(db, 100); return r; });
 }
 
 export function startRelay(db: Db, intervalMs = 2000, onError: (e: unknown) => void = console.error) {
   let running = false;
+  let tick = 0;
   const scan = () => runScheduledScans(db).catch(onError);
   const daily = setInterval(scan, 3_600_000); // hourly check; each alert is sent once
   void scan();
   const timer = setInterval(async () => {
     if (running) return;
     running = true;
-    try { while ((await relayOutbox(db)) > 0); } catch (e) { onError(e); } finally { running = false; }
+    try { while ((await relayOutbox(db)) > 0); if (++tick % 15 === 0) await sendQueued(db); } catch (e) { onError(e); } finally { running = false; }
   }, intervalMs);
   return () => { clearInterval(timer); clearInterval(daily); };
 }
