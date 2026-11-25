@@ -6,4 +6,6 @@ coverage/
 .vite/
 apps/api/storage/
 .vercel/
-deploy/
+deploy/demo-snapshot.sql
+deploy/backups/
+deploy/.env
