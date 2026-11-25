@@ -85,3 +85,9 @@ Keep a sealed offline copy of `APP_ENCRYPTION_KEY`: without it, encrypted bank a
 - Loader: `pnpm --filter @dhruv/api exec tsx --env-file=.env src/db/load-materials.ts` (through the bulk importer; names already present are skipped).
 - 706 Draft items in three categories: Raw Material (259, type RM, RM-001…), Packing Material (432, type PM so packing runs and stores treat them as packaging, PM-001…), Labour Consumables (15, type RM, LC-001…). Codes follow alphabetical order within each group.
 - Base unit, HSN, shelf life, vendor and specifications are to be completed before approval. The stock quantities and rates belong to the opening-stock load at cut-over (which also needs warehouse, lot and expiry).
+
+## 9. Vendor list (loaded 25 Nov 2026)
+- Source: the company vendor workbook (47 vendors in two groups). It is company data and is not kept in the repository.
+- Loader: `pnpm --filter @dhruv/api exec tsx --env-file=.env src/db/load-vendors.ts <vendors.csv>` (columns group, name, address, state, pin_code, mobile_number, mail_id, gstin).
+- Taken: name, address, state, PIN (or a PIN written at the end of the address), the first mobile (every number as written is kept in "Other phone numbers"), e-mail, GSTIN with PAN read from it. Packing Material Creditors → Packaging; Factory other creditors → Other. "N/A" is empty. Bank details written inside an address are dropped from it; bank accounts are added with a cancelled cheque and verified by finance.
+- Draft vendors may have constitution, PAN, contact person, mobile and parts of the address empty; the onboarding checklist lists what is missing and blocks submission until it is complete. Dealers keep their stricter form.
