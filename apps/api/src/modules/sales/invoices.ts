@@ -136,9 +136,9 @@ const invSel = `select i.id, i.doc_no as "docNo", i.legal_entity_id as "legalEnt
     i.shipment_id as "shipmentId", s.doc_no as "shipmentNo", s.vehicle_no as "vehicleNo", s.lr_no as "lrNo", s.lr_date as "lrDate", s.ewb_no as "ewbNo", t.name as "transporterName",
     i.invoice_date as "invoiceDate", i.due_date as "dueDate", i.payment_terms as "paymentTerms", i.status, i.status_reason as "statusReason", i.taxable_total as "taxableTotal", i.cgst_total as "cgstTotal",
     i.sgst_total as "sgstTotal", i.igst_total as "igstTotal", i.round_off as "roundOff", i.grand_total as "grandTotal", i.amount_settled as "amountSettled", i.grand_total - i.amount_settled as outstanding,
-    i.irn, i.created_at as "createdAt", cu.full_name as "createdBy", i.cancelled_at as "cancelledAt", i.version
-  from sales.invoices i join org.legal_entities le on le.id = i.legal_entity_id join mdm.parties p on p.id = i.party_id join sales.sales_orders so on so.id = i.sales_order_id
-  join logistics.shipments s on s.id = i.shipment_id left join logistics.transporters t on t.id = s.transporter_id left join iam.users cu on cu.id = i.created_by`;
+    i.irn, i.is_opening as "isOpening", i.opening_ref as "openingRef", i.created_at as "createdAt", cu.full_name as "createdBy", i.cancelled_at as "cancelledAt", i.version
+  from sales.invoices i join org.legal_entities le on le.id = i.legal_entity_id join mdm.parties p on p.id = i.party_id left join sales.sales_orders so on so.id = i.sales_order_id
+  left join logistics.shipments s on s.id = i.shipment_id left join logistics.transporters t on t.id = s.transporter_id left join iam.users cu on cu.id = i.created_by`;
 const cnSel = `select c.id, c.doc_no as "docNo", c.invoice_id as "invoiceId", i.doc_no as "invoiceNo", i.invoice_date as "invoiceDate", c.legal_entity_id as "legalEntityId", c.party_id as "partyId",
     p.legal_name as "partyName", p.code as "partyCode", i.party_gstin as "partyGstin", c.inter_state as "interState", c.note_date as "noteDate", c.reason, c.remarks, c.customer_return_id as "customerReturnId",
     r.doc_no as "customerReturnNo", c.shipment_id as "shipmentId", c.status, c.status_reason as "statusReason", c.taxable_total as "taxableTotal", c.cgst_total as "cgstTotal", c.sgst_total as "sgstTotal",

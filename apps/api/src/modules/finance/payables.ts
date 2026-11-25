@@ -39,8 +39,8 @@ async function openDocs(dbx: Db | Tx, payee: { type: 'VENDOR' | 'TRANSPORTER'; i
     return (await dbx.query(`select si.id, 'SUPPLIER_INVOICE' as kind, si.doc_no as "docNo", si.invoice_no as "billNo", si.invoice_date as "billDate", si.due_date as "dueDate", si.grand_total as total,
         si.amount_settled as settled, coalesce((select sum(pl.amount) from fin.payment_lines pl join fin.payments p on p.id = pl.payment_id where pl.supplier_invoice_id = si.id and p.status in ${IN_FLIGHT}
           and p.id is distinct from $3), 0) as held
-        from purchase.supplier_invoices si join purchase.purchase_orders po on po.id = si.purchase_order_id
-       where si.party_id = $1 and po.legal_entity_id = $2 and si.status in ${PAYABLE_SI} order by si.due_date, si.invoice_date`, [payee.id, legalEntityId, exceptPaymentId])).rows
+        from purchase.supplier_invoices si left join purchase.purchase_orders po on po.id = si.purchase_order_id
+       where si.party_id = $1 and coalesce(si.legal_entity_id, po.legal_entity_id) = $2 and si.status in ${PAYABLE_SI} order by si.due_date, si.invoice_date`, [payee.id, legalEntityId, exceptPaymentId])).rows
       .map((x) => ({ ...x, outstanding: r2(Number(x.total) - Number(x.settled) - Number(x.held)) })).filter((x) => x.outstanding > 0.004);
   }
   return (await dbx.query(`select fb.id, 'FREIGHT_BILL' as kind, fb.doc_no as "docNo", fb.bill_no as "billNo", fb.bill_date as "billDate", fb.due_date as "dueDate", fb.grand_total as total,
@@ -341,7 +341,7 @@ export function payableRoutes(db: Db) {
       const dn = (await tx.query(`select id, doc_no, party_id, status, grand_total from purchase.debit_notes where id = $1 for update`, [req.params.id])).rows[0];
       if (!dn) throw Errors.notFound('Debit note');
       if (dn.status !== 'Open') throw Errors.state(`This debit note is ${dn.status.toLowerCase()}.`);
-      const si = (await tx.query(`select si.id, si.doc_no, si.party_id, si.status, po.legal_entity_id from purchase.supplier_invoices si join purchase.purchase_orders po on po.id = si.purchase_order_id where si.id = $1 for update of si`, [supplierInvoiceId])).rows[0];
+      const si = (await tx.query(`select si.id, si.doc_no, si.party_id, si.status, coalesce(si.legal_entity_id, po.legal_entity_id) as legal_entity_id from purchase.supplier_invoices si left join purchase.purchase_orders po on po.id = si.purchase_order_id where si.id = $1 for update of si`, [supplierInvoiceId])).rows[0];
       if (!si || si.party_id !== dn.party_id) throw Errors.rule('WRONG_INVOICE', 'Adjust a debit note against an invoice of the same vendor.');
       if (!inScope(req, 'finance.payment:create', si.legal_entity_id)) throw Errors.notFound('Supplier invoice');
       const doc = (await openDocs(tx, { type: 'VENDOR', id: si.party_id }, si.legal_entity_id)).find((x) => x.id === si.id);
@@ -358,8 +358,8 @@ export function payableRoutes(db: Db) {
     const today = todayIST();
     const a1: unknown[] = [today];
     const si = (await db.query(`select 'VENDOR' as type, si.party_id as id, p.code, p.legal_name as name, ($1::date - si.due_date) as days, si.grand_total - si.amount_settled as o
-        from purchase.supplier_invoices si join purchase.purchase_orders po on po.id = si.purchase_order_id join mdm.parties p on p.id = si.party_id
-        where si.status in ${PAYABLE_SI} and si.grand_total - si.amount_settled > 0.004 and ${scopeSql(req, V, 'po.legal_entity_id', a1)}`, a1)).rows;
+        from purchase.supplier_invoices si left join purchase.purchase_orders po on po.id = si.purchase_order_id join mdm.parties p on p.id = si.party_id
+        where si.status in ${PAYABLE_SI} and si.grand_total - si.amount_settled > 0.004 and ${scopeSql(req, V, 'coalesce(si.legal_entity_id, po.legal_entity_id)', a1)}`, a1)).rows;
     const a2: unknown[] = [today];
     const fb = (await db.query(`select 'TRANSPORTER' as type, fb.transporter_id as id, t.code, t.name, ($1::date - fb.due_date) as days, fb.grand_total - fb.amount_settled as o
         from logistics.freight_bills fb join logistics.transporters t on t.id = fb.transporter_id where fb.status = 'Approved' and fb.grand_total - fb.amount_settled > 0.004 and ${scopeSql(req, V, 'fb.legal_entity_id', a2)}`, a2)).rows;
@@ -385,11 +385,11 @@ export function payableRoutes(db: Db) {
     const party = (await db.query(`select id, code, legal_name as name, gstin from mdm.parties where id = $1`, [req.params.partyId])).rows[0];
     if (!party) throw Errors.notFound('Vendor');
     const args: unknown[] = [party.id];
-    const sc = scopeSql(req, V, 'po.legal_entity_id', args);
-    const sp = sc.replace('po.legal_entity_id', 'p.legal_entity_id');
+    const sc = scopeSql(req, V, 'coalesce(si.legal_entity_id, po.legal_entity_id)', args);
+    const sp = sc.replace('coalesce(si.legal_entity_id, po.legal_entity_id)', 'p.legal_entity_id');
     const entries = (await db.query(`
       select si.invoice_date as date, si.created_at as ts, 'Supplier invoice' as kind, si.doc_no as ref, si.id, 0 as debit, si.grand_total as credit, 'Bill ' || si.invoice_no as note
-        from purchase.supplier_invoices si join purchase.purchase_orders po on po.id = si.purchase_order_id where si.party_id = $1 and si.status in ${PAYABLE_SI} and ${sc}
+        from purchase.supplier_invoices si left join purchase.purchase_orders po on po.id = si.purchase_order_id where si.party_id = $1 and si.status in ${PAYABLE_SI} and ${sc}
       union all select dn.note_date, dn.created_at, 'Debit note', dn.doc_no, dn.id, dn.grand_total, 0, dn.reason from purchase.debit_notes dn where dn.party_id = $1 and dn.status in ('Open','Adjusted')
       union all select p.paid_on, p.updated_at, 'Payment', p.doc_no, p.id, p.amount, 0, p.mode || ' ' || p.reference || case when p.tds_amount > 0 then ' (TDS ' || p.tds_amount || ')' else '' end
         from fin.payments p where p.party_id = $1 and p.status = 'Paid' and ${sp}

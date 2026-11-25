@@ -507,6 +507,8 @@ export function reportRoutes(db: Db) {
     const x = byId(req.params.id!);
     if (!x || !can(req, x.perm) || !x.run) throw Errors.notFound('Report');
     const out = await runReport(db, req, x);
+    res.setHeader('content-type', 'text/csv; charset=utf-8');
+    res.setHeader('content-disposition', `attachment; filename="${x.id}-${todayIST()}.csv"`);
     res.send(toCsv(out));
   }));
   return r;

@@ -138,6 +138,7 @@ export function userRoutes(db: Db) {
     if (req.params.id === req.auth!.user.id) throw Errors.sod('Ask another administrator to reset your MFA.');
     await withTx(db, async (tx) => {
       const u = (await tx.query(`update iam.users set mfa_enabled = false, mfa_secret_enc = null where id = $1 returning id`, [req.params.id])).rows[0];
+      await tx.query(`delete from iam.mfa_recovery_codes where user_id = $1`, [req.params.id]);
       if (!u) throw Errors.notFound('User');
       await tx.query(`update iam.sessions set revoked_at = now() where user_id = $1 and revoked_at is null`, [u.id]);
       await audit(tx, actorOf(req), { action: 'iam.user.mfa_reset', entityType: 'iam.user', entityId: u.id, reason });

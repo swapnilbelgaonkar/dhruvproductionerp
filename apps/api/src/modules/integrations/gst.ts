@@ -55,6 +55,7 @@ export async function einvoicePayload(tx: Db | Tx, kind: 'INV' | 'CRN', id: stri
   if (!inv) throw Errors.notFound(kind === 'INV' ? 'Invoice' : 'Credit note');
   const cn = kind === 'CRN' ? (await tx.query(`select * from sales.credit_notes where id = $1`, [id])).rows[0] : null;
   const doc = cn ?? inv;
+  if (inv.is_opening) return { applicable: false, reason: 'Brought forward from the old system at go-live: its e-invoice (if any) was made there.', payload: null, problems, doc, inv };
   if (!inv.party_gstin) return { applicable: false, reason: 'The buyer is not GST-registered (B2C): no e-invoice is needed.', payload: null, problems, doc, inv };
   if (kind === 'INV' && inv.status !== 'Posted') return { applicable: false, reason: 'The invoice is cancelled.', payload: null, problems, doc, inv };
   if (cn && cn.status !== 'Approved') return { applicable: false, reason: 'Only an approved credit note gets an IRN.', payload: null, problems, doc, inv };
@@ -186,7 +187,7 @@ export async function buildGstr1(dbx: Db | Tx, gstin: string, period: string) {
   const b2clLimit = Number(await getSetting(dbx, 'gst.gstr1.b2clThreshold', 100000));
   const uqc = await getSetting<string>(dbx, 'gst.uqc.default', 'NOS');
   const invs = (await dbx.query(`select i.id, i.doc_no, i.invoice_date, i.party_gstin, i.place_of_supply, i.inter_state, i.grand_total, i.status from sales.invoices i
-      where i.seller_gstin = $1 and i.invoice_date between $2 and $3 order by i.doc_no`, [gstin, from, to])).rows;
+      where i.seller_gstin = $1 and not i.is_opening and i.invoice_date between $2 and $3 order by i.doc_no`, [gstin, from, to])).rows;
   const posted = invs.filter((x) => x.status === 'Posted');
   const rates = posted.length ? (await dbx.query(`select invoice_id, gst_rate::float as rt, sum(taxable)::float as txval, sum(igst)::float as iamt, sum(cgst)::float as camt, sum(sgst)::float as samt
       from sales.invoice_lines where invoice_id = any($1::uuid[]) group by 1, 2 order by 2`, [posted.map((x) => x.id)])).rows : [];

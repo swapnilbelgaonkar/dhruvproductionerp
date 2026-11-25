@@ -103,7 +103,7 @@ export async function syncLedger(db: Db): Promise<{ posted: number; failed: { re
   const rows = async (sql: string) => (await db.query(sql)).rows;
 
   // ---------------------------------------------------------------- sales invoices
-  for (const x of await rows(`select x.* from sales.invoices x where ${none('sales.invoice', 'posted')}`)) {
+  for (const x of await rows(`select x.* from sales.invoices x where not x.is_opening and ${none('sales.invoice', 'posted')}`)) {
     await run(x.doc_no, (tx) => postJournal(tx, { le: x.legal_entity_id, date: new Date(x.invoice_date).toISOString().slice(0, 10), sourceType: 'sales.invoice', sourceId: x.id, sourceEvent: 'posted', sourceRef: x.doc_no,
       narration: `Sales invoice ${x.doc_no}`, lines: [
         { key: 'AR_TRADE', debit: Number(x.grand_total), partyId: x.party_id }, { key: 'SALES', credit: Number(x.taxable_total) },

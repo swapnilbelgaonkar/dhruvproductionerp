@@ -5,7 +5,8 @@ import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import { changePasswordSchema, loginSchema, totpSchema } from '@dhruv/contracts';
 import type { Config } from '../../config';
-import { withTx, type Db } from '../../db/pool';
+import { randomBytes } from 'node:crypto';
+import { withTx, type Actor, type Db, type Tx } from '../../db/pool';
 import { audit } from '../../lib/audit';
 import { decrypt, encrypt, randomToken, sha256 } from '../../lib/crypto';
 import { AppError, Errors } from '../../lib/errors';
@@ -19,6 +20,16 @@ authenticator.options = { window: 1 };
 // Unknown emails are verified against a real dummy hash so they take as long as wrong passwords (no user enumeration).
 let dummyHash: Promise<string> | null = null;
 const getDummyHash = () => (dummyHash ??= hash(randomToken()));
+
+const normaliseRecovery = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, '');
+async function newRecoveryCodes(tx: Tx, userId: string, actor: Actor) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const codes = Array.from({ length: 10 }, () => { const b = randomBytes(8); const raw = [...b].map((x) => alphabet[x % alphabet.length]).join(''); return `${raw.slice(0, 4)}-${raw.slice(4)}`; });
+  await tx.query(`delete from iam.mfa_recovery_codes where user_id = $1`, [userId]);
+  for (const c of codes) await tx.query(`insert into iam.mfa_recovery_codes (user_id, code_hash) values ($1,$2)`, [userId, sha256(`${userId}:${normaliseRecovery(c)}`)]);
+  await audit(tx, actor, { action: 'auth.mfa_recovery_codes_issued', entityType: 'iam.user', entityId: userId });
+  return codes;
+}
 
 export function authRoutes(db: Db, cfg: Config) {
   const r = Router();
@@ -82,17 +93,35 @@ export function authRoutes(db: Db, cfg: Config) {
     res.clearCookie(SESSION_COOKIE, cookieOpts).clearCookie(CSRF_COOKIE, { ...cookieOpts, httpOnly: false }).json({ ok: true });
   }));
 
+  // the 6-digit code from the authenticator, or one of the single-use recovery codes when the phone is lost
   r.post('/mfa/verify', limiter, requireAuth, asyncHandler(async (req, res) => {
-    const { code } = parse(totpSchema, req.body);
+    const body = req.body ?? {};
+    const recovery = typeof body.recoveryCode === 'string' ? normaliseRecovery(body.recoveryCode) : null;
+    const code = recovery ? null : parse(totpSchema, body).code;
     const u = (await db.query(`select mfa_secret_enc from iam.users where id = $1`, [req.auth!.user.id])).rows[0];
     if (!u?.mfa_secret_enc) throw Errors.state('MFA is not enrolled for this account.');
-    const valid = authenticator.check(code, decrypt(u.mfa_secret_enc, cfg.APP_ENCRYPTION_KEY));
+    let valid = false;
+    let left: number | null = null;
     await withTx(db, async (tx) => {
+      if (recovery) {
+        const used = (await tx.query(`update iam.mfa_recovery_codes set used_at = now() where id = (select id from iam.mfa_recovery_codes where user_id = $1 and code_hash = $2 and used_at is null limit 1) returning id`,
+          [req.auth!.user.id, sha256(`${req.auth!.user.id}:${recovery}`)])).rowCount;
+        valid = !!used;
+        left = Number((await tx.query(`select count(*) from iam.mfa_recovery_codes where user_id = $1 and used_at is null`, [req.auth!.user.id])).rows[0].count);
+      } else valid = authenticator.check(code!, decrypt(u.mfa_secret_enc, cfg.APP_ENCRYPTION_KEY));
       if (valid) await tx.query(`update iam.sessions set mfa_satisfied = true where id = $1`, [req.auth!.sessionId]);
-      await audit(tx, actorOf(req), { action: valid ? 'auth.mfa_verified' : 'auth.mfa_failed', entityType: 'iam.user', entityId: req.auth!.user.id });
+      await audit(tx, actorOf(req), { action: valid ? (recovery ? 'auth.mfa_recovery_used' : 'auth.mfa_verified') : 'auth.mfa_failed', entityType: 'iam.user', entityId: req.auth!.user.id });
     });
-    if (!valid) throw new AppError(401, 'MFA_INVALID', 'The code is not valid. Check your authenticator app.');
-    res.json({ ok: true });
+    if (!valid) throw new AppError(401, 'MFA_INVALID', recovery ? 'That recovery code is not valid or was already used.' : 'The code is not valid. Check your authenticator app.');
+    res.json({ ok: true, recoveryCodesLeft: left });
+  }));
+
+  // ten single-use recovery codes, shown once; making new ones voids the old ones
+  r.post('/mfa/recovery-codes', requireAuth, asyncHandler(async (req, res) => {
+    if (!req.auth!.user.mfaEnabled) throw Errors.state('Set up two-step verification first.');
+    if (!req.auth!.mfaSatisfied) throw Errors.state('Verify your current code first.');
+    const codes = await withTx(db, (tx) => newRecoveryCodes(tx, req.auth!.user.id, actorOf(req)));
+    res.json({ codes });
   }));
 
   // Enrolment: start returns a secret + QR, confirm stores it once a valid code proves possession.
@@ -114,8 +143,9 @@ export function authRoutes(db: Db, cfg: Config) {
       await tx.query(`update iam.users set mfa_enabled = true, mfa_secret_enc = $2 where id = $1`, [req.auth!.user.id, encrypt(p.secret, cfg.APP_ENCRYPTION_KEY)]);
       await tx.query(`update iam.sessions set mfa_satisfied = true, mfa_pending_secret_enc = null, mfa_pending_expires_at = null where id = $1`, [req.auth!.sessionId]);
       await audit(tx, actorOf(req), { action: 'auth.mfa_enrolled', entityType: 'iam.user', entityId: req.auth!.user.id });
-    });
-    res.json({ ok: true });
+      return newRecoveryCodes(tx, req.auth!.user.id, actorOf(req));
+    }).then((codes) => res.json({ ok: true, recoveryCodes: codes }));
+    return;
   }));
 
   r.post('/password/change', requireAuth, asyncHandler(async (req, res) => {

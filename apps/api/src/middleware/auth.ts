@@ -10,7 +10,7 @@ export const SESSION_COOKIE = 'dsid';
 export const CSRF_COOKIE = 'dcsrf';
 
 /** Routes a partially-authenticated session may still use (MFA / password-change gates). */
-const GATE_ALLOW = ['/api/v1/me', '/api/v1/auth/logout', '/api/v1/auth/mfa/verify', '/api/v1/auth/mfa/enrol', '/api/v1/auth/mfa/enrol/confirm', '/api/v1/auth/password/change'];
+const GATE_ALLOW = ['/api/v1/me', '/api/v1/auth/logout', '/api/v1/auth/mfa/verify', '/api/v1/auth/mfa/enrol', '/api/v1/auth/mfa/enrol/confirm', '/api/v1/auth/mfa/recovery-codes', '/api/v1/auth/password/change'];
 
 /** Roles and permission grants of a user (also used to run scheduled reports as their owner). */
 export async function grantsFor(db: Db, userId: string) {

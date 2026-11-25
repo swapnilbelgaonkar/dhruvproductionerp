@@ -13,5 +13,7 @@ export default async function setup() {
   const c2 = new pg.Client({ connectionString: TEST_DB });
   await c2.connect();
   await c2.query(`update sys.settings set value = 'false' where key = 'mfg.lineClearance.required'`);
+  // two-factor ships switched off until go-live (0031); the sign-in suites test it switched on
+  await c2.query(`update sys.settings set value = 'true' where key = 'auth.mfa.enforced'`);
   await c2.end();
 }
