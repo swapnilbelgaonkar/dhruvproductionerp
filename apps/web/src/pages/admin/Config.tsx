@@ -9,7 +9,7 @@ import { Button, Card, ErrorBanner, Field, Input, KeyValues, Modal, PageHeader, 
 import { api, qs, type Page } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { fmtDateTime, fmtINR, humanize } from '../../lib/format';
-import { ChangePasswordForm } from '../auth/Gate';
+import { ChangePasswordForm, MfaSetup, RecoveryCodes } from '../auth/Gate';
 
 // ---------------------------------------------------------------- Approval policies
 interface Policy { id: string; doc_type: string; name: string; description: string; published_version: number; published_at: string; definition: unknown; drafts: number }
@@ -260,15 +260,44 @@ export function AuditPage() {
 
 // ---------------------------------------------------------------- My profile
 export function ProfilePage() {
-  const { me } = useAuth();
+  const { me, refresh } = useAuth();
   const toast = useToast();
+  const [setup, setSetup] = useState(false);
+  const [codes, setCodes] = useState<string[] | null>(null);
+  const ch = useQuery({ queryKey: ['my-channels'], queryFn: () => api<{ channels: string[]; mobile: string | null; available: string[] }>('/messaging/me/channels') });
+  const [chan, setChan] = useState<string[] | null>(null);
+  const [mobile, setMobile] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   if (!me) return null;
+  const sel = chan ?? ch.data?.channels ?? [];
+  const regen = async () => { try { setCodes((await api<{ codes: string[] }>('/auth/mfa/recovery-codes', { body: {} })).codes); } catch (e) { toast('error', e instanceof Error ? e.message : 'Failed'); } };
+  const saveChannels = async () => { setError(null);
+    try { await api('/messaging/me/channels', { method: 'PUT', body: { channels: sel, mobile: mobile ?? ch.data?.mobile ?? null } }); toast('success', 'Saved.'); await ch.refetch(); setChan(null); } catch (e) { setError(e); } };
+  const LABEL: Record<string, string> = { EMAIL: 'E-mail', SMS: 'SMS', WHATSAPP: 'WhatsApp' };
   return (
     <>
-      <PageHeader title="My profile" subtitle="Your account and sign-in security." />
+      <PageHeader title="My profile" subtitle="Your account, sign-in security and how alerts reach you." />
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card title="Account"><KeyValues items={[['Name', me.user.fullName], ['Email', me.user.email], ['Two-step verification', me.user.mfaEnabled ? 'Enrolled' : me.mfaRequiredByRole ? 'Required by your role' : 'Not enrolled'], ['Roles', me.roles.map((r) => r.name).join(', ') || '—']]} /></Card>
+        <Card title="Account"><KeyValues items={[['Name', me.user.fullName], ['Email', me.user.email], ['Roles', me.roles.map((r) => r.name).join(', ') || '—']]} /></Card>
+        <Card title="Two-step verification">
+          {codes ? <RecoveryCodes codes={codes} onDone={() => setCodes(null)} doneLabel="Done" /> : setup ? <MfaSetup onDone={async () => { setSetup(false); await refresh(); toast('success', 'Two-step verification is set up.'); }} /> : (
+            <div className="space-y-3 text-[14px]">
+              <p>{me.user.mfaEnabled ? <><StatusBadge status="Active" label="Set up" /> Your authenticator app is linked.</> : <><StatusBadge status="Draft" label="Not set up" /> {me.mfaRequiredByRole ? 'Your role requires it.' : 'Recommended for everyone.'}</>}</p>
+              <p className="text-ink-2">The company switches two-step verification on at go-live. Setting it up now means you are ready: you will then be asked for a 6-digit code from your phone when you sign in.</p>
+              {me.user.mfaEnabled ? <Button variant="secondary" onClick={regen}>New recovery codes</Button> : <Button onClick={() => setSetup(true)}>Set up</Button>}
+            </div>)}
+        </Card>
         <Card title="Change password"><ChangePasswordForm onDone={() => toast('success', 'Password changed. Your other sessions were signed out.')} /></Card>
+        <Card title="Alerts outside the ERP">
+          <ErrorBanner error={error} />
+          {!ch.data ? <Skeleton className="h-24" /> : !ch.data.available.length ? <p className="text-[14px] text-ink-2">E-mail, SMS and WhatsApp are not switched on yet. Alerts appear here in the ERP.</p> : (
+            <div className="space-y-3 text-[14px]">
+              <p className="text-ink-2">You always see alerts in the ERP. Also send them to me by:</p>
+              {ch.data.available.map((c) => <label key={c} className="mr-5 inline-flex items-center gap-2"><input type="checkbox" checked={sel.includes(c)} onChange={(e) => setChan(e.target.checked ? [...sel, c] : sel.filter((x) => x !== c))} />{LABEL[c]}</label>)}
+              {sel.some((c) => c !== 'EMAIL') && <Field label="Mobile number" htmlFor="my-mobile"><Input id="my-mobile" inputMode="numeric" maxLength={10} value={mobile ?? ch.data.mobile ?? ''} onChange={(e) => setMobile(e.target.value)} /></Field>}
+              <Button onClick={saveChannels}>Save</Button>
+            </div>)}
+        </Card>
       </div>
     </>
   );

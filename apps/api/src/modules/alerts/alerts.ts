@@ -218,7 +218,7 @@ export function alertRoutes(db: Db) {
 
   r.get('/rules', requirePermission('sys.alert:configure'), asyncHandler(async (_req, res) => {
     const rows = (await db.query(`select r.code, r.name, r.description, r.area, r.enabled, r.params, r.recipient_roles as "recipientRoles", r.escalate_after_hours as "escalateAfterHours",
-        r.escalate_roles as "escalateRoles", r.escalate_to_manager as "escalateToManager", r.updated_at as "updatedAt",
+        r.escalate_roles as "escalateRoles", r.escalate_to_manager as "escalateToManager", r.channels, r.updated_at as "updatedAt",
         (select count(*)::int from sys.alerts a where a.rule_code = r.code and a.resolved_at is null) as "openAlerts" from sys.alert_rules r order by r.area, r.name`)).rows;
     const roles = (await db.query(`select code, name from iam.roles order by name`)).rows;
     res.json({ data: rows, roles });

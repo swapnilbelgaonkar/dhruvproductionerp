@@ -1,3 +1,4 @@
+import { EwayBillPanel } from '../../components/GstPanels';
 import { ArrowLeft, Barcode, Plus, Printer, Trash, Truck } from '@phosphor-icons/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -26,7 +27,7 @@ interface ShipmentDetail extends ShipmentRow {
   legalEntityName: string; partyGstin: string | null; shipToState: string; warehouseName: string; dealerPoNo: string | null; transporterId: string | null; transporterGstin: string | null;
   driverName: string | null; driverPhone: string | null; freightTerms: string | null; freightAmount: string | null; lrDate: string | null; ewbValidUntil: string | null; dispatchedBy: string | null;
   podReceivedOn: string | null; podReceivedBy: string | null; podRemarks: string | null; remarks: string | null; createdAt: string;
-  lines: ShipLine[]; pickedValue: number; ewbRequired: boolean; ewbThreshold: number; allowedActions: string[];
+  lines: ShipLine[]; pickedValue: number; ewbRequired: boolean; ewbThreshold: number; ewbLater: boolean; allowedActions: string[];
   seller?: { name: string; address: string | null; pan: string | null; gstin: string | null };
   invoice: { id: string; docNo: string; grandTotal: string; status: string } | null; shortageCreditNote: { id: string; docNo: string; status: string } | null;
 }
@@ -215,6 +216,7 @@ export function ShipmentDetailPage() {
               ['Tax invoice', s.invoice ? <Link key="i" className="text-primary" to={`/finance/invoices/${s.invoice.id}`}>{s.invoice.docNo} · {fmtINR(s.invoice.grandTotal)}</Link> : ['Dispatched', 'Delivered'].includes(s.status) ? 'Not raised yet' : '—'],
               ['Delivered', s.podReceivedOn ? `${fmtDate(s.podReceivedOn)} — received by ${s.podReceivedBy}` : '—'], ['POD remarks', s.podRemarks ?? '—'], ['Remarks', s.remarks ?? '—']]} />
           </Card>
+          {['Dispatched', 'Delivered'].includes(s.status) && s.ewbLater && <EwayBillPanel shipmentId={s.id} docNo={s.docNo} />}
           {['Dispatched', 'Delivered'].includes(s.status) && <DocumentsPanel entityType="logistics.shipment" entityId={s.id} />}
         </div>
       </div>
@@ -270,7 +272,7 @@ function DispatchDialog({ s, onClose, onDone }: { s: ShipmentDetail; onClose: ()
   };
   return (
     <Modal open onClose={onClose} title={`Load & dispatch ${s.docNo}`} description={`${fmtINR(s.pickedValue)} scanned. Stock leaves the warehouse and the order is updated now.`} width={720}
-      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={!f.transporterId || !f.vehicleNo || !f.driverName || !f.lrNo || (s.ewbRequired && !f.ewbNo)} onClick={save}>Confirm dispatch</Button></>}>
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={!f.transporterId || !f.vehicleNo || !f.driverName || !f.lrNo || (s.ewbRequired && !s.ewbLater && !f.ewbNo)} onClick={save}>Confirm dispatch</Button></>}>
       <ErrorBanner error={error} />
       {short && <p className="mb-4 rounded-md bg-warning-bg px-3 py-2 text-[14px] text-warning-text">Fewer packs are scanned than planned. Only what was scanned is dispatched; the rest stays open on the order.</p>}
       <div className="grid gap-4 md:grid-cols-2">
@@ -284,7 +286,7 @@ function DispatchDialog({ s, onClose, onDone }: { s: ShipmentDetail; onClose: ()
         <Field label="Freight terms" htmlFor="ds-ft" required><Select id="ds-ft" value={f.freightTerms} onChange={(e) => setF({ ...f, freightTerms: e.target.value })}>
           <option value="PAID">Paid (by us)</option><option value="TO_PAY">To pay (by consignee)</option><option value="TBB">To be billed</option></Select></Field>
         <Field label="Freight amount (₹)" htmlFor="ds-fa"><Input id="ds-fa" type="number" min="0" step="any" value={f.freightAmount} onChange={(e) => setF({ ...f, freightAmount: e.target.value })} /></Field>
-        <Field label="E-way bill number" htmlFor="ds-ewb" required={s.ewbRequired} hint={s.ewbRequired ? `Required: the value is above ${fmtINR(s.ewbThreshold)}` : 'Optional at this value'}>
+        <Field label="E-way bill number" htmlFor="ds-ewb" required={s.ewbRequired && !s.ewbLater} hint={s.ewbLater ? 'Leave empty: it is generated from the invoice right after dispatch' : s.ewbRequired ? `Required: the value is above ${fmtINR(s.ewbThreshold)}` : 'Optional at this value'}>
           <Input id="ds-ewb" inputMode="numeric" maxLength={12} value={f.ewbNo} onChange={(e) => setF({ ...f, ewbNo: e.target.value.replace(/\D/g, '') })} /></Field>
         <Field label="E-way bill valid until" htmlFor="ds-ewbv" required={!!f.ewbNo}><Input id="ds-ewbv" type="date" min={today()} value={f.ewbValidUntil} onChange={(e) => setF({ ...f, ewbValidUntil: e.target.value })} /></Field>
       </div>

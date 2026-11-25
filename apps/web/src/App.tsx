@@ -7,6 +7,8 @@ import { FreightBillDetailPage, FreightBillsPage, PayablesAgeingPage, PaymentDet
 import { AccountLedgerPage, ChartOfAccountsPage, FinancialStatementsPage, GstPage, JournalDetailPage, JournalsPage, PeriodsPage, TrialBalancePage } from './pages/finance/Ledger';
 import { ExecutiveDashboardPage, ReportsPage, ReportViewerPage } from './pages/mis/Management';
 import { AlertRulesPage, AlertsPage } from './pages/admin/Alerts';
+import { GoLivePage, ImportsPage, IntegrationsPage, ReportSchedulesPage } from './pages/admin/GoLive';
+import { BankFilesPage, GstReturnsPage, TdsPage } from './pages/finance/Statutory';
 import { MobileHomePage, MobileLookupPage, MobilePickListPage, MobilePickPage, MobileQueuePage } from './pages/mobile/Scanner';
 import { DispatchQueuePage, ShipmentChallanPage, ShipmentDetailPage, ShipmentsPage, TransportersPage } from './pages/logistics/Dispatch';
 import { BatchDetailPage, BatchesPage, IpqcWorklistPage } from './pages/production/Batches';
@@ -171,6 +173,10 @@ export function App() {
         <Route path="logistics/freight-bills/:id" element={<Protected perm="logistics.freight_bill:view"><FreightBillDetailPage /></Protected>} />
         <Route path="alerts" element={<AlertsPage />} />
         <Route path="admin/alert-rules" element={<Protected perm="sys.alert:configure"><AlertRulesPage /></Protected>} />
+        <Route path="admin/integrations" element={<Protected perm="sys.integration:view"><IntegrationsPage /></Protected>} />
+        <Route path="admin/imports" element={<ImportsPage />} />
+        <Route path="admin/go-live" element={<Protected perm="sys.golive:view"><GoLivePage /></Protected>} />
+        <Route path="reports/schedules" element={<Protected perm="mis.schedule:manage"><ReportSchedulesPage /></Protected>} />
         <Route path="dashboard/executive" element={<Protected perm="mis.executive:view"><ExecutiveDashboardPage /></Protected>} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="reports/:id" element={<ReportViewerPage />} />
@@ -181,6 +187,9 @@ export function App() {
         <Route path="finance/statements" element={<Protected perm="finance.gl:view"><FinancialStatementsPage /></Protected>} />
         <Route path="finance/periods" element={<Protected perm="finance.gl:view"><PeriodsPage /></Protected>} />
         <Route path="finance/gst" element={<Protected perm="finance.gst:view"><GstPage /></Protected>} />
+        <Route path="finance/gst-returns" element={<Protected perm="gst.return:prepare"><GstReturnsPage /></Protected>} />
+        <Route path="finance/tds" element={<Protected perm="finance.tds:view"><TdsPage /></Protected>} />
+        <Route path="finance/bank-files" element={<Protected perm="finance.payment_batch:view"><BankFilesPage /></Protected>} />
         <Route path="finance/accounts" element={<Protected perm="finance.gl:view"><ChartOfAccountsPage /></Protected>} />
         <Route path="finance/invoices" element={<Protected perm="sales.invoice:view"><SalesInvoicesPage /></Protected>} />
         <Route path="finance/invoices/:id" element={<Protected perm="sales.invoice:view"><SalesInvoiceDetailPage /></Protected>} />

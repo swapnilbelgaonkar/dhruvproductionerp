@@ -72,7 +72,7 @@ describe('Go-live: bulk import, opening balances, readiness and two-step verific
     // the same invoice twice is refused
     expect((await fh.post('/api/v1/imports/opening-receivables/validate', { content: ar }).expect(200)).body.errors[0]).toMatchObject({ field: 'invoice_no', message: 'Already brought forward' });
 
-    const [AR, AP, BANK, CAP, INV] = await Promise.all(['AR_TRADE', 'AP_TRADE', 'BANK', 'CAPITAL', 'INV_FG'].map(acct));
+    const [AR, AP, BANK, CAP, INV] = (await Promise.all(['AR_TRADE', 'AP_TRADE', 'BANK', 'CAPITAL', 'INV_FG'].map(acct))) as [string, string, string, string, string];
     const tb = csv([['legal_entity_code', 'account_code', 'party_code', 'debit', 'credit'], [leCode, AR, dealer.code, '48500', ''], [leCode, AP, vendor.code, '', '126000'],
       [leCode, BANK, '', '250000', ''], [leCode, CAP, '', '', '343500']]);
     const v = (await fh.post('/api/v1/imports/opening-ledger/validate', { content: csv([['legal_entity_code', 'account_code', 'party_code', 'debit', 'credit'], [leCode, INV, '', '1', ''], [leCode, AR, '', '5', '']]) }).expect(200)).body;

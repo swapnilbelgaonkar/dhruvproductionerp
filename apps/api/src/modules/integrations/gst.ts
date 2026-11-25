@@ -318,7 +318,7 @@ export function gstIntegrationRoutes(db: Db) {
         // the IRN is fixed by GSTIN, year, type and number: a typo is caught here
         const expected = irnOf(x.payload!.SellerDtls.Gstin, year, kind, x.payload!.DocDtls.No);
         if (m.irn !== expected) throw Errors.rule('IRN_MISMATCH', 'This IRN does not belong to this document (it is computed from the GSTIN, year, type and number). Check that the right document was uploaded.');
-        reply = { irn: m.irn, ackNo: m.ackNo, ackDate: new Date(m.ackDate.includes('T') || m.ackDate.includes('+') ? m.ackDate : `${m.ackDate.replace(' ', 'T')}+05:30`), signedQr: m.signedQr };
+        reply = { irn: m.irn, ackNo: m.ackNo, ackDate: new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(m.ackDate) ? m.ackDate : `${m.ackDate.replace(' ', 'T')}${m.ackDate.length <= 16 ? ':00' : ''}+05:30`), signedQr: m.signedQr };
       }
       if ((await tx.query(`select 1 from gst.einvoices where irn = $1`, [reply.irn])).rowCount) {
         throw Errors.rule('DOC_NO_USED', 'The IRP does not accept a document number again once its IRN was cancelled. Cancel this document and raise a new one.');

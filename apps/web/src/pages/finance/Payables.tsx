@@ -59,7 +59,8 @@ function PaymentDialog({ onClose }: { onClose: () => void }) {
   const entities = useQuery({ queryKey: ['legal-entities-active'], queryFn: () => api<Page<{ id: string; code: string; name: string }>>('/legal-entities?status=Active&limit=100') });
   const vendors = useQuery({ queryKey: ['vendors-active'], queryFn: () => api<Page<{ id: string; code: string; legalName: string }>>('/vendors?status=Active&limit=100') });
   const trs = useQuery({ queryKey: ['transporters'], queryFn: () => api<{ data: { id: string; code: string; name: string; status: string }[] }>('/shipments/transporters').catch(() => ({ data: [] })) });
-  const [f, setF] = useState({ legalEntityId: '', payeeType: 'VENDOR', payeeId: '', paymentDate: today(), mode: 'NEFT', fromAccount: '', tdsSection: '', tdsAmount: '', remarks: '' });
+  const [f, setF] = useState({ legalEntityId: '', payeeType: 'VENDOR', payeeId: '', paymentDate: today(), mode: 'NEFT', fromAccount: '', tdsSection: '', tdsAmount: '', tdsReason: '', remarks: '' });
+  const [override, setOverride] = useState(false);
   const [amt, setAmt] = useState<Record<string, string>>({});
   const [adjustTo, setAdjustTo] = useState<Record<string, string>>({});
   useEffect(() => { const e = entities.data?.data; if (e?.length === 1 && !f.legalEntityId) setF((x) => ({ ...x, legalEntityId: e[0]!.id })); }, [entities.data, f.legalEntityId]);
@@ -71,7 +72,9 @@ function PaymentDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const lines = Object.entries(amt).map(([docId, v]) => ({ docId, amount: Number(v) || 0 })).filter((l) => l.amount > 0);
   const gross = lines.reduce((a, l) => a + l.amount, 0);
-  const tds = Number(f.tdsAmount) || 0;
+  const auto = useQuery({ queryKey: ['tds-compute', f.payeeType, f.payeeId, f.paymentDate, JSON.stringify(lines)], enabled: !!f.payeeId && lines.length > 0,
+    queryFn: () => api<{ section: string | null; rate: number; base: number; amount: number; basis: string; reason: string }>('/tds/compute', { body: { payeeType: f.payeeType, payeeId: f.payeeId, date: f.paymentDate, lines } }) });
+  const tds = override ? Number(f.tdsAmount) || 0 : auto.data?.amount ?? 0;
   const adjust = async (dnId: string) => {
     try { await api(`/payables/debit-notes/${dnId}/adjust`, { body: { supplierInvoiceId: adjustTo[dnId] } }); toast('success', 'Debit note adjusted against the invoice.'); await qc.invalidateQueries({ queryKey: key }); }
     catch (e) { setError(e); }
@@ -80,14 +83,14 @@ function PaymentDialog({ onClose }: { onClose: () => void }) {
     setBusy(true); setError(null);
     try {
       const r = await api<{ id: string; docNo: string }>('/payments', { body: { legalEntityId: f.legalEntityId, payeeType: f.payeeType, payeeId: f.payeeId, paymentDate: f.paymentDate, mode: f.mode,
-        fromAccount: f.fromAccount || null, tdsSection: f.tdsSection || null, tdsAmount: tds, remarks: f.remarks || null, lines } });
+        fromAccount: f.fromAccount || null, ...(override ? { tdsSection: f.tdsSection || null, tdsAmount: tds, tdsReason: f.tdsReason || null } : {}), remarks: f.remarks || null, lines } });
       toast('success', `${r.docNo} drafted. Submit it for approval.`); nav(`/finance/payments/${r.id}`);
     } catch (e) { setError(e); } finally { setBusy(false); }
   };
   const bank = docs.data?.bank;
   return (
     <Modal open onClose={onClose} title="New payment" width={820}
-      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={!f.payeeId || !lines.length || tds >= gross || (tds > 0 && !f.tdsSection)} onClick={save}>Draft payment</Button></>}>
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={!f.payeeId || !lines.length || tds >= gross || (override && tds > 0 && !f.tdsSection)} onClick={save}>Draft payment</Button></>}>
       <ErrorBanner error={error} />
       <div className="grid gap-4 md:grid-cols-3">
         <Field label="Paying entity" htmlFor="py-le" required><Select id="py-le" value={f.legalEntityId} onChange={(e) => { setF({ ...f, legalEntityId: e.target.value }); setAmt({}); }}><option value="">Select…</option>
@@ -124,8 +127,11 @@ function PaymentDialog({ onClose }: { onClose: () => void }) {
         )}
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <Field label="TDS section" htmlFor="py-tds"><Select id="py-tds" value={f.tdsSection} onChange={(e) => setF({ ...f, tdsSection: e.target.value })}><option value="">No TDS</option>{TDS.map((t) => <option key={t} value={t}>{t}</option>)}</Select></Field>
-        <Field label="TDS deducted (₹)" htmlFor="py-tdsamt" hint="Entered as computed by accounts"><Input id="py-tdsamt" type="number" min="0" step="0.01" value={f.tdsAmount} disabled={!f.tdsSection} onChange={(e) => setF({ ...f, tdsAmount: e.target.value })} /></Field>
+        {!override ? <div className="md:col-span-2 text-[14px]"><p className="font-semibold">TDS</p><p className="text-ink-2">{!lines.length ? 'Worked out from the TDS master once amounts are entered.' : auto.data ? (auto.data.amount ? auto.data.reason : auto.data.reason) : 'Working out…'}</p>
+          <button type="button" className="text-[13px] text-primary underline" onClick={() => { setOverride(true); setF({ ...f, tdsSection: auto.data?.section ?? '', tdsAmount: String(auto.data?.amount ?? '') }); }}>Enter TDS by hand</button></div> : <>
+          <Field label="TDS section" htmlFor="py-tds"><Select id="py-tds" value={f.tdsSection} onChange={(e) => setF({ ...f, tdsSection: e.target.value })}><option value="">No TDS</option>{TDS.map((t) => <option key={t} value={t}>{t}</option>)}</Select></Field>
+          <Field label="TDS deducted (₹)" htmlFor="py-tdsamt" hint={auto.data?.basis === 'AUTO' ? `The master gives ${fmtINR(auto.data.amount)}` : undefined}><Input id="py-tdsamt" type="number" min="0" step="0.01" value={f.tdsAmount} disabled={!f.tdsSection} onChange={(e) => setF({ ...f, tdsAmount: e.target.value })} /></Field>
+          <Field label="Reason for entering it by hand" htmlFor="py-tdsr"><Input id="py-tdsr" value={f.tdsReason} onChange={(e) => setF({ ...f, tdsReason: e.target.value })} /></Field></>}
         <div className="rounded-md bg-canvas p-3 text-[14px]"><p>Gross {fmtINR(gross)}</p><p>Less TDS {fmtINR(tds)}</p><p className="font-semibold">Net to bank {fmtINR(gross - tds)}</p></div>
       </div>
     </Modal>

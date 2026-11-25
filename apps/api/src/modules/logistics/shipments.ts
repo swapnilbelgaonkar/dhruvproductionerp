@@ -150,7 +150,7 @@ export function shipmentRoutes(db: Db) {
         left join org.gst_registrations g on g.legal_entity_id = le.id and g.state_code = so.seller_state and g.status = 'Active' where le.id = $1`, [s.legalEntityId, s.salesOrderId])).rows[0];
     const invoice = (await db.query(`select id, doc_no as "docNo", grand_total as "grandTotal", status from sales.invoices where shipment_id = $1 and status <> 'Cancelled'`, [s.id])).rows[0] ?? null;
     const credit = (await db.query(`select id, doc_no as "docNo", status from sales.credit_notes where shipment_id = $1 and status <> 'Cancelled' order by created_at desc limit 1`, [s.id])).rows[0] ?? null;
-    res.json({ ...s, lines: ls, invoice, shortageCreditNote: credit, pickedValue: value, ewbRequired: value > ewbThreshold, ewbThreshold, seller, allowedActions: actions(req, s, picked) });
+    res.json({ ...s, lines: ls, invoice, shortageCreditNote: credit, pickedValue: value, ewbRequired: value > ewbThreshold, ewbThreshold, ewbLater: (await getIntegration(db, 'EWAYBILL')).mode !== 'OFF', seller, allowedActions: actions(req, s, picked) });
   }));
 
   r.post('/', requirePermission(P('create')), asyncHandler(async (req, res) => {

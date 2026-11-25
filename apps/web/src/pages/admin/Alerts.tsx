@@ -68,7 +68,7 @@ export function AlertsPage() {
 
 // ---------------------------------------------------------------- alert rules (administration)
 interface Rule { code: string; name: string; description: string; area: string; enabled: boolean; params: Record<string, number>; recipientRoles: string[]; escalateAfterHours: number | null;
-  escalateRoles: string[]; escalateToManager: boolean; updatedAt: string; openAlerts: number }
+  escalateRoles: string[]; escalateToManager: boolean; channels: string[]; updatedAt: string; openAlerts: number }
 const PARAM_LABEL: Record<string, string> = { daysBefore: 'Warn this many days before', hours: 'Alert after this many hours', days: 'Alert after this many days', graceDays: 'Grace days after the due date' };
 
 export function AlertRulesPage() {
@@ -91,6 +91,7 @@ export function AlertRulesPage() {
     try {
       await api(`/alerts/rules/${edit.code}`, { method: 'PUT', body: { enabled: edit.enabled, params: edit.params, recipientRoles: edit.recipientRoles, escalateAfterHours: edit.escalateAfterHours,
         escalateRoles: edit.escalateRoles, escalateToManager: edit.escalateToManager } });
+      await api(`/messaging/alert-rules/${edit.code}/channels`, { method: 'PUT', body: { channels: edit.channels } });
       toast('success', `${edit.name} saved; it applies from the next check.`); setEdit(null); await qc.invalidateQueries({ queryKey: ['alert-rules'] });
     } catch (e) { setError(e); }
   };
@@ -102,7 +103,7 @@ export function AlertRulesPage() {
   );
   return (
     <>
-      <PageHeader title="Alert Rules" subtitle="What raises an alert, who hears about it, and who it escalates to if nobody acknowledges it. Checked every hour; in-app now, e-mail and WhatsApp once the channels are chosen (D11)."
+      <PageHeader title="Alert Rules" subtitle="What raises an alert, who hears about it, and who it escalates to if nobody acknowledges it. Checked every hour; in-app always, and by e-mail, SMS or WhatsApp where the rule and the user allow it."
         actions={<Button loading={busy} icon={<Lightning size={18} />} onClick={run}>Check now</Button>} />
       <Card padded={false}>
         {q.isLoading ? <Skeleton className="h-60" /> : !q.data ? <div className="p-5"><ErrorBanner error={q.error} /></div> : (
@@ -133,6 +134,8 @@ export function AlertRulesPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Field label="Escalate after (hours unacknowledged)" htmlFor="rp-esc" hint="Empty = never escalate"><Input id="rp-esc" type="number" min="1" step="1" value={edit.escalateAfterHours ?? ''}
               onChange={(e) => setEdit({ ...edit, escalateAfterHours: e.target.value ? Number(e.target.value) : null })} /></Field>
+            <fieldset className="md:col-span-2"><legend className="mb-1 text-[13px] font-semibold">Also send outside the ERP (to users who chose the channel in their profile)</legend>
+              {['EMAIL', 'SMS', 'WHATSAPP'].map((c) => <label key={c} className="mr-5 inline-flex items-center gap-2 text-[14px]"><input type="checkbox" checked={edit.channels.includes(c)} onChange={(e) => setEdit({ ...edit, channels: e.target.checked ? [...edit.channels, c] : edit.channels.filter((x) => x !== c) })} />{c === 'EMAIL' ? 'E-mail' : c === 'SMS' ? 'SMS' : 'WhatsApp'}</label>)}</fieldset>
             <label className="mt-7 inline-flex items-center gap-2 text-[14px]"><input type="checkbox" checked={edit.escalateToManager} onChange={(e) => setEdit({ ...edit, escalateToManager: e.target.checked })} />Also escalate to the reporting manager of the person responsible</label>
           </div>
         </Modal>

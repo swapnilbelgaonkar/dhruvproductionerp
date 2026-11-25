@@ -1,3 +1,4 @@
+import { EinvoicePanel } from '../../components/GstPanels';
 import { ArrowLeft, ArrowUUpLeft, Plus, Printer, Receipt } from '@phosphor-icons/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -26,7 +27,7 @@ interface InvLine { id: string; lineNo: number; description: string; hsnCode: st
 interface InvoiceDetail extends InvoiceRow {
   legalEntityName: string; sellerAddress: string | null; sellerPan: string | null; sellerGstin: string | null; sellerState: string; partyGstin: string | null; placeOfSupply: string; interState: boolean;
   dealerPoNo: string | null; dealerPoDate: string | null; vehicleNo: string | null; lrNo: string | null; lrDate: string | null; ewbNo: string | null; transporterName: string | null; paymentTerms: string;
-  taxableTotal: string; cgstTotal: string; sgstTotal: string; igstTotal: string; roundOff: string; irn: string | null; createdAt: string; createdBy: string; cancelledAt: string | null;
+  taxableTotal: string; cgstTotal: string; sgstTotal: string; igstTotal: string; roundOff: string; irn: string | null; einvoice?: { irn: string; ackNo: string; ackDate: string; simulated: boolean; qrDataUrl: string } | null; isOpening?: boolean; openingRef?: string | null; createdAt: string; createdBy: string; cancelledAt: string | null;
   lines: InvLine[]; billTo: Address | null; shipTo: Address | null; creditNotes: { id: string; docNo: string; noteDate: string; reason: string; status: string; grandTotal: string }[];
   returns: { id: string; docNo: string; receivedOn: string; reason: string; status: string }[]; hsnSummary: { hsnCode: string; gstRate: number; taxable: number; cgst: number; sgst: number; igst: number }[];
   amountInWords: string; bankDetails: string; cancelWindowHours: number; allowedActions: string[];
@@ -128,6 +129,7 @@ export function SalesInvoiceDetailPage() {
               ['Shipment', <Link key="s" className="text-primary" to={`/logistics/shipments/${d.shipmentId}`}>{d.shipmentNo}</Link>], ['Place of supply', state(d.placeOfSupply)],
               ['Transport', d.vehicleNo ? `${d.transporterName} · ${d.vehicleNo} · LR ${d.lrNo}` : '—'], ['E-way bill', d.ewbNo ?? '—'], ['Raised', `${d.createdBy}, ${fmtDateTime(d.createdAt)}`]]} />
           </Card>
+          <EinvoicePanel kind="invoice" id={d.id} docNo={d.docNo} />
           <Card title="Credit notes and returns">
             {!d.creditNotes.length && !d.returns.length ? <p className="text-ink-2">None.</p> : (
               <ul className="space-y-2 text-[14px]">
@@ -248,8 +250,10 @@ export function SalesInvoicePrintPage() {
           <div><h1 className="text-[18px] font-extrabold">{d.legalEntityName}</h1>{d.sellerAddress && <p className="max-w-[95mm] whitespace-pre-line">{d.sellerAddress}</p>}
             <p>GSTIN {d.sellerGstin ?? '—'}{d.sellerPan ? ` · PAN ${d.sellerPan}` : ''} · State {state(d.sellerState)}</p></div>
           <div className="text-right"><p className="text-[20px] font-extrabold tracking-wide">TAX INVOICE</p><p className="text-[10px]">Original for recipient</p><p className="num text-[13px] font-semibold">{d.docNo}</p>
-            <p>Date {fmtDate(d.invoiceDate)}</p><p>Due {fmtDate(d.dueDate)}</p>{d.irn && <p className="max-w-[70mm] break-all">IRN {d.irn}</p>}</div>
+            <p>Date {fmtDate(d.invoiceDate)}</p><p>Due {fmtDate(d.dueDate)}</p></div>
         </header>
+        {d.einvoice && <div className="flex items-center gap-3 border-b border-line py-2"><img src={d.einvoice.qrDataUrl} alt="E-invoice signed QR" width={96} height={96} />
+            <div className="text-[9px]"><p className="font-semibold">{d.einvoice.simulated ? 'SIMULATED — NOT A VALID IRN' : 'E-invoice'}</p><p className="break-all">IRN {d.einvoice.irn}</p><p>Ack {d.einvoice.ackNo}</p><p>{fmtDateTime(d.einvoice.ackDate)}</p></div></div>}
         <section className="grid grid-cols-3 gap-4 border-b border-line py-3">
           <div><p className="text-[10px] font-semibold uppercase text-ink-2">Billed to</p><p className="font-semibold">{d.partyName}</p><p>{addressText(d.billTo)}</p><p>{d.partyGstin ? `GSTIN ${d.partyGstin}` : 'Unregistered (B2C)'}</p></div>
           <div><p className="text-[10px] font-semibold uppercase text-ink-2">Shipped to</p><p>{addressText(d.shipTo)}</p><p>Place of supply: {state(d.placeOfSupply)}</p></div>
@@ -355,6 +359,7 @@ export function CreditNoteDetailPage() {
                 <td className={`${th} text-right num`}>{l.qty ? fmtNum(l.qty) : 'Value only'}</td><td className={`${th} text-right num`}>{fmtINR(l.taxable)}</td>
                 <td className={`${th} text-right num`}>{fmtNum(l.gstRate)}% · {fmtINR(n(l.cgst) + n(l.sgst) + n(l.igst))}</td><td className={`${th} text-right num`}>{fmtINR(l.lineTotal)}</td></tr>))}</tbody></table></div>
         </Card>
+        {c.status === 'Approved' && <EinvoicePanel kind="credit-note" id={c.id} docNo={c.docNo} />}
         <Card title="Summary">
           <KeyValues columns="narrow" items={[['Reason', REASON_LABEL[c.reason] ?? c.reason], ['Remarks', c.remarks ?? '—'],
             ['Customer return', c.customerReturnId ? <Link key="r" className="text-primary" to={`/logistics/returns/${c.customerReturnId}`}>{c.customerReturnNo}</Link> : '—'],

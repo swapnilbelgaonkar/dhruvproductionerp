@@ -62,6 +62,35 @@ export function integrationRoutes(db: Db) {
     res.json({ data: rows });
   }));
 
+  // the addresses the GST schemas need: each GSTIN's principal place, and each warehouse goods are dispatched from
+  r.get('/addresses', requirePermission('sys.integration:view'), asyncHandler(async (_req, res) => {
+    const gstins = (await db.query(`select g.id, g.gstin, le.name as "legalEntityName", g.trade_name as "tradeName", g.addr_line1 as "addrLine1", g.location, g.pincode, g.einvoice_applicable as "einvoiceApplicable"
+        from org.gst_registrations g join org.legal_entities le on le.id = g.legal_entity_id where g.status = 'Active' order by g.gstin`)).rows;
+    const warehouses = (await db.query(`select id, code, name, address, city, pincode, state_code as "stateCode" from org.warehouses where status = 'Active' order by code`)).rows;
+    res.json({ gstins, warehouses });
+  }));
+  r.put('/addresses/gstin/:id', requirePermission('org.legal_entity:edit_draft'), asyncHandler(async (req, res) => {
+    const d = parse(z.object({ tradeName: z.string().trim().max(100).nullable(), addrLine1: z.string().trim().min(3).max(100), location: z.string().trim().min(2).max(50),
+      pincode: z.string().regex(/^[1-9][0-9]{5}$/, '6-digit PIN'), einvoiceApplicable: z.boolean() }), req.body);
+    await withTx(db, async (tx) => {
+      const before = (await tx.query(`select * from org.gst_registrations where id = $1 for update`, [req.params.id])).rows[0];
+      if (!before) throw Errors.notFound('GST registration');
+      await tx.query(`update org.gst_registrations set trade_name = $2, addr_line1 = $3, location = $4, pincode = $5, einvoice_applicable = $6 where id = $1`, [before.id, d.tradeName, d.addrLine1, d.location, d.pincode, d.einvoiceApplicable]);
+      await audit(tx, actorOf(req), { action: 'org.gst_registration.address', entityType: 'org.legal_entity', entityId: before.legal_entity_id, before, after: d });
+    });
+    res.json({ ok: true });
+  }));
+  r.put('/addresses/warehouse/:id', requirePermission('org.warehouse:edit_draft'), asyncHandler(async (req, res) => {
+    const d = parse(z.object({ address: z.string().trim().min(3).max(200), city: z.string().trim().min(2).max(50), pincode: z.string().regex(/^[1-9][0-9]{5}$/, '6-digit PIN') }), req.body);
+    await withTx(db, async (tx) => {
+      const before = (await tx.query(`select id, address, city, pincode from org.warehouses where id = $1 for update`, [req.params.id])).rows[0];
+      if (!before) throw Errors.notFound('Warehouse');
+      await tx.query(`update org.warehouses set address = $2, city = $3, pincode = $4, updated_by = $5 where id = $1`, [before.id, d.address, d.city, d.pincode, req.auth!.user.id]);
+      await audit(tx, actorOf(req), { action: 'org.warehouse.dispatch_address', entityType: 'org.warehouse', entityId: before.id, before, after: d });
+    });
+    res.json({ ok: true });
+  }));
+
   r.put('/:code', requirePermission(CONF), asyncHandler(async (req, res) => {
     const d = parse(z.object({ mode: z.enum(['OFF', 'MANUAL', 'SIMULATED', 'LIVE']), provider: z.string().trim().max(40).optional().nullable(),
       config: z.record(z.union([z.string().max(300), z.number(), z.boolean()])).default({}) }), req.body);

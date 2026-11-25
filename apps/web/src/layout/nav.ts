@@ -1,4 +1,4 @@
-import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, Notebook, Books, ChartLine, CalendarX, ListNumbers, PresentationChart, FileCsv, BellRinging, DeviceMobile, type Icon } from '@phosphor-icons/react';
+import { Stack, Microscope, TrayArrowDown, ArrowUUpLeft, Receipt, Barcode, FileText, Tag, ShoppingCart, Truck, ClipboardText, ListChecks, Package, Buildings, CalendarCheck, Funnel, Kanban, Storefront, Flask, Percent, Ruler, CheckSquareOffset, ClockCounterClockwise, Factory, FlowArrow, Gauge, Hash, IdentificationBadge, MapTrifold, Scales, ShieldCheck, SlidersHorizontal, TreeStructure, UsersThree, Warehouse, Warning, TestTube, ChartBar, Timer, Cube, WarningOctagon, ArrowsClockwise, XSquare, GitDiff, ChatCircleText, Siren, Broom, BookOpen, Van, ListDashes, Invoice, ReceiptX, ArrowUDownLeft, HandCoins, HourglassMedium, Bank, Scroll, Notebook, Books, ChartLine, CalendarX, ListNumbers, PresentationChart, FileCsv, BellRinging, DeviceMobile, Plugs, UploadSimple, RocketLaunch, CalendarBlank, FileArrowUp, Coins, type Icon } from '@phosphor-icons/react';
 
 export interface NavItem { to: string; label: string; icon: Icon; perm?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -10,6 +10,7 @@ export const NAV: NavGroup[] = [
     { to: '/approvals', label: 'Approvals', icon: CheckSquareOffset },
     { to: '/dashboard/executive', label: 'Executive Dashboard', icon: PresentationChart, perm: 'mis.executive:view' },
     { to: '/reports', label: 'Reports', icon: FileCsv },
+    { to: '/reports/schedules', label: 'Scheduled Reports', icon: CalendarBlank, perm: 'mis.schedule:manage' },
     { to: '/alerts', label: 'Alerts', icon: BellRinging },
     { to: '/m', label: 'Mobile Scanner', icon: DeviceMobile },
   ] },
@@ -76,12 +77,15 @@ export const NAV: NavGroup[] = [
     { to: '/finance/ageing', label: 'Receivables Ageing', icon: HourglassMedium, perm: 'finance.receivable:view' },
     { to: '/finance/payments', label: 'Payments', icon: Bank, perm: 'finance.payment:view' },
     { to: '/finance/payables', label: 'Payables Ageing', icon: HourglassMedium, perm: 'finance.payable:view' },
+    { to: '/finance/bank-files', label: 'Bank Payment Files', icon: FileArrowUp, perm: 'finance.payment_batch:view' },
+    { to: '/finance/tds', label: 'TDS', icon: Coins, perm: 'finance.tds:view' },
   ] },
   { label: 'Accounts', items: [
     { to: '/finance/trial-balance', label: 'Trial Balance', icon: Books, perm: 'finance.gl:view' },
     { to: '/finance/statements', label: 'Financial Statements', icon: ChartLine, perm: 'finance.gl:view' },
     { to: '/finance/journals', label: 'Journals', icon: Notebook, perm: 'finance.gl:view' },
     { to: '/finance/gst', label: 'GST Working', icon: Percent, perm: 'finance.gst:view' },
+    { to: '/finance/gst-returns', label: 'GST Returns', icon: FileText, perm: 'gst.return:prepare' },
     { to: '/finance/periods', label: 'Accounting Periods', icon: CalendarX, perm: 'finance.gl:view' },
     { to: '/finance/accounts', label: 'Chart of Accounts', icon: ListNumbers, perm: 'finance.gl:view' },
   ] },
@@ -106,6 +110,9 @@ export const NAV: NavGroup[] = [
     { to: '/admin/authority-limits', label: 'Authority Limits', icon: Scales, perm: 'iam.authority_limit:view' },
     { to: '/admin/number-series', label: 'Number Series', icon: Hash, perm: 'sys.number_series:view' },
     { to: '/admin/alert-rules', label: 'Alert Rules', icon: Siren, perm: 'sys.alert:configure' },
+    { to: '/admin/integrations', label: 'Integrations', icon: Plugs, perm: 'sys.integration:view' },
+    { to: '/admin/imports', label: 'Import', icon: UploadSimple, perm: 'sys.import:masters|sys.import:opening' },
+    { to: '/admin/go-live', label: 'Go-live', icon: RocketLaunch, perm: 'sys.golive:view' },
     { to: '/admin/settings', label: 'Settings', icon: SlidersHorizontal, perm: 'sys.settings:view' },
     { to: '/admin/audit', label: 'Audit Log', icon: ClockCounterClockwise, perm: 'sys.audit:view' },
   ] },

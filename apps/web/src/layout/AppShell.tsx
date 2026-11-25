@@ -28,7 +28,7 @@ function Sidebar({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
     <nav aria-label="Main" className="flex h-full flex-col gap-6 overflow-y-auto px-4 py-7">
       <Logo collapsed={collapsed} />
       {NAV.map((g, gi) => {
-        const items = g.items.filter((i) => !i.perm || can(i.perm));
+        const items = g.items.filter((i) => !i.perm || i.perm.split('|').some((p) => can(p)));
         if (!items.length) return null;
         return (
           <div key={gi}>

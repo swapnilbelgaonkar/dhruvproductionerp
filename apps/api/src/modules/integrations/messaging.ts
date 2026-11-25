@@ -276,6 +276,9 @@ export function messagingRoutes(db: Db) {
     .refine((x) => x.frequency !== 'WEEKLY' || x.weekday != null, { message: 'Choose the day of the week', path: ['weekday'] })
     .refine((x) => x.frequency !== 'MONTHLY' || x.monthDay != null, { message: 'Choose the day of the month', path: ['monthDay'] });
   const mine = (req: Request) => (can(req, 'sys.integration:configure') ? null : req.auth!.user.id);
+  r.get('/recipients', requirePermission(M), asyncHandler(async (_req, res) => {
+    res.json({ data: (await db.query(`select id, full_name as "fullName" from iam.users where status = 'Active' order by full_name`)).rows });
+  }));
   r.get('/report-schedules', requirePermission(M), asyncHandler(async (req, res) => {
     const rows = (await db.query(`select s.id, s.name, s.report_id as "reportId", s.params, s.frequency, s.weekday, s.month_day as "monthDay", s.hour_ist as "hourIst", s.enabled, s.next_run_at as "nextRunAt",
         s.last_run_at as "lastRunAt", s.last_status as "lastStatus", s.recipient_user_ids as "recipientUserIds", u.full_name as "owner",
