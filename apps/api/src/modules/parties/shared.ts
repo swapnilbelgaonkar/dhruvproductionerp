@@ -29,14 +29,14 @@ const LICENCE_NAME: Record<string, string> = {
 };
 
 /** Other parties with the same GSTIN, PAN or mobile (a rejected onboarding does not count). */
-export async function duplicates(dbx: Db | Tx, d: { gstin?: string | null; pan?: string; mobile?: string }, excludeId: string | null) {
+export async function duplicates(dbx: Db | Tx, d: { gstin?: string | null; pan?: string | null; mobile?: string | null }, excludeId: string | null) {
   const r = await dbx.query(
     `select p.id, p.code, p.legal_name as "legalName", p.gstin, p.pan, p.mobile, coalesce(dp.status, vp.status) as status,
             case when dp.party_id is not null then 'dealer' when vp.party_id is not null then 'vendor' end as role
        from mdm.parties p left join mdm.dealer_profiles dp on dp.party_id = p.id left join mdm.vendor_profiles vp on vp.party_id = p.id
       where p.id <> coalesce($4::uuid, '00000000-0000-0000-0000-000000000000') and (($1::text is not null and p.gstin = $1) or p.pan = $2 or p.mobile = $3)
         and coalesce(dp.status, vp.status, 'Active') <> 'Rejected'`, [d.gstin ?? null, d.pan ?? null, d.mobile ?? null, excludeId]);
-  return r.rows.map((x) => ({ ...x, matches: [x.gstin && x.gstin === d.gstin && 'GSTIN', x.pan === d.pan && 'PAN', x.mobile === d.mobile && 'mobile'].filter(Boolean) as string[] }));
+  return r.rows.map((x) => ({ ...x, matches: [x.gstin && x.gstin === d.gstin && 'GSTIN', !!x.pan && x.pan === d.pan && 'PAN', !!x.mobile && x.mobile === d.mobile && 'mobile'].filter(Boolean) as string[] }));
 }
 
 /** Addresses, GSTIN state and duplicates — common to every party role. */

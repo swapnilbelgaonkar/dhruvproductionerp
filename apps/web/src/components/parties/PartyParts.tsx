@@ -24,7 +24,7 @@ export const LICENCE_DOC: Record<string, string> = {
 };
 const today = () => new Date().toISOString().slice(0, 10);
 
-export interface PartyAddress { id: string; kind: string; label: string | null; line1: string; line2: string | null; city: string; district: string; stateCode: string; pincode: string }
+export interface PartyAddress { id: string; kind: string; label: string | null; line1: string | null; line2: string | null; city: string | null; district: string | null; stateCode: string | null; pincode: string | null }
 export interface PartyLicence { id: string; licenceType: string; number: string; issuer: string; validFrom: string; validTo: string; verification: string; remarks: string | null; verifiedBy: string | null; verifiedAt: string | null; documentId: string; status: string }
 export interface PartySignatory { id: string; fullName: string; designation: string; idType: string; idLast4: string }
 export interface Readiness { ready: boolean; policy: string; checks: { key: string; label: string; ok: boolean; detail?: string }[] }
@@ -74,8 +74,9 @@ export function AddressesCard({ base, addresses, canEdit, onChanged, emptyText }
           <li key={x.id} className="rounded-md border border-line p-4">
             <p className="flex items-center justify-between"><span className="text-[12px] font-semibold uppercase tracking-wide text-primary-hover">{x.kind}{x.label ? ` · ${x.label}` : ''}</span>
               {canEdit && <button className="text-[13px] font-semibold text-ink-2 hover:text-danger-text" onClick={() => remove(`${base}/addresses/${x.id}/remove`)}>Remove</button>}</p>
-            <p className="mt-1">{x.line1}{x.line2 ? `, ${x.line2}` : ''}</p>
-            <p className="text-ink-2">{x.city}, {x.district}, {INDIAN_STATES[x.stateCode]} {x.pincode}</p>
+            <p className="mt-1">{[x.line1, x.line2].filter(Boolean).join(', ') || <span className="text-warning-text">Address line missing</span>}</p>
+            <p className="text-ink-2">{[x.city, x.district, x.stateCode ? INDIAN_STATES[x.stateCode] : null].filter(Boolean).join(', ')} {x.pincode ?? ''}
+              {(!x.line1 || !x.city || !x.district || !x.stateCode || !x.pincode) && <span className="ml-1 text-warning-text">(incomplete — add the full address and remove this one)</span>}</p>
           </li>))}</ul>
       )}
       {open && <AddressDialog base={base} onDone={() => { setOpen(false); onChanged(); }} onClose={() => setOpen(false)} />}

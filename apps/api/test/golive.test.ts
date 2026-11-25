@@ -181,3 +181,35 @@ describe('Purchased-material list loader', () => {
     expect(await loadMaterials(db, csv, { userId: null, label: 'test' })).toMatchObject({ ok: true, rows: 0 });
   });
 });
+
+describe('Vendor list loader', () => {
+  it('reads messy cells as written in the list and leaves the rest of KYC empty', async () => {
+    const { parseVendorRow } = await import('../src/db/load-vendors');
+    expect(parseVendorRow({ group: 'Packing Material Creditors', name: 'SAMPLE  CHEMICALS', address: 'B-1/1, MIDC AREA,, NASHIK - 422010, EXAMPLE BANK LTD, A/C NO - 00000000000000, IFSC CODE - ABCD0000000',
+      state: 'Maharashtra', pin_code: '', mobile_number: '9000000001', mail_id: 'Sales@Example.com', gstin: '27ABCDE1234F1Z5' }))
+      .toMatchObject({ name: 'SAMPLE CHEMICALS', category: 'PACKAGING', address: 'B-1/1, MIDC AREA,, NASHIK - 422010', stateCode: '27', pincode: '422010', mobile: '9000000001', phoneNumbers: null,
+        email: 'sales@example.com', gstin: '27ABCDE1234F1Z5', pan: 'ABCDE1234F', notes: ['bank details removed from the address'] });
+    expect(parseVendorRow({ group: 'Factory other creditors', name: 'X', address: '', state: '', pin_code: '', mobile_number: '0253-1234567, 9000000002/9000000003', mail_id: 'N/A', gstin: 'N/A' }))
+      .toMatchObject({ category: 'OTHER', mobile: '9000000002', phoneNumbers: '0253-1234567, 9000000002/9000000003', email: null, gstin: null, pan: null, stateCode: null, pincode: null });
+    expect(parseVendorRow({ group: 'Factory other creditors', name: 'Y', mobile_number: '90000 00004', state: 'Dadra & Nagar Haveli and Daman & Diu' }))
+      .toMatchObject({ mobile: '9000000004', phoneNumbers: null, stateCode: '26' });
+  });
+
+  it('creates Draft vendors that cannot be submitted until KYC is complete, and skips ones already present', async () => {
+    const { loadVendors } = await import('../src/db/load-vendors');
+    const name = uniq('[TEST] Sample Packaging ');
+    const csv = `group,name,address,state,pin_code,mobile_number,mail_id,gstin\nPacking Material Creditors,${name},"Plot A-1, MIDC Area, Nashik",Maharashtra,422010,9000000005,a@b.in,\n`;
+    const r = await loadVendors(db, csv, { userId: null, label: 'test' });
+    expect(r.created).toHaveLength(1);
+    expect((await loadVendors(db, csv, { userId: null, label: 'test' })).skipped).toHaveLength(1);
+    const p = (await db.query(`select p.id, p.constitution, p.contact_person, p.pan, vp.status, vp.vendor_category, a.city, a.pincode from mdm.parties p join mdm.vendor_profiles vp on vp.party_id = p.id
+        left join mdm.party_addresses a on a.party_id = p.id where p.legal_name = $1`, [name])).rows[0];
+    expect(p).toMatchObject({ constitution: null, contact_person: null, pan: null, status: 'Draft', vendor_category: 'PACKAGING', city: null, pincode: '422010' });
+    const pe = await userAgent([{ code: 'PURCHASE_EXEC' }]);
+    const ready = (await pe.get(`/api/v1/vendors/${p.id}`).expect(200)).body;
+    expect(JSON.stringify(ready)).toContain('Missing: constitution, PAN, contact person');
+    const sub = await pe.post(`/api/v1/vendors/${p.id}/submit`, {}).expect(422);
+    expect(sub.body.error.code).toBe('NOT_READY');
+    expect(sub.body.error.details.map((c: { key: string }) => c.key)).toEqual(expect.arrayContaining(['kyc.details', 'addr.complete']));
+  });
+});

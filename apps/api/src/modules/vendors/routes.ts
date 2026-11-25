@@ -40,6 +40,11 @@ async function setStatus(tx: Tx, partyId: string, status: string, actor: Actor, 
 export async function vendorReadiness(dbx: Db | Tx, partyId: string) {
   const p = await loadVendor(dbx, partyId);
   const { checks, add } = checklist();
+  const missing = [!p.constitution && 'constitution', !p.pan && 'PAN', !p.contact_person && 'contact person', !p.mobile && 'mobile number'].filter(Boolean);
+  add('kyc.details', 'Constitution, PAN, contact person and mobile', !missing.length, missing.length ? `Missing: ${missing.join(', ')}` : undefined);
+  const reg = (await dbx.query(`select line1, city, district, state_code, pincode from mdm.party_addresses where party_id = $1 and kind = 'REGISTERED' and status = 'Active' limit 1`, [partyId])).rows[0];
+  const gaps = reg ? [!reg.line1 && 'address line', !reg.city && 'city', !reg.district && 'district', !reg.state_code && 'state', !reg.pincode && 'PIN code'].filter(Boolean) : [];
+  if (reg) add('addr.complete', 'Registered address complete', !gaps.length, gaps.length ? `Missing: ${gaps.join(', ')}` : undefined);
   await identityChecks(dbx, { ...p, id: partyId }, add, { billing: false, shipping: false, noun: 'vendor' });
   const bank = (await dbx.query(`select verification from mdm.party_bank_accounts where party_id = $1 and status = 'Active'`, [partyId])).rows[0];
   add('bank', 'Bank account with cancelled cheque', !!bank && bank.verification !== 'Rejected', bank?.verification === 'Rejected' ? 'Rejected by finance — replace it' : undefined);
@@ -143,7 +148,7 @@ export function vendorRoutes(db: Db, cfg: Config) {
     if (status === 'Suspended' && can(req, P('suspend'))) actions.push('reactivate');
     res.json({
       id: d.party_id, code: d.code, legalName: d.legal_name, tradeName: d.trade_name, constitution: d.constitution, pan: d.pan,
-      gstRegistered: d.gst_registered, gstin: d.gstin, contactPerson: d.contact_person, mobile: d.mobile, email: d.email,
+      gstRegistered: d.gst_registered, gstin: d.gstin, contactPerson: d.contact_person, mobile: d.mobile, phoneNumbers: d.phone_numbers, email: d.email,
       vendorCategory: d.vendor_category, licenceTypes: d.licence_types, msmeRegistered: d.msme_registered, udyamNumber: d.udyam_number,
       paymentTermsDays: d.payment_terms_days, rating: d.rating, status, statusReason: d.status_reason, activatedAt: d.activated_at, version: d.version, updatedAt: d.updated_at,
       ...parts, bank, items,
@@ -157,10 +162,10 @@ export function vendorRoutes(db: Db, cfg: Config) {
   }));
 
   const values = (d: ReturnType<typeof vendorSchema.parse>) => ({
-    party: [d.legalName, d.tradeName, d.constitution, d.pan, d.gstRegistered, d.gstRegistered ? d.gstin : null, d.contactPerson, d.mobile, d.email ?? null],
+    party: [d.legalName, d.tradeName, d.constitution ?? null, d.pan ?? null, d.gstRegistered, d.gstRegistered ? d.gstin : null, d.contactPerson ?? null, d.mobile ?? null, d.email ?? null, d.phoneNumbers ?? null],
     profile: [d.vendorCategory, d.licenceTypes, d.msmeRegistered, d.msmeRegistered ? d.udyamNumber : null, d.paymentTermsDays],
   });
-  const noDup = async (tx: Tx, d: { gstin?: string | null; pan: string; mobile: string }, id: string | null) => {
+  const noDup = async (tx: Tx, d: { gstin?: string | null; pan?: string | null; mobile?: string | null }, id: string | null) => {
     const dups = (await duplicates(tx, d, id)).filter((x) => x.matches.includes('GSTIN') || x.matches.includes('PAN'));
     if (dups.length) {
       const x = dups[0]!;
@@ -178,8 +183,8 @@ export function vendorRoutes(db: Db, cfg: Config) {
       const code = await nextMasterCode(tx, 'VENDOR_CODE');
       const v = values(d);
       const p = (await tx.query(
-        `insert into mdm.parties (code, legal_name, trade_name, constitution, pan, gst_registered, gstin, contact_person, mobile, email, created_by, updated_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) returning id`, [code, ...v.party, actor.userId])).rows[0];
+        `insert into mdm.parties (code, legal_name, trade_name, constitution, pan, gst_registered, gstin, contact_person, mobile, email, phone_numbers, created_by, updated_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12) returning id`, [code, ...v.party, actor.userId])).rows[0];
       await tx.query(
         `insert into mdm.vendor_profiles (party_id, vendor_category, licence_types, msme_registered, udyam_number, payment_terms_days, created_by, updated_by)
          values ($1,$2,$3,$4,$5,$6,$7,$7)`, [p.id, ...v.profile, actor.userId]);
@@ -199,8 +204,8 @@ export function vendorRoutes(db: Db, cfg: Config) {
       await noDup(tx, d, before.party_id);
       const v = values(d);
       const p = (await tx.query(
-        `update mdm.parties set legal_name=$2, trade_name=$3, constitution=$4, pan=$5, gst_registered=$6, gstin=$7, contact_person=$8, mobile=$9, email=$10, updated_by=$11
-          where id = $1 returning legal_name, trade_name, constitution, pan, gst_registered, gstin, contact_person, mobile, email`, [before.party_id, ...v.party, actor.userId])).rows[0];
+        `update mdm.parties set legal_name=$2, trade_name=$3, constitution=$4, pan=$5, gst_registered=$6, gstin=$7, contact_person=$8, mobile=$9, email=$10, phone_numbers=$11, updated_by=$12
+          where id = $1 returning legal_name, trade_name, constitution, pan, gst_registered, gstin, contact_person, mobile, email, phone_numbers`, [before.party_id, ...v.party, actor.userId])).rows[0];
       const vp = (await tx.query(
         `update mdm.vendor_profiles set vendor_category=$2, licence_types=$3, msme_registered=$4, udyam_number=$5, payment_terms_days=$6, updated_by=$7
           where party_id = $1 returning vendor_category, licence_types, msme_registered, udyam_number, payment_terms_days`, [before.party_id, ...v.profile, actor.userId])).rows[0];

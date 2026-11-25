@@ -267,17 +267,19 @@ export const salesOrderHeaderSchema = z.object({
 export const convertQuotationSchema = z.object({ ...orderExtras });
 
 // ---------- Vendors (BRD §3.2 p.8; MDM-011, MDM-016) ----------
+// KYC fields may be empty on a Draft vendor; the onboarding checklist requires them before submission.
 export const vendorSchema = z.object({
-  legalName: trimmed(150), tradeName: optionalText(150), constitution: z.enum(CONSTITUTIONS),
-  pan: panSchema, gstRegistered: z.boolean(), gstin: gstinSchema.optional().nullable(),
-  contactPerson: trimmed(100), mobile, email: z.string().trim().toLowerCase().email().optional().nullable(),
+  legalName: trimmed(150), tradeName: optionalText(150), constitution: z.enum(CONSTITUTIONS).optional().nullable(),
+  pan: panSchema.optional().nullable(), gstRegistered: z.boolean(), gstin: gstinSchema.optional().nullable(),
+  contactPerson: optionalText(100), mobile: mobile.optional().nullable().or(z.literal('').transform(() => null)), phoneNumbers: optionalText(200),
+  email: z.string().trim().toLowerCase().email().optional().nullable().or(z.literal('').transform(() => null)),
   vendorCategory: z.enum(VENDOR_CATEGORIES), licenceTypes: z.array(z.enum(VENDOR_LICENCE_TYPES)).default([]),
   msmeRegistered: z.boolean().default(false),
   udyamNumber: z.string().trim().toUpperCase().regex(/^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/, 'Format UDYAM-MH-00-0000000').optional().nullable(),
   paymentTermsDays: z.number().int().min(0).max(180),
 }).superRefine((d, ctx) => {
   if (d.gstRegistered && !d.gstin) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN is required for a GST-registered vendor' });
-  if (d.gstin && d.gstin.slice(2, 12) !== d.pan) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN characters 3–12 must equal the PAN' });
+  if (d.gstin && d.pan && d.gstin.slice(2, 12) !== d.pan) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN characters 3–12 must equal the PAN' });
   if (d.msmeRegistered && !d.udyamNumber) ctx.addIssue({ code: 'custom', path: ['udyamNumber'], message: 'Udyam number is required for an MSME vendor' });
 });
 export const bankAccountSchema = z.object({

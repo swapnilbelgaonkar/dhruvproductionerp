@@ -64,7 +64,8 @@ export function VendorFormPage() {
   const f = useForm<VendorForm>({
     resolver: zodResolver(z.preprocess((o) => Object.fromEntries(Object.entries(o as Record<string, unknown>).map(([k, v]) => [k, v === '' ? null : v])), vendorSchema)),
     defaultValues: { gstRegistered: true, licenceTypes: [], msmeRegistered: false, paymentTermsDays: 30, vendorCategory: 'RAW_MATERIAL', constitution: 'PROPRIETORSHIP' },
-    values: existing.data ? { ...existing.data, gstin: existing.data.gstin ?? '', email: existing.data.email ?? '', tradeName: existing.data.tradeName ?? '', udyamNumber: existing.data.udyamNumber ?? '' } as VendorForm : undefined,
+    values: existing.data ? { ...existing.data, gstin: existing.data.gstin ?? '', email: existing.data.email ?? '', tradeName: existing.data.tradeName ?? '', udyamNumber: existing.data.udyamNumber ?? '',
+      constitution: existing.data.constitution ?? '', pan: existing.data.pan ?? '', contactPerson: existing.data.contactPerson ?? '', mobile: existing.data.mobile ?? '', phoneNumbers: existing.data.phoneNumbers ?? '' } as VendorForm : undefined,
   });
   if (id && existing.isLoading) return <Skeleton className="h-96" />;
   const gstRegistered = f.watch('gstRegistered');
@@ -94,16 +95,17 @@ export function VendorFormPage() {
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="Legal business name" htmlFor="legalName" required error={err('legalName')} hint="As per GST and PAN"><Input id="legalName" {...f.register('legalName')} /></Field>
             <Field label="Trade name" htmlFor="tradeName" error={err('tradeName')}><Input id="tradeName" {...f.register('tradeName')} /></Field>
-            <Field label="Constitution" htmlFor="constitution" required><Select id="constitution" {...f.register('constitution')}>{CONSTITUTIONS.map((c) => <option key={c} value={c}>{CONSTITUTION_LABEL[c]}</option>)}</Select></Field>
+            <Field label="Constitution" htmlFor="constitution" hint="Needed before submission"><Select id="constitution" {...f.register('constitution')}><option value="">Not yet known</option>{CONSTITUTIONS.map((c) => <option key={c} value={c}>{CONSTITUTION_LABEL[c]}</option>)}</Select></Field>
             <Field label="Vendor category" htmlFor="vendorCategory" required><Select id="vendorCategory" {...f.register('vendorCategory')}>{VENDOR_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}</Select></Field>
-            <Field label="Contact person" htmlFor="contactPerson" required error={err('contactPerson')}><Input id="contactPerson" {...f.register('contactPerson')} /></Field>
-            <Field label="Mobile" htmlFor="mobile" required error={err('mobile')}><Input id="mobile" inputMode="numeric" maxLength={10} {...f.register('mobile', { onBlur: checkDup })} /></Field>
+            <Field label="Contact person" htmlFor="contactPerson" error={err('contactPerson')} hint="Needed before submission"><Input id="contactPerson" {...f.register('contactPerson')} /></Field>
+            <Field label="Mobile" htmlFor="mobile" error={err('mobile')} hint="Needed before submission"><Input id="mobile" inputMode="numeric" maxLength={10} {...f.register('mobile', { onBlur: checkDup })} /></Field>
+            <Field label="Other phone numbers" htmlFor="phoneNumbers" error={err('phoneNumbers')} hint="Landlines or more mobiles, as written"><Input id="phoneNumbers" {...f.register('phoneNumbers')} /></Field>
             <Field label="Email" htmlFor="email" error={err('email')} hint="Purchase orders are sent here"><Input id="email" type="email" {...f.register('email')} /></Field>
           </div>
         </Card>
         <Card title="2. Tax identity">
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="PAN" htmlFor="pan" required error={err('pan')}><Input id="pan" className="uppercase num" maxLength={10} {...f.register('pan', { setValueAs: (v: string) => v?.toUpperCase(), onBlur: checkDup })} /></Field>
+            <Field label="PAN" htmlFor="pan" error={err('pan')} hint="Needed before submission"><Input id="pan" className="uppercase num" maxLength={10} {...f.register('pan', { setValueAs: (v: string) => v?.toUpperCase(), onBlur: checkDup })} /></Field>
             <label className="flex items-center gap-3 self-end py-3"><input type="checkbox" className="h-5 w-5 accent-[#5B38F5]" {...f.register('gstRegistered')} />Registered under GST</label>
             {gstRegistered && <Field label="GSTIN" htmlFor="gstin" required error={err('gstin')} hint="Characters 3–12 must equal the PAN. Upload the certificate on the same line on the next step."><Input id="gstin" className="uppercase num" maxLength={15} {...f.register('gstin', { setValueAs: (v: string) => v?.toUpperCase(), onBlur: checkDup })} /></Field>}
             <label className="flex items-center gap-3 self-end py-3"><input type="checkbox" className="h-5 w-5 accent-[#5B38F5]" {...f.register('msmeRegistered')} />MSME (Udyam registered) — payment within 45 days by law</label>
@@ -129,8 +131,8 @@ export function VendorFormPage() {
 interface Bank { id: string; accountHolder: string; bankName: string; branch: string | null; ifsc: string; accountLast4: string; accountNumber: string | null; verification: string; remarks: string | null; verifiedAt: string | null; verifiedBy: string | null }
 interface VendorItem { id: string; itemId: string; itemCode: string; itemName: string; itemType: string; uom: string; vendorItemCode: string | null; leadTimeDays: number; minOrderQty: string | null }
 interface Vendor {
-  id: string; code: string; legalName: string; tradeName: string | null; constitution: string; pan: string; gstRegistered: boolean; gstin: string | null;
-  contactPerson: string; mobile: string; email: string | null; vendorCategory: string; licenceTypes: string[]; msmeRegistered: boolean; udyamNumber: string | null;
+  id: string; code: string; legalName: string; tradeName: string | null; constitution: string | null; pan: string | null; gstRegistered: boolean; gstin: string | null;
+  contactPerson: string | null; mobile: string | null; phoneNumbers: string | null; email: string | null; vendorCategory: string; licenceTypes: string[]; msmeRegistered: boolean; udyamNumber: string | null;
   paymentTermsDays: number; rating: string | null; status: string; statusReason: string | null; activatedAt: string | null; version: number;
   addresses: PartyAddress[]; licences: PartyLicence[]; signatories: PartySignatory[]; approvals: ApprovalRef[]; readiness: Readiness | null;
   bank: Bank | null; items: VendorItem[];
@@ -167,8 +169,8 @@ export function VendorDetailPage() {
       <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
           <Card title="Business & tax identity">
-            <KeyValues items={[['Legal name', d.legalName], ['Trade name', d.tradeName], ['Constitution', CONSTITUTION_LABEL[d.constitution]], ['Contact person', d.contactPerson],
-              ['Mobile', d.mobile], ['Email', d.email], ['PAN', d.pan], ['Category', CATEGORY_LABEL[d.vendorCategory]], ['MSME', d.msmeRegistered ? d.udyamNumber : 'No'],
+            <KeyValues items={[['Legal name', d.legalName], ['Trade name', d.tradeName], ['Constitution', d.constitution ? CONSTITUTION_LABEL[d.constitution] : null], ['Contact person', d.contactPerson],
+              ['Mobile', d.mobile], ['Other phone numbers', d.phoneNumbers], ['Email', d.email], ['PAN', d.pan], ['Category', CATEGORY_LABEL[d.vendorCategory]], ['MSME', d.msmeRegistered ? d.udyamNumber : 'No'],
               ['Payment terms', `${d.paymentTermsDays} days`], ['Licences required', d.licenceTypes.map((t) => LICENCE_LABEL[t]).join(', ') || 'None'],
               ['Rating', d.rating ? `${d.rating} / 5` : 'Rated from receipts and QC once purchasing starts'], ['Activated', fmtDateTime(d.activatedAt)]]} />
             <div className="mt-5">{d.gstRegistered ? <GstinRow partyId={d.id} gstin={d.gstin} canUpload={d.canAddLicence} /> : <p className="text-ink-2">Not registered under GST.</p>}</div>
