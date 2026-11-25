@@ -56,7 +56,7 @@ export function goliveRoutes(db: Db, cfg: Config) {
     const sample = await one(`select
         (select count(*) from mdm.parties where legal_name ilike any (array['%[SAMPLE]%','%[TEST]%']))::int as parties,
         (select count(*) from mdm.items where name ilike any (array['%[SAMPLE]%','%[TEST]%']))::int as items,
-        (select count(*) from org.employees where full_name ilike any (array['%[SAMPLE]%','%[TEST]%']))::int as employees,
+        (select count(*) from org.employees where status = 'Active' and full_name ilike any (array['%[SAMPLE]%','%[TEST]%']))::int as employees,
         (select count(*) from org.territories where name ilike any (array['%[SAMPLE]%','%[TEST]%']))::int as territories,
         (select count(*) from iam.users where status = 'Active' and (email like '%@demo.local' or full_name ilike '%[SAMPLE]%'))::int as users`);
     const nSample = Number(sample.parties) + Number(sample.items) + Number(sample.employees) + Number(sample.territories) + Number(sample.users);
