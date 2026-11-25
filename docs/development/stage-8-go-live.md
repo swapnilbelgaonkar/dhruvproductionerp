@@ -91,3 +91,10 @@ Keep a sealed offline copy of `APP_ENCRYPTION_KEY`: without it, encrypted bank a
 - Loader: `pnpm --filter @dhruv/api exec tsx --env-file=.env src/db/load-vendors.ts <vendors.csv>` (columns group, name, address, state, pin_code, mobile_number, mail_id, gstin).
 - Taken: name, address, state, PIN (or a PIN written at the end of the address), the first mobile (every number as written is kept in "Other phone numbers"), e-mail, GSTIN with PAN read from it. Packing Material Creditors → Packaging; Factory other creditors → Other. "N/A" is empty. Bank details written inside an address are dropped from it; bank accounts are added with a cancelled cheque and verified by finance.
 - Draft vendors may have constitution, PAN, contact person, mobile and parts of the address empty; the onboarding checklist lists what is missing and blocks submission until it is complete. Dealers keep their stricter form.
+
+## 10. Dealer list (loaded 25 Nov 2026)
+- Source: the company dealer workbook (50 dealers). It is company data and is not kept in the repository.
+- Loader: `pnpm --filter @dhruv/api exec tsx --env-file=.env src/db/load-dealers.ts <dealers.csv>` (columns sr_no, company, address, pincode, state, mobile_no, e_mail, gstin_uin, pan_no).
+- Taken: company, address, PIN, state, mobile (other numbers kept as written), e-mail, GSTIN, PAN (read from the GSTIN when the PAN cell is empty). A GSTIN shared by two branch rows stays on the first; the other is reported.
+- Draft dealers may leave dealer category, territory, sales owner, constitution, contact person and parts of the address empty; the onboarding checklist requires them before submission. Dealers without a territory are seen only by users not limited to a territory (e.g. sales operations, administrators) until one is set.
+- The [SAMPLE] demo dealers and vendors were removed with their addresses, licences, signatories and bank accounts; their approval history is kept.
