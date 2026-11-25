@@ -79,3 +79,9 @@ Keep a sealed offline copy of `APP_ENCRYPTION_KEY`: without it, encrypted bank a
 - Left empty to fill before approval: HSN, GST rate, shelf life, cost, storage class, container and units per box, and for the six neem insecticides (FG-049…FG-054) the packing and base unit, which the brochure does not give. "Not mentioned in brochure" and "Not marked" are stored as empty.
 - All 67 are Draft: complete them and submit for approval before they can be priced, quoted or stocked.
 - On the demo database the [SAMPLE] items were removed together with every demo transaction that used them (orders, stock, production, QC, dispatch, invoices, payments, journals). Users, dealers, vendors, settings and the approval history were kept; open approvals for removed documents were cancelled.
+
+## 8. Purchased-material list (loaded 25 Nov 2026)
+- Source: the company workbook RawPacking_Labour_Consumables_Material_List.xlsx (stock group summary 1-Apr-26 to 21-Nov-26). Only names and groups are in the repository (`docs/source/materials/materials.csv`); the quantities, rates and values are commercial data and are kept out of git.
+- Loader: `pnpm --filter @dhruv/api exec tsx --env-file=.env src/db/load-materials.ts` (through the bulk importer; names already present are skipped).
+- 706 Draft items in three categories: Raw Material (259, type RM, RM-001…), Packing Material (432, type PM so packing runs and stores treat them as packaging, PM-001…), Labour Consumables (15, type RM, LC-001…). Codes follow alphabetical order within each group.
+- Base unit, HSN, shelf life, vendor and specifications are to be completed before approval. The stock quantities and rates belong to the opening-stock load at cut-over (which also needs warehouse, lot and expiry).

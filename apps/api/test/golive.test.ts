@@ -168,3 +168,16 @@ ${sr},[TEST] Chelated Micronutrient Fertilizers,${name},"Zinc (Zn) 12%, EDTA che
     expect(sub.body.error.details.map((d: { field: string }) => d.field)).toEqual(expect.arrayContaining(['hsnId', 'shelfLifeDays']));
   });
 });
+
+describe('Purchased-material list loader', () => {
+  it('puts each group in its category with the right item type, codes in name order, and skips names already present', async () => {
+    const { loadMaterials } = await import('../src/db/load-materials');
+    const a = uniq('[TEST] Zinc Sulphate '); const b = uniq('[TEST] 1 Ltr HDPE Bottle '); const c = uniq('[TEST] Hand Gloves ');
+    const csv = `name,group,quantity,rate,value\n${a},Raw Material,100,10,1000\n${b},Packing Material,5,2,10\n${c},Labour Consumables,,,\n`;
+    expect(await loadMaterials(db, csv, { userId: null, label: 'test' })).toMatchObject({ ok: true, rows: 3 });
+    const got = (await db.query(`select i.name, i.item_type, i.status, i.base_uom, i.code, c.code as cat from mdm.items i join mdm.product_categories c on c.id = i.category_id where i.name = any($1) order by i.item_type, i.name`, [[a, b, c]])).rows;
+    expect(got.map((x) => [x.name, x.item_type, x.cat, x.status, x.base_uom])).toEqual([[b, 'PM', 'PACKING-MATERIAL', 'Draft', null], [c, 'RM', 'LABOUR-CONSUMABLES', 'Draft', null], [a, 'RM', 'RAW-MATERIAL', 'Draft', null]]);
+    expect(got.find((x) => x.name === c).code).toMatch(/^LC-\d{3}$/);
+    expect(await loadMaterials(db, csv, { userId: null, label: 'test' })).toMatchObject({ ok: true, rows: 0 });
+  });
+});
