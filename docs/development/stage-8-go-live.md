@@ -98,3 +98,10 @@ Keep a sealed offline copy of `APP_ENCRYPTION_KEY`: without it, encrypted bank a
 - Taken: company, address, PIN, state, mobile (other numbers kept as written), e-mail, GSTIN, PAN (read from the GSTIN when the PAN cell is empty). A GSTIN shared by two branch rows stays on the first; the other is reported.
 - Draft dealers may leave dealer category, territory, sales owner, constitution, contact person and parts of the address empty; the onboarding checklist requires them before submission. Dealers without a territory are seen only by users not limited to a territory (e.g. sales operations, administrators) until one is set.
 - The [SAMPLE] demo dealers and vendors were removed with their addresses, licences, signatories and bank accounts; their approval history is kept.
+
+## 11. Staff list (loaded 25 Nov 2026)
+- Source: the company staff workbook (69 employees in 13 sections). It holds personal data and is not kept in the repository.
+- Loader: `pnpm --filter @dhruv/api exec tsx --env-file=.env src/db/load-employees.ts <employees.csv>`. No sign-ins are created; user accounts are made separately when the company asks.
+- Taken: employee code, Sr. no., name, headquarters, district, area, reporting to (as written, and linked to the manager where the name matches one employee by full name or by first and last name), designation, mobile (other numbers kept as written), education, date of joining, e-mail, ID card, blood group, and the section heading as "team".
+- Sales tier is set only where the designation states it (ZSM, ASM, Sr. ASM / Sr. Area Sales Manager → SASM, Territory Sales Manager → TSM, Sales Executive → SE); others are left for the company to decide.
+- Education, date of joining, ID card, blood group and other phone numbers are shown only to holders of `org.employee:view_personal` (security administrator, executive administrator, super administrator). Someone without it can still edit the employee without erasing them.

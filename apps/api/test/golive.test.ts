@@ -234,3 +234,37 @@ describe('Dealer list loader', () => {
     expect(sub.body.error.details.map((c: { key: string }) => c.key)).toEqual(expect.arrayContaining(['kyc.details', 'profile', 'addr.complete']));
   });
 });
+
+describe('Staff list loader', () => {
+  it('reads the staff columns, links reporting lines by name, makes no sign-ins, and shows personal details only to those allowed', async () => {
+    const { parseEmployeeRow, loadEmployees } = await import('../src/db/load-employees');
+    expect(parseEmployeeRow({ team: 'Nagpur A', emp_code: 'dapl emp 9', sr: '3', employee_name: 'Test  Person', headquarters: 'Nagpur', district: 'Nagpur', area: 'Vidarbha', reporting_to: 'Some One Sir',
+      designation: 'Sr. ASM', mobile_number: '9000000007/ 9000000008', educational_details: 'B.Sc Agri', date_of_joining: '01.07.2026', email: 'a@x.in/ b@x.in', id_card: 'DAPLEMP9', blood_group: 'o+ve' }))
+      .toMatchObject({ code: 'DAPLEMP9', name: 'Test Person', salesTier: 'SASM', mobile: '9000000007', phoneNumbers: '9000000007/ 9000000008', email: 'a@x.in', dateOfJoining: '2026-07-01', bloodGroup: 'O+', serialNo: 3 });
+    expect(parseEmployeeRow({ emp_code: 'X1', employee_name: 'Y', designation: 'MDO', date_of_joining: '-', blood_group: 'N/A', mobile_number: '-' }))
+      .toMatchObject({ salesTier: null, dateOfJoining: null, dateOfJoiningText: null, bloodGroup: null, mobile: null });
+    const boss = uniq('TB'); const rep = uniq('TR');
+    const bossName = `${uniq('Bossa')} Vijay ${uniq('Sharma')}`;
+    const parts = bossName.split(' ');
+    const csv = `team,emp_code,sr,employee_name,headquarters,district,area,reporting_to,designation,mobile_number,educational_details,date_of_joining,email,id_card,blood_group
+OFFICE,${boss},1,${bossName},Nashik,Nashik,Office,-,Director,9000000009,MBA,2020-01-15,,${boss},B+VE
+OFFICE,${rep},2,${uniq('Rep')} Person,Nashik,Nashik,Office,${parts[0]} ${parts[2]} Sir / Other Person,Accounts Executive,,BCom,2023-04-18,,${rep},A+ve
+`;
+    const r = await loadEmployees(db, csv, { userId: null, label: 'test' });
+    expect(r.created).toHaveLength(2);
+    const e = (await db.query(`select e.id, e.team, e.blood_group, e.date_of_joining::text as doj, m.emp_code as mgr from org.employees e left join org.employees m on m.id = e.manager_id where e.emp_code = $1`, [rep])).rows[0];
+    expect(e).toMatchObject({ team: 'OFFICE', blood_group: 'A+', doj: '2023-04-18', mgr: boss });
+    expect((await db.query(`select count(*)::int as n from iam.users u join org.employees x on x.id = u.employee_id where x.emp_code = any($1)`, [[boss, rep]])).rows[0].n).toBe(0);
+    const viewer = await userAgent([{ code: 'SALES_OPS' }]);
+    const plain = (await viewer.get(`/api/v1/employees/${e.id}`).expect(200)).body;
+    expect(plain).toMatchObject({ team: 'OFFICE', canViewPersonal: false });
+    expect(plain.bloodGroup).toBeUndefined();
+    const sec = await userAgent([{ code: 'SECURITY_ADMIN' }]);
+    expect((await sec.get(`/api/v1/employees/${e.id}`).expect(200)).body).toMatchObject({ bloodGroup: 'A+', education: 'BCom', canViewPersonal: true });
+    // someone who cannot see personal details does not wipe them when editing
+    const mdo = await userAgent([{ code: 'MASTER_DATA_OWNER' }]);
+    const cur = (await mdo.get(`/api/v1/employees/${e.id}`).expect(200)).body;
+    await mdo.put(`/api/v1/employees/${e.id}`, { empCode: rep, fullName: cur.fullName, designation: 'Senior Accounts Executive', managerId: cur.managerId, team: 'OFFICE', version: cur.version }).expect(200);
+    expect((await db.query(`select blood_group, education, designation from org.employees where id = $1`, [e.id])).rows[0]).toEqual({ blood_group: 'A+', education: 'BCom', designation: 'Senior Accounts Executive' });
+  });
+});

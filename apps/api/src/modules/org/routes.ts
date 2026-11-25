@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import {
   departmentSchema, employeeSchema, gstRegistrationSchema, gstinMatchesPan, legalEntitySchema, plantSchema, reasonSchema,
   territorySchema, warehouseSchema,
@@ -180,9 +180,15 @@ export function orgRoutes(db: Db) {
   });
 
   // ------------------------------------------------------------------ employees
+  const PERSONAL = ['phoneNumbers', 'education', 'dateOfJoining', 'dateOfJoiningText', 'idCardNo', 'bloodGroup'];
+  /** Personal details are left out for those without org.employee:view_personal. */
+  const personal = (req: Request, row: Record<string, unknown>) =>
+    (can(req, 'org.employee:view_personal') ? row : Object.fromEntries(Object.entries(row).filter(([k]) => !PERSONAL.includes(k))));
   const empSelect = `select e.id, e.emp_code as "empCode", e.full_name as "fullName", e.email, e.mobile, e.department_id as "departmentId", d.name as "departmentName",
       e.designation, e.sales_tier as "salesTier", e.manager_id as "managerId", m.full_name as "managerName", e.territory_id as "territoryId",
-      t.name as "territoryName", e.legal_entity_id as "legalEntityId", e.status, e.version, u.id as "userId", u.email as "userEmail"
+      t.name as "territoryName", e.legal_entity_id as "legalEntityId", e.status, e.version, u.id as "userId", u.email as "userEmail",
+      e.serial_no as "serialNo", e.team, e.headquarters, e.district, e.area, e.reporting_to as "reportingTo",
+      e.phone_numbers as "phoneNumbers", e.education, e.date_of_joining::text as "dateOfJoining", e.date_of_joining_text as "dateOfJoiningText", e.id_card_no as "idCardNo", e.blood_group as "bloodGroup"
     from org.employees e left join org.departments d on d.id = e.department_id left join org.employees m on m.id = e.manager_id
     left join org.territories t on t.id = e.territory_id left join iam.users u on u.employee_id = e.id`;
 
@@ -198,15 +204,17 @@ export function orgRoutes(db: Db) {
     if (status) { args.push(status); where.push(`e.status = $${args.length}`); }
     const scope = legalEntityScope(req, 'org.employee:view');
     if (scope) { args.push(scope); where.push(`e.legal_entity_id = any($${args.length}::uuid[])`); }
+    const team = str(req.query.team);
+    if (team) { args.push(team); where.push(`e.team = $${args.length}`); }
     const rows = await db.query(`${empSelect.replace('select e.id,', 'select count(*) over() as total, e.id,')} ${where.length ? 'where ' + where.join(' and ') : ''}
-      order by e.emp_code limit ${limit} offset ${offset}`, args);
-    res.json({ data: rows.rows.map((x) => { const { total: _t, ...rest } = x; return rest; }), total: rows.rows[0]?.total ?? 0 });
+      order by e.serial_no nulls last, e.emp_code limit ${limit} offset ${offset}`, args);
+    res.json({ data: rows.rows.map((x) => { const { total: _t, ...rest } = x; return personal(req, rest); }), total: rows.rows[0]?.total ?? 0 });
   }));
   r.get('/employees/:id', requirePermission('org.employee:view'), asyncHandler(async (req, res) => {
     const row = (await db.query(`${empSelect} where e.id = $1`, [req.params.id])).rows[0];
     if (!row || !inLegalEntityScope(req, 'org.employee:view', row.legalEntityId)) throw Errors.notFound('Employee');
     const reports = (await db.query(`select id, emp_code as "empCode", full_name as "fullName", sales_tier as "salesTier", status from org.employees where manager_id = $1 order by full_name`, [row.id])).rows;
-    res.json({ ...row, directReports: reports, allowedActions: [
+    res.json({ ...personal(req, row), canViewPersonal: can(req, 'org.employee:view_personal'), directReports: reports, allowedActions: [
       ...(can(req, 'org.employee:edit') ? ['edit'] : []),
       ...(can(req, 'org.employee:deactivate') ? [row.status === 'Active' ? 'deactivate' : 'activate'] : []),
     ] });
@@ -228,15 +236,19 @@ export function orgRoutes(db: Db) {
     }
   }
   const empCols = (d: Record<string, unknown>) => [d.empCode, d.fullName, d.email ?? null, d.mobile ?? null, d.departmentId ?? null, d.designation ?? null,
-    d.salesTier ?? null, d.managerId ?? null, d.territoryId ?? null, d.legalEntityId ?? null];
+    d.salesTier ?? null, d.managerId ?? null, d.territoryId ?? null, d.legalEntityId ?? null,
+    d.team ?? null, d.headquarters ?? null, d.district ?? null, d.area ?? null, d.reportingTo ?? null];
+  const personalCols = (d: Record<string, unknown>) => [d.phoneNumbers ?? null, d.education ?? null, d.dateOfJoining ?? null, d.idCardNo ?? null, d.bloodGroup ?? null];
 
   r.post('/employees', requirePermission('org.employee:create'), asyncHandler(async (req, res) => {
     const d = parse(employeeSchema, req.body) as Record<string, unknown>;
     const id = await withTx(db, async (tx) => {
       await validateEmployee(tx, d, null);
       const ins = await tx.query(
-        `insert into org.employees (emp_code, full_name, email, mobile, department_id, designation, sales_tier, manager_id, territory_id, legal_entity_id, created_by, updated_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) returning *`, [...empCols(d), req.auth!.user.id]);
+        `insert into org.employees (emp_code, full_name, email, mobile, department_id, designation, sales_tier, manager_id, territory_id, legal_entity_id,
+           team, headquarters, district, area, reporting_to, phone_numbers, education, date_of_joining, id_card_no, blood_group, created_by, updated_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$21) returning *`,
+        [...empCols(d), ...(can(req, 'org.employee:view_personal') ? personalCols(d) : [null, null, null, null, null]), req.auth!.user.id]);
       await audit(tx, actorOf(req), { action: 'org.employee.created', entityType: 'org.employee', entityId: ins.rows[0].id, after: ins.rows[0] });
       return ins.rows[0].id;
     });
@@ -249,9 +261,13 @@ export function orgRoutes(db: Db) {
       if (!before) throw Errors.notFound('Employee');
       if (before.version !== Number(req.body?.version)) throw Errors.concurrent();
       await validateEmployee(tx, d, before.id);
+      // someone who cannot see personal details keeps them as they are
+      const pv = can(req, 'org.employee:view_personal') ? personalCols(d) : [before.phone_numbers, before.education, before.date_of_joining, before.id_card_no, before.blood_group];
       const after = (await tx.query(
         `update org.employees set emp_code=$2, full_name=$3, email=$4, mobile=$5, department_id=$6, designation=$7, sales_tier=$8, manager_id=$9,
-           territory_id=$10, legal_entity_id=$11, updated_by=$12 where id = $1 returning *`, [before.id, ...empCols(d), req.auth!.user.id])).rows[0];
+           territory_id=$10, legal_entity_id=$11, team=$12, headquarters=$13, district=$14, area=$15, reporting_to=$16,
+           phone_numbers=$17, education=$18, date_of_joining=$19, id_card_no=$20, blood_group=$21, updated_by=$22 where id = $1 returning *`,
+        [before.id, ...empCols(d), ...pv, req.auth!.user.id])).rows[0];
       const df = diff(before, after);
       await audit(tx, actorOf(req), { action: 'org.employee.updated', entityType: 'org.employee', entityId: before.id, before: df.before, after: df.after });
     });

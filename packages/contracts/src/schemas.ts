@@ -66,6 +66,9 @@ export const employeeSchema = z.object({
   mobile: z.string().regex(/^[6-9][0-9]{9}$/, '10-digit Indian mobile number').optional().nullable().or(z.literal('').transform(() => null)),
   departmentId: uuid.optional().nullable(), designation: optionalText(120), salesTier: z.enum(SALES_TIERS).optional().nullable(),
   managerId: uuid.optional().nullable(), territoryId: uuid.optional().nullable(), legalEntityId: uuid.optional().nullable(),
+  team: optionalText(80), headquarters: optionalText(80), district: optionalText(80), area: optionalText(120), reportingTo: optionalText(200),
+  phoneNumbers: optionalText(200), education: optionalText(300), dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable().or(z.literal('').transform(() => null)),
+  idCardNo: optionalText(40), bloodGroup: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']).optional().nullable().or(z.literal('').transform(() => null)),
 });
 export const withVersion = <T extends z.ZodRawShape>(s: z.ZodObject<T>) => s.extend({ version: z.number().int() });
 
