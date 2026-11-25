@@ -40,7 +40,7 @@ export async function queueMessage(tx: Db | Tx, m: { channel: Channel; template:
 
 type Sender = (cfg: Record<string, unknown>, msg: { to: string; subject: string | null; body: string; template: string; vars: Record<string, unknown>; templateId: string | null; attachments: { name: string; contentType: string; base64: string }[] }) => Promise<string>;
 const env = (name: unknown) => (typeof name === 'string' && name ? process.env[name] : undefined);
-let smtp: { key: string; t: nodemailer.Transporter } | null = null;
+let smtp: { key: string; t: ReturnType<typeof nodemailer.createTransport> } | null = null;
 const SENDERS: Record<Channel, Sender> = {
   EMAIL: async (c, m) => {
     const key = JSON.stringify(c);

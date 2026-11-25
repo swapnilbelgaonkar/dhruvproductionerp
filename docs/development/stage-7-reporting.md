@@ -103,3 +103,27 @@ Stage 7 parts:
 - **More offline tasks** (goods receipt, stock count, issue to production): these work online in the portal on a phone. Offline versions follow once the device pilot (D09) shows which sites lose network.
 - **Native Android wrapper (Capacitor):** only if the device pilot needs features a PWA cannot reach.
 - **Look-up offline:** it needs the server, because stock changes all the time.
+
+## Part 4 — Integrations: GST portals, TDS, bank files, e-mail/SMS/WhatsApp (D08, D11, D27)
+
+Every integration has a **mode** set in Administration → Integrations: **Off**; **Manual** (the ERP makes the government or bank file, a person uploads it and records the reply); **Simulated** (a training imitation — results say SIMULATED and never print as valid); **Live** (through a provider). Keys never sit in the database: a live connection names the environment variable that holds them. Every file made and message sent is in the integration log.
+
+| Area | What works | RTM |
+|---|---|---|
+| E-invoice | INV-01 JSON (schema 1.1) for B2B invoices and approved credit notes, with checks before upload (seller and buyer address and PIN, HSN, totals). Manual: record IRN, acknowledgement and signed QR from the portal — the IRN is checked against the GSTIN, year, type and number, so a wrong one is refused. Cancel within 24 h. An invoice with an active IRN cannot be cancelled; a cancelled document number cannot get a new IRN. The printed invoice carries the QR and IRN | FIN-001, D27 |
+| E-way bill | NIC JSON from the dispatched shipment and its invoice (from-warehouse, ship-to, transporter, vehicle, LR, items). Validity worked out from distance (one day per 200 km, ending at midnight IST — setting). Manual: record the EWB number and time. Cancel within 24 h. With the integration on, dispatch no longer asks for a typed number; the delivery cannot be closed above the threshold until the e-way bill exists | LOG-005, D08 |
+| GST returns | GSTR-1 (B2B, B2CL, B2CS net of small credit notes, CDNR, HSN, document series) and GSTR-3B (outward supplies from the invoices; ITC from the ledger) per GSTIN and month in the offline-tool JSON. Prepare → download → record ARN. A file is refused if anything changed after it was prepared. Once GSTR-1 is filed, that month's invoices cannot be cancelled | FIN-019, D27 |
+| TDS | Sections, rates (individual / other / no PAN) and thresholds (per payment, per year, or only on the excess as for 194Q) are finance master data — none are seeded as facts. Payments work TDS out automatically from the payee's section: lower-deduction certificate, PAN type, s.206AA, transporter declaration u/s 194C(6), base before GST. Manual figures need a reason. Deducted vs deposited by month with the due date, challans (BSR, serial, interest if late) posted to the ledger, quarterly 26Q rows | FIN-010 |
+| Bank payment files | Approved NEFT/RTGS/IMPS payments into one bulk file (CSV or host-to-host pipe layout) for a company bank account. The file is not stored (account numbers): it is rebuilt on download and must match its fingerprint, so a changed account invalidates it. The bank's reply file releases paid payments with their UTRs; rejected ones return to the queue with the bank's reason | FIN-010 |
+| Messages | One queue for e-mail (SMTP), SMS and WhatsApp (HTTPS providers), retried up to five times, each sent once. Alerts go out on the channels the rule allows and the user chose in My profile. Editable wording per channel (placeholders checked; DLT / WhatsApp template ids) | NOT-002, D11 |
+| Dealer reminders | Before the due date and every N days while overdue, to the dealer's e-mail / mobile, once per step | D11 |
+| Scheduled reports | Any report e-mailed as CSV daily, weekly or monthly at an IST hour, limited to what the schedule's owner may see | MIS-009 |
+
+### Evidence
+- `gst.test.ts` (3), `tds-bank.test.ts` (2), `messaging.test.ts` (4): portal-recorded and simulated IRNs, IRN mismatch, cancel rules, e-way bill validity arithmetic, delivery blocked without EWB, GSTR-1 content, stale-file refusal, ARN, month closed; TDS thresholds, rates, no-PAN, override reason; bank file content, fingerprint, reply with paid/rejected/unknown rows; challan journal and 26Q row; alerts by e-mail, a live SMS gateway receiving the message with its bearer token, reminders once per step, a scheduled report with its CSV attachment.
+- Browser: a simulated IRN generated on SI/2026-27/00001; the printed invoice shows the QR marked "SIMULATED — NOT A VALID IRN".
+
+### Waiting on decisions
+- **Live GST connection** needs the GST service provider (D27); until then the manual mode is complete.
+- **Bank host-to-host** needs the bank's interface; the file layouts cover bulk upload.
+- **SMS/WhatsApp** need the provider and DLT / template registration (D11).

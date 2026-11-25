@@ -60,7 +60,8 @@ import { importRoutes } from './modules/golive/imports';
 import { goliveRoutes } from './modules/golive/readiness';
 
 export function createApp(db: Db, cfg: Config, storage: FileStorage = new LocalDiskStorage(cfg.STORAGE_DIR)) {
-  const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info' });
+  // session and CSRF cookies are credentials: never written to the logs
+  const log = pino({ level: cfg.NODE_ENV === 'test' ? 'silent' : 'info', redact: { paths: ['req.headers.cookie', 'req.headers["x-csrf-token"]', 'req.headers.authorization', 'res.headers["set-cookie"]'], censor: '[redacted]' } });
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');

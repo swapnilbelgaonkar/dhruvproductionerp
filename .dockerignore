@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+.git
+deploy/demo-snapshot.sql
+deploy/.env
+deploy/backups
+apps/api/storage
