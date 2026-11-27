@@ -59,14 +59,27 @@ async function prepare(): Promise<void> {
   }
 }
 
-const ready = prepare();
-ready.catch((e) => console.error('database preparation failed', e));
+// A dropped connection on a cold start (the database waking up, a TLS reset) is retried, and a failure is not kept:
+// the next request tries again instead of the instance answering "not ready" until it is recycled.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function prepareWithRetry(): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try { return await prepare(); } catch (e) {
+      console.error(`database preparation failed (attempt ${attempt})`, e);
+      if (attempt >= 4) throw e;
+      await sleep(500 * 2 ** attempt);
+    }
+  }
+}
+let ready: Promise<void> | null = null;
+const ensureReady = () => (ready ??= prepareWithRetry().catch((e) => { ready = null; throw e; }));
+void ensureReady().catch(() => undefined);
 
 const relay = async () => { try { while ((await relayOutbox(db)) > 0); } catch (e) { console.error('relay failed', e); } };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   try {
-    await ready;
+    await ensureReady();
   } catch {
     res.statusCode = 503;
     res.setHeader('content-type', 'application/json');
