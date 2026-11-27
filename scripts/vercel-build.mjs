@@ -50,6 +50,11 @@ if (existsSync(snapshot)) {
   if (process.env.DEMO_REFRESH === '1') env.DEMO_REFRESH = '1';   // replace older demo data on the next cold start
 }
 
+// demo super administrators (DEMO_ADMINS: JSON [{ email, name, hash }], argon2 hashes), from the build environment or the gitignored file
+const adminsFile = join(root, 'deploy/backups/demo-admins.json');  // gitignored
+const demoAdmins = process.env.DEMO_ADMINS ?? (existsSync(adminsFile) ? readFileSync(adminsFile, 'utf8') : '');
+if (demoAdmins) env.DEMO_ADMINS = demoAdmins;
+
 writeFileSync(join(fn, 'package.json'), JSON.stringify({ type: 'module' }));
 writeFileSync(join(fn, '.vc-config.json'), JSON.stringify({
   runtime: 'nodejs22.x', handler: 'vercel.js', launcherType: 'Nodejs', shouldAddHelpersToRequest: false,

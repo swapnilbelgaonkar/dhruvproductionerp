@@ -15,6 +15,7 @@ import { createApp } from './app';
 import { loadConfig } from './config';
 import { createPool } from './db/pool';
 import { migrate } from './db/migrate';
+import { ensureSuperAdmin } from './db/admins';
 import { DbStorage } from './modules/documents/storage';
 import { relayOutbox, runScheduledScans } from './modules/notifications/relay';
 
@@ -53,6 +54,13 @@ async function prepare(): Promise<void> {
       console.log('demo snapshot loaded');
     }
     await migrate(url, () => undefined);
+    // demo only: super administrators the company asked for, as [{ email, name, hash }] (argon2 hash, never a plain password)
+    if (process.env.DEMO_ADMINS) {
+      for (const a of JSON.parse(process.env.DEMO_ADMINS) as { email: string; name: string; hash: string }[]) {
+        const r = await ensureSuperAdmin(client, a.email, a.name, a.hash, 'Super administrator for demonstrating the system (company request)');
+        if (r.created) console.log('demo super administrator added');
+      }
+    }
   } finally {
     await client.query('select pg_advisory_unlock(727001)').catch(() => undefined);
     await client.end();
